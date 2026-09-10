@@ -1,9 +1,9 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useMemo } from "react";
 import { DispatchRowModel } from "@/types/domain";
 import { DispatchStatus, CargoStatus } from "@/types/database";
-import { ArrowUpDown, Check, Copy, Clock } from "lucide-react";
+import { ArrowUpDown, Check, Copy, Clock, Search, X } from "lucide-react";
 
 interface DispatchGridProps {
   dispatches: DispatchRowModel[];
@@ -23,6 +23,8 @@ export function DispatchGrid({
   const [sortAsc, setSortAsc] = useState<boolean>(true);
   const [selectedRow, setSelectedRow] = useState<string | null>(null);
   const [fleetDrafts, setFleetDrafts] = useState<Record<string, string>>({});
+  const [columnSearch, setColumnSearch] = useState<string>("");
+  const [isSearching, setIsSearching] = useState<boolean>(false);
 
   // Status de acionamento disponíveis
   const STATUS_OPTIONS: DispatchStatus[] = [
@@ -57,30 +59,24 @@ export function DispatchGrid({
     }
   };
 
-  const sortedDispatches = [...dispatches].sort((a, b) => {
-    let aVal: string | number | boolean | null = "";
-    let bVal: string | number | boolean | null = "";
+  // Cores de horário conforme a planilha (Turno A 04h, Turno B 12h, Turno C 20h)
+  const getHorarioBadge = (timeStr?: string | null, shift?: string | null) => {
+    const t = (timeStr || "").trim();
+    const s = (shift || "").toUpperCase();
 
-    if (sortField === "driver_name") {
-      aVal = a.driver.name;
-      bVal = b.driver.name;
-    } else if (sortField === "login") {
-      aVal = a.driver.login_matricula;
-      bVal = b.driver.login_matricula;
-    } else {
-      aVal = (a[sortField as keyof DispatchRowModel] as string | number | boolean | null) ?? "";
-      bVal = (b[sortField as keyof DispatchRowModel] as string | number | boolean | null) ?? "";
+    if (t.startsWith("04:") || s === "A") {
+      return "bg-amber-400/20 text-amber-300 border border-amber-500/40 font-bold px-1.5 py-0.5 rounded text-[10px]";
     }
+    if (t.startsWith("12:") || s === "B") {
+      return "bg-sky-400/20 text-sky-300 border border-sky-500/40 font-bold px-1.5 py-0.5 rounded text-[10px]";
+    }
+    if (t.startsWith("20:") || s === "C") {
+      return "bg-purple-400/20 text-purple-300 border border-purple-500/40 font-bold px-1.5 py-0.5 rounded text-[10px]";
+    }
+    return "text-slate-300 font-mono text-[10px]";
+  };
 
-    if (aVal === null) aVal = "";
-    if (bVal === null) bVal = "";
-
-    if (aVal < bVal) return sortAsc ? -1 : 1;
-    if (aVal > bVal) return sortAsc ? 1 : -1;
-    return 0;
-  });
-
-  // Função para aplicar badges de cores conforme o status operacional
+  // Badges de status operacional conforme a planilha
   const getStatusBadge = (status: DispatchStatus) => {
     switch (status) {
       case "ACIONADO":
@@ -108,45 +104,119 @@ export function DispatchGrid({
     }
   };
 
+  // Filtragem e ordenação dos despachos
+  const processedDispatches = useMemo(() => {
+    let result = [...dispatches];
+
+    if (columnSearch.trim()) {
+      const q = columnSearch.toLowerCase().trim();
+      result = result.filter(
+        (row) =>
+          row.driver.name.toLowerCase().includes(q) ||
+          row.driver.login_matricula.toLowerCase().includes(q)
+      );
+    }
+
+    return result.sort((a, b) => {
+      let aVal: string | number | boolean | null = "";
+      let bVal: string | number | boolean | null = "";
+
+      if (sortField === "driver_name") {
+        aVal = a.driver.name;
+        bVal = b.driver.name;
+      } else if (sortField === "login") {
+        aVal = a.driver.login_matricula;
+        bVal = b.driver.login_matricula;
+      } else {
+        aVal = (a[sortField as keyof DispatchRowModel] as string | number | boolean | null) ?? "";
+        bVal = (b[sortField as keyof DispatchRowModel] as string | number | boolean | null) ?? "";
+      }
+
+      if (aVal === null) aVal = "";
+      if (bVal === null) bVal = "";
+
+      if (aVal < bVal) return sortAsc ? -1 : 1;
+      if (aVal > bVal) return sortAsc ? 1 : -1;
+      return 0;
+    });
+  }, [dispatches, columnSearch, sortField, sortAsc]);
+
   return (
     <div className="excel-grid overflow-hidden flex flex-col flex-1">
       {/* Contêiner com rolagem horizontal e vertical */}
       <div className="overflow-x-auto overflow-y-auto max-h-[calc(100vh-210px)] relative select-none">
         <table className="w-full text-left border-collapse table-fixed text-[11px]">
           {/* Cabeçalho Fixo */}
-          <thead className="sticky top-0 z-20">
+          <thead className="sticky top-0 z-20 bg-slate-800">
             <tr className="excel-column-letters h-5" aria-hidden="true">
-              <th className="w-[42px] sticky left-0 z-40">#</th>
+              <th className="w-[42px] sticky left-0 z-40 bg-slate-800">#</th>
               {"ABCDEFGHIJKLMNOPQ".split("").map((letter) => (
-                <th key={letter}>{letter}</th>
+                <th key={letter} className="bg-slate-800">{letter}</th>
               ))}
             </tr>
-            <tr className="h-8">
-              <th className="excel-row-number w-[42px] sticky left-0 z-40">#</th>
-              {/* Coluna 1: CONDUTOR (Fixada à esquerda) */}
-              <th
-                onClick={() => handleSort("driver_name")}
-                className="w-[190px] px-2.5 py-1.5 sticky left-[42px] z-30 cursor-pointer"
-              >
-                <div className="flex items-center justify-between">
-                  <span className="truncate">CONDUTOR</span>
-                  <ArrowUpDown className="w-3 h-3 opacity-60 ml-1 shrink-0" />
+            <tr className="h-9">
+              <th className="excel-row-number w-[42px] sticky left-0 z-40 bg-slate-800 text-center">#</th>
+              
+              {/* Coluna 1: CONDUTOR (Fixada à esquerda com Pesquisa Integrada) */}
+              <th className="w-[220px] px-2 py-1 sticky left-[42px] z-30 bg-slate-800 border-r border-slate-700">
+                <div className="flex items-center justify-between gap-1">
+                  {isSearching ? (
+                    <div className="flex items-center flex-1 bg-slate-900 border border-emerald-500 rounded px-1.5 py-0.5">
+                      <Search className="w-3 h-3 text-emerald-400 shrink-0 mr-1" />
+                      <input
+                        autoFocus
+                        type="text"
+                        placeholder="Filtrar condutor..."
+                        value={columnSearch}
+                        onChange={(e) => setColumnSearch(e.target.value)}
+                        className="bg-transparent text-slate-100 text-xs w-full focus:outline-none font-sans"
+                      />
+                      <button
+                        onClick={() => {
+                          setColumnSearch("");
+                          setIsSearching(false);
+                        }}
+                        className="text-slate-400 hover:text-white ml-1"
+                      >
+                        <X className="w-3 h-3" />
+                      </button>
+                    </div>
+                  ) : (
+                    <>
+                      <div
+                        onClick={() => handleSort("driver_name")}
+                        className="flex items-center space-x-1 cursor-pointer truncate flex-1 hover:text-emerald-400 transition-colors"
+                      >
+                        <span className="truncate font-bold">CONDUTOR</span>
+                        <ArrowUpDown className="w-3 h-3 opacity-60 ml-0.5 shrink-0" />
+                      </div>
+                      <button
+                        onClick={() => setIsSearching(true)}
+                        className={`p-1 rounded hover:bg-slate-700 transition-colors ${
+                          columnSearch ? "text-emerald-400 bg-slate-900" : "text-slate-400"
+                        }`}
+                        title="Pesquisar condutor na grade"
+                      >
+                        <Search className="w-3.5 h-3.5" />
+                      </button>
+                    </>
+                  )}
                 </div>
               </th>
 
               {/* Coluna 2: LOGIN (Fixada à esquerda) */}
               <th
                 onClick={() => handleSort("login")}
-                className="w-[85px] px-2 py-1.5 sticky left-[232px] z-30 cursor-pointer"
+                className="w-[85px] px-2 py-1.5 sticky left-[262px] z-30 bg-slate-800 border-r border-slate-700 cursor-pointer text-center"
               >
-                <div className="flex items-center justify-between">
-                  <span>LOGIN</span>
-                  <ArrowUpDown className="w-3 h-3 opacity-60 ml-1 shrink-0" />
+                <div className="flex items-center justify-center space-x-1">
+                  <span className="font-bold">LOGIN</span>
+                  <ArrowUpDown className="w-3 h-3 opacity-60 shrink-0" />
                 </div>
               </th>
 
-              {/* Coluna 3: HORÁRIO */}
-              <th className="w-[75px] px-2 py-1.5 border-r border-slate-700 text-center">
+              {/* Coluna 3: HORÁRIO (Com destaque de turno) */}
+              <th className="w-[85px] px-2 py-1.5 border-r border-slate-700 text-center font-bold">
                 HORÁRIO
               </th>
 
@@ -156,7 +226,7 @@ export function DispatchGrid({
                 className="w-[85px] px-2 py-1.5 border-r border-slate-700 cursor-pointer hover:bg-slate-700 transition-colors text-center"
               >
                 <div className="flex items-center justify-center space-x-1">
-                  <span>PREVISÃO</span>
+                  <span className="font-bold">PREVISÃO</span>
                   <ArrowUpDown className="w-3 h-3 opacity-60 shrink-0" />
                 </div>
               </th>
@@ -167,78 +237,79 @@ export function DispatchGrid({
                 className="w-[125px] px-2 py-1.5 border-r border-slate-700 cursor-pointer hover:bg-slate-700 transition-colors text-center"
               >
                 <div className="flex items-center justify-center space-x-1">
-                  <span>STATUS</span>
+                  <span className="font-bold">STATUS</span>
                   <ArrowUpDown className="w-3 h-3 opacity-60 shrink-0" />
                 </div>
               </th>
 
               {/* Coluna 6: MOTIVO DO ABONO */}
-              <th className="w-[200px] px-2 py-1.5 border-r border-slate-700">
+              <th className="w-[200px] px-2 py-1.5 border-r border-slate-700 font-bold">
                 MOTIVO DO ABONO / APROVAÇÃO
               </th>
 
               {/* Coluna 7: LOCAL */}
-              <th className="w-[95px] px-2 py-1.5 border-r border-slate-700 text-center">
+              <th className="w-[95px] px-2 py-1.5 border-r border-slate-700 text-center font-bold">
                 LOCAL
               </th>
 
               {/* Coluna 8: ENTRADA */}
-              <th className="w-[80px] px-2 py-1.5 border-r border-slate-700 text-center">
+              <th className="w-[80px] px-2 py-1.5 border-r border-slate-700 text-center font-bold">
                 ENTRADA
               </th>
 
               {/* Coluna 9: FROTA */}
-              <th className="w-[95px] px-2 py-1.5 border-r border-slate-700 text-center">
+              <th className="w-[95px] px-2 py-1.5 border-r border-slate-700 text-center font-bold">
                 FROTA
               </th>
 
               {/* Coluna 10: C/V */}
-              <th className="w-[50px] px-1.5 py-1.5 border-r border-slate-700 text-center">
+              <th className="w-[50px] px-1.5 py-1.5 border-r border-slate-700 text-center font-bold">
                 C/V
               </th>
 
               {/* Coluna 11: DESTINO */}
-              <th className="w-[110px] px-2 py-1.5 border-r border-slate-700">
+              <th className="w-[110px] px-2 py-1.5 border-r border-slate-700 font-bold">
                 DESTINO
               </th>
 
               {/* Coluna 12: DESTINO FINAL */}
-              <th className="w-[110px] px-2 py-1.5 border-r border-slate-700">
+              <th className="w-[110px] px-2 py-1.5 border-r border-slate-700 font-bold">
                 DESTINO FINAL
               </th>
 
               {/* Coluna 13: SAÍDA */}
-              <th className="w-[80px] px-2 py-1.5 border-r border-slate-700 text-center">
+              <th className="w-[80px] px-2 py-1.5 border-r border-slate-700 text-center font-bold">
                 SAÍDA
               </th>
 
               {/* Coluna 14: OBSERVAÇÃO */}
-              <th className="w-[170px] px-2 py-1.5 border-r border-slate-700">
+              <th className="w-[170px] px-2 py-1.5 border-r border-slate-700 font-bold">
                 OBSERVAÇÃO
               </th>
 
               {/* Coluna 15: DIA DE ESCALA */}
-              <th className="w-[80px] px-2 py-1.5 border-r border-slate-700 text-center">
+              <th className="w-[80px] px-2 py-1.5 border-r border-slate-700 text-center font-bold">
                 DIA ESC.
               </th>
 
               {/* Coluna 16: PREV. PRÓX. */}
-              <th className="w-[85px] px-2 py-1.5 border-r border-slate-700 text-center text-emerald-400">
+              <th className="w-[85px] px-2 py-1.5 border-r border-slate-700 text-center text-emerald-400 font-bold">
                 PREV. PRÓX.
               </th>
 
               {/* Coluna 17: TEMPO DE JORNADA */}
-              <th className="w-[95px] px-2 py-1.5 text-center text-amber-300">
+              <th className="w-[95px] px-2 py-1.5 text-center text-amber-300 font-bold">
                 TEMPO JORNADA
               </th>
             </tr>
           </thead>
 
-          {/* Corpo da Tabela com Linhas Compactas e Edição Rápida */}
+          {/* Corpo da Tabela */}
           <tbody className="divide-y divide-slate-800 font-mono text-[11px]">
-            {sortedDispatches.map((row, index) => {
+            {processedDispatches.map((row, index) => {
               const isEven = index % 2 === 0;
-              const hasAbonoPending = row.abono_authorized_by === "PENDENTE" && row.dispatch_status === "ABONADO";
+              const hasAbonoPending =
+                row.abono_authorized_by === "PENDENTE" && row.dispatch_status === "ABONADO";
 
               return (
                 <tr
@@ -252,11 +323,14 @@ export function DispatchGrid({
                       : "bg-slate-900/60"
                   }`}
                 >
-                  <td className="excel-row-number w-[42px] sticky left-0 z-20 text-center">{index + 1}</td>
+                  <td className="excel-row-number w-[42px] sticky left-0 z-20 text-center bg-slate-900 text-slate-500">
+                    {index + 1}
+                  </td>
+
                   {/* 1. CONDUTOR (Fixado) */}
-                  <td className="px-2.5 py-0.5 sticky left-[42px] z-10 font-sans font-medium truncate group">
+                  <td className="px-2.5 py-0.5 sticky left-[42px] z-10 bg-slate-900 font-sans font-medium truncate group border-r border-slate-800">
                     <div className="flex items-center justify-between">
-                      <span className="truncate" title={row.driver.name}>
+                      <span className="truncate text-slate-200" title={row.driver.name}>
                         {row.driver.name}
                       </span>
                       <button
@@ -274,9 +348,9 @@ export function DispatchGrid({
                   </td>
 
                   {/* 2. LOGIN (Fixado) */}
-                  <td className="px-2 py-0.5 sticky left-[232px] z-10 font-bold text-center group">
+                  <td className="px-2 py-0.5 sticky left-[262px] z-10 bg-slate-900 font-bold text-center group border-r border-slate-800">
                     <div className="flex items-center justify-between">
-                      <span className="mx-auto">{row.driver.login_matricula}</span>
+                      <span className="mx-auto text-slate-300">{row.driver.login_matricula}</span>
                       <button
                         onClick={() => handleCopy(row.driver.login_matricula, `login-${row.id}`)}
                         className="opacity-0 group-hover:opacity-100 p-0.5 hover:text-emerald-400 transition-opacity shrink-0"
@@ -291,9 +365,11 @@ export function DispatchGrid({
                     </div>
                   </td>
 
-                  {/* 3. HORÁRIO */}
-                  <td className="px-1.5 py-0.5 border-r border-slate-800 text-center text-slate-300">
-                    {row.driver.default_start_time || "--:--"}
+                  {/* 3. HORÁRIO (Com cores de turno 04h, 12h, 20h) */}
+                  <td className="px-1.5 py-0.5 border-r border-slate-800 text-center">
+                    <span className={getHorarioBadge(row.driver.default_start_time, row.driver.default_shift)}>
+                      {row.driver.default_start_time ? row.driver.default_start_time.slice(0, 5) : "--:--"}
+                    </span>
                   </td>
 
                   {/* 4. PREVISÃO */}
@@ -378,27 +454,34 @@ export function DispatchGrid({
                     <input
                       type="text"
                       value={row.entry_time || ""}
-                      placeholder="--:--"
-                      onChange={(e) => onUpdateRow(row.id, { entry_time: e.target.value })}
-                      className="w-full bg-transparent text-center text-emerald-300 placeholder-slate-600 focus:bg-slate-800 focus:outline-none rounded font-bold px-1"
+                      placeholder="--:--:--"
+                      onChange={(e) => onUpdateRow(row.id, { entry_time: e.target.value || null })}
+                      className="w-full bg-transparent text-center text-slate-200 placeholder-slate-600 focus:bg-slate-800 focus:outline-none rounded px-1"
                     />
                   </td>
 
-                  {/* 9. FROTA */}
+                  {/* 9. FROTA (Digitação Livre) */}
                   <td className="px-1 py-0.5 border-r border-slate-800 text-center">
                     <input
                       type="text"
-                      value={fleetDrafts[row.id] ?? row.fleet_code ?? ""}
-                      placeholder="Digite"
-                      maxLength={20}
-                      onChange={(event) => setFleetDrafts((current) => ({ ...current, [row.id]: event.target.value.toUpperCase().replace(/[^A-Z0-9-]/g, "") }))}
-                      onBlur={(event) => {
-                        const fleetCode = event.target.value.trim();
-                        if (fleetCode !== (row.fleet_code || "")) void onUpdateRow(row.id, { fleet_code: fleetCode });
-                        setFleetDrafts((current) => { const next = { ...current }; delete next[row.id]; return next; });
+                      value={fleetDrafts[row.id] ?? (row.fleet_code || row.vehicle?.plate_code || "")}
+                      placeholder="Ex: ABC1234"
+                      onChange={(e) =>
+                        setFleetDrafts((prev) => ({
+                          ...prev,
+                          [row.id]: e.target.value.toUpperCase(),
+                        }))
+                      }
+                      onBlur={(e) => {
+                        const value = e.target.value.trim().toUpperCase();
+                        setFleetDrafts((prev) => {
+                          const copy = { ...prev };
+                          delete copy[row.id];
+                          return copy;
+                        });
+                        onUpdateRow(row.id, { fleet_code: value });
                       }}
-                      className="w-full bg-transparent px-1 text-center font-bold uppercase text-slate-200 placeholder-slate-600 focus:bg-slate-800 focus:outline-none"
-                      aria-label={`Frota de ${row.driver.name}`}
+                      className="w-full bg-transparent text-center text-slate-200 placeholder-slate-600 focus:bg-slate-800 focus:outline-none rounded px-1 font-mono uppercase"
                     />
                   </td>
 
@@ -406,18 +489,18 @@ export function DispatchGrid({
                   <td className="px-0.5 py-0.5 border-r border-slate-800 text-center">
                     <select
                       value={row.cargo_status || ""}
-                      onChange={(e) => onUpdateRow(row.id, { cargo_status: (e.target.value as CargoStatus) || null })}
-                      className={`w-full bg-transparent text-center font-bold focus:bg-slate-800 focus:outline-none rounded cursor-pointer ${
-                        row.cargo_status === "C" ? "text-amber-400" : row.cargo_status === "V" ? "text-cyan-400" : "text-slate-500"
-                      }`}
+                      onChange={(e) =>
+                        onUpdateRow(row.id, { cargo_status: (e.target.value || null) as CargoStatus | null })
+                      }
+                      className="w-full bg-transparent text-center font-bold text-slate-200 focus:bg-slate-800 focus:outline-none rounded cursor-pointer"
                     >
                       <option value="" className="bg-slate-900 text-slate-400">
                         -
                       </option>
-                      <option value="C" className="bg-slate-900 text-amber-400">
+                      <option value="C" className="bg-slate-900 text-emerald-400 font-bold">
                         C
                       </option>
-                      <option value="V" className="bg-slate-900 text-cyan-400">
+                      <option value="V" className="bg-slate-900 text-amber-400 font-bold">
                         V
                       </option>
                     </select>
@@ -428,7 +511,7 @@ export function DispatchGrid({
                     <select
                       value={row.destination_location_id || ""}
                       onChange={(e) => onUpdateRow(row.id, { destination_location_id: e.target.value || null })}
-                      className="w-full bg-transparent text-slate-200 focus:bg-slate-800 focus:outline-none rounded cursor-pointer truncate font-sans text-[11px]"
+                      className="w-full bg-transparent text-slate-200 focus:bg-slate-800 focus:outline-none rounded cursor-pointer truncate"
                     >
                       <option value="" className="bg-slate-900 text-slate-400">
                         - Destino -
@@ -445,8 +528,10 @@ export function DispatchGrid({
                   <td className="px-1 py-0.5 border-r border-slate-800">
                     <select
                       value={row.final_destination_location_id || ""}
-                      onChange={(e) => onUpdateRow(row.id, { final_destination_location_id: e.target.value || null })}
-                      className="w-full bg-transparent text-slate-200 focus:bg-slate-800 focus:outline-none rounded cursor-pointer truncate font-sans text-[11px]"
+                      onChange={(e) =>
+                        onUpdateRow(row.id, { final_destination_location_id: e.target.value || null })
+                      }
+                      className="w-full bg-transparent text-slate-200 focus:bg-slate-800 focus:outline-none rounded cursor-pointer truncate"
                     >
                       <option value="" className="bg-slate-900 text-slate-400">
                         - Destino Final -
@@ -464,9 +549,9 @@ export function DispatchGrid({
                     <input
                       type="text"
                       value={row.exit_time || ""}
-                      placeholder="--:--"
-                      onChange={(e) => onUpdateRow(row.id, { exit_time: e.target.value })}
-                      className="w-full bg-transparent text-center text-cyan-300 placeholder-slate-600 focus:bg-slate-800 focus:outline-none rounded font-bold px-1"
+                      placeholder="--:--:--"
+                      onChange={(e) => onUpdateRow(row.id, { exit_time: e.target.value || null })}
+                      className="w-full bg-transparent text-center text-slate-200 placeholder-slate-600 focus:bg-slate-800 focus:outline-none rounded px-1"
                     />
                   </td>
 
@@ -475,51 +560,39 @@ export function DispatchGrid({
                     <input
                       type="text"
                       value={row.observations || ""}
-                      placeholder="Anotações..."
+                      placeholder="Notas..."
                       onChange={(e) => onUpdateRow(row.id, { observations: e.target.value })}
-                      className="w-full bg-transparent text-slate-300 placeholder-slate-600 focus:bg-slate-800 focus:outline-none rounded px-1 font-sans text-[11px] truncate"
+                      className="w-full bg-transparent text-slate-200 placeholder-slate-600 focus:bg-slate-800 focus:outline-none rounded px-1 text-[11px] truncate font-sans"
                     />
                   </td>
 
                   {/* 15. DIA DE ESCALA */}
-                  <td className="px-1.5 py-0.5 border-r border-slate-800 text-center font-bold">
-                    <span
-                      className={`px-1.5 py-0.2 rounded text-[10px] ${
-                        row.scale_day_status === "F"
-                          ? "bg-rose-900/80 text-white"
-                          : row.scale_day_status === "FE"
-                          ? "bg-blue-900 text-blue-200"
-                          : "text-slate-300"
-                      }`}
-                    >
-                      {row.scale_day_status || "-"}
-                    </span>
+                  <td className="px-1 py-0.5 border-r border-slate-800 text-center font-bold text-slate-300">
+                    {row.scale_day_status || "-"}
                   </td>
 
-                  {/* 16. PREV. PRÓX. */}
-                  <td className="px-1.5 py-0.5 border-r border-slate-800 text-center text-emerald-400 font-bold">
-                    {row.next_day_forecast_time || "--:--"}
+                  {/* 16. PREV. PRÓX. DIA */}
+                  <td className="px-1 py-0.5 border-r border-slate-800 text-center font-semibold text-emerald-400">
+                    {row.next_day_forecast_time ? row.next_day_forecast_time.slice(0, 5) : "--:--"}
                   </td>
 
                   {/* 17. TEMPO DE JORNADA */}
                   <td className="px-1.5 py-0.5 text-center font-bold">
-                    {row.formatted_worked_time ? (
-                      <div className="flex items-center justify-center space-x-1">
-                        {row.is_ongoing && (
-                          <Clock className="w-3 h-3 text-cyan-400 animate-pulse inline" />
-                        )}
-                        <span
-                          className={`${
-                            row.is_ongoing
-                              ? "text-cyan-400"
-                              : row.total_worked_minutes && row.total_worked_minutes > 600
-                              ? "text-rose-400"
-                              : "text-amber-300"
-                          }`}
-                        >
-                          {row.formatted_worked_time}
-                        </span>
-                      </div>
+                    {row.is_ongoing ? (
+                      <span className="flex items-center justify-center space-x-1 text-emerald-400 animate-pulse">
+                        <Clock className="w-3 h-3 inline mr-0.5" />
+                        <span>{row.formatted_worked_time}</span>
+                      </span>
+                    ) : row.formatted_worked_time ? (
+                      <span
+                        className={
+                          (row.total_worked_minutes || 0) > 600
+                            ? "text-rose-400 font-extrabold"
+                            : "text-slate-200"
+                        }
+                      >
+                        {row.formatted_worked_time}
+                      </span>
                     ) : (
                       <span className="text-slate-600">--:--</span>
                     )}
@@ -527,34 +600,15 @@ export function DispatchGrid({
                 </tr>
               );
             })}
-
-            {sortedDispatches.length === 0 && (
+            {!processedDispatches.length && (
               <tr>
-                <td colSpan={18} className="text-center py-8 font-sans">
-                  Nenhum condutor encontrado com os filtros selecionados.
+                <td colSpan={18} className="py-10 text-center text-slate-500 font-sans">
+                  Nenhum registro encontrado para os filtros selecionados.
                 </td>
               </tr>
             )}
           </tbody>
         </table>
-      </div>
-
-      {/* Rodapé da Grade com Atalhos Operacionais */}
-      <div className="bg-slate-800 border-t border-slate-700 px-3 py-1.5 text-[10px] text-slate-400 flex items-center justify-between select-none">
-        <div className="flex items-center space-x-4">
-          <span>
-            Total Exibido: <strong className="text-slate-200">{sortedDispatches.length}</strong> linhas
-          </span>
-          <span>
-            Dica: Utilize <kbd className="px-1 bg-slate-900 rounded border border-slate-700 text-slate-300">Tab</kbd> para navegar rapidamente entre os campos.
-          </span>
-        </div>
-        <div className="flex items-center space-x-3">
-          <span className="flex items-center space-x-1">
-            <span className="w-2 h-2 rounded-full bg-emerald-500"></span>
-            <span>Salvo Automaticamente</span>
-          </span>
-        </div>
       </div>
     </div>
   );
