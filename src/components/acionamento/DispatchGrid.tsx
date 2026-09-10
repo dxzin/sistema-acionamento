@@ -65,15 +65,15 @@ export function DispatchGrid({
     const s = (shift || "").toUpperCase();
 
     if (t.startsWith("04:") || s === "A") {
-      return "bg-amber-400/20 text-amber-300 border border-amber-500/40 font-bold px-1.5 py-0.5 rounded text-[10px]";
+      return "bg-amber-400/20 text-amber-300 border border-amber-500/40 font-bold px-2 py-0.5 rounded text-[11px] whitespace-nowrap shadow-sm";
     }
     if (t.startsWith("12:") || s === "B") {
-      return "bg-sky-400/20 text-sky-300 border border-sky-500/40 font-bold px-1.5 py-0.5 rounded text-[10px]";
+      return "bg-sky-400/20 text-sky-300 border border-sky-500/40 font-bold px-2 py-0.5 rounded text-[11px] whitespace-nowrap shadow-sm";
     }
     if (t.startsWith("20:") || s === "C") {
-      return "bg-purple-400/20 text-purple-300 border border-purple-500/40 font-bold px-1.5 py-0.5 rounded text-[10px]";
+      return "bg-purple-400/20 text-purple-300 border border-purple-500/40 font-bold px-2 py-0.5 rounded text-[11px] whitespace-nowrap shadow-sm";
     }
-    return "text-slate-300 font-mono text-[10px]";
+    return "text-slate-300 font-mono text-[11px] px-1 py-0.5 whitespace-nowrap";
   };
 
   // Badges de status operacional conforme a planilha
@@ -145,20 +145,44 @@ export function DispatchGrid({
     <div className="excel-grid overflow-hidden flex flex-col flex-1">
       {/* Contêiner com rolagem horizontal e vertical */}
       <div className="overflow-x-auto overflow-y-auto max-h-[calc(100vh-210px)] relative select-none">
-        <table className="w-full text-left border-collapse table-fixed text-[11px]">
+        <table className="text-left border-collapse table-fixed text-[11px] min-w-full">
+          {/* Definição estrita das larguras de colunas */}
+          <colgroup>
+            <col style={{ width: "44px" }} />
+            <col style={{ width: "230px" }} />
+            <col style={{ width: "86px" }} />
+            <col style={{ width: "92px" }} />
+            <col style={{ width: "90px" }} />
+            <col style={{ width: "135px" }} />
+            <col style={{ width: "230px" }} />
+            <col style={{ width: "100px" }} />
+            <col style={{ width: "90px" }} />
+            <col style={{ width: "100px" }} />
+            <col style={{ width: "55px" }} />
+            <col style={{ width: "120px" }} />
+            <col style={{ width: "120px" }} />
+            <col style={{ width: "90px" }} />
+            <col style={{ width: "180px" }} />
+            <col style={{ width: "80px" }} />
+            <col style={{ width: "95px" }} />
+            <col style={{ width: "110px" }} />
+          </colgroup>
+
           {/* Cabeçalho Fixo */}
           <thead className="sticky top-0 z-20 bg-slate-800">
             <tr className="excel-column-letters h-5" aria-hidden="true">
-              <th className="w-[42px] sticky left-0 z-40 bg-slate-800">#</th>
-              {"ABCDEFGHIJKLMNOPQ".split("").map((letter) => (
-                <th key={letter} className="bg-slate-800">{letter}</th>
+              <th className="sticky left-0 z-40 bg-slate-800 text-center">#</th>
+              <th className="sticky left-[44px] z-30 bg-slate-800 text-center">A</th>
+              <th className="sticky left-[274px] z-30 bg-slate-800 text-center">B</th>
+              {"CDEFGHIJKLMNOPQ".split("").map((letter) => (
+                <th key={letter} className="bg-slate-800 text-center">{letter}</th>
               ))}
             </tr>
             <tr className="h-9">
-              <th className="excel-row-number w-[42px] sticky left-0 z-40 bg-slate-800 text-center">#</th>
+              <th className="excel-row-number sticky left-0 z-40 bg-slate-800 text-center border-r border-slate-700">#</th>
               
               {/* Coluna 1: CONDUTOR (Fixada à esquerda com Pesquisa Integrada) */}
-              <th className="w-[220px] px-2 py-1 sticky left-[42px] z-30 bg-slate-800 border-r border-slate-700">
+              <th className="px-2 py-1 sticky left-[44px] z-30 bg-slate-800 border-r border-slate-700">
                 <div className="flex items-center justify-between gap-1">
                   {isSearching ? (
                     <div className="flex items-center flex-1 bg-slate-900 border border-emerald-500 rounded px-1.5 py-0.5">
@@ -207,7 +231,7 @@ export function DispatchGrid({
               {/* Coluna 2: LOGIN (Fixada à esquerda) */}
               <th
                 onClick={() => handleSort("login")}
-                className="w-[85px] px-2 py-1.5 sticky left-[262px] z-30 bg-slate-800 border-r border-slate-700 cursor-pointer text-center"
+                className="px-2 py-1.5 sticky left-[274px] z-30 bg-slate-800 border-r border-slate-700 cursor-pointer text-center"
               >
                 <div className="flex items-center justify-center space-x-1">
                   <span className="font-bold">LOGIN</span>
@@ -216,14 +240,14 @@ export function DispatchGrid({
               </th>
 
               {/* Coluna 3: HORÁRIO (Com destaque de turno) */}
-              <th className="w-[85px] px-2 py-1.5 border-r border-slate-700 text-center font-bold">
+              <th className="px-2 py-1.5 border-r border-slate-700 text-center font-bold">
                 HORÁRIO
               </th>
 
               {/* Coluna 4: PREVISÃO */}
               <th
                 onClick={() => handleSort("forecast_start_time")}
-                className="w-[85px] px-2 py-1.5 border-r border-slate-700 cursor-pointer hover:bg-slate-700 transition-colors text-center"
+                className="px-2 py-1.5 border-r border-slate-700 cursor-pointer hover:bg-slate-700 transition-colors text-center"
               >
                 <div className="flex items-center justify-center space-x-1">
                   <span className="font-bold">PREVISÃO</span>
@@ -234,7 +258,7 @@ export function DispatchGrid({
               {/* Coluna 5: ACIONADO / STATUS */}
               <th
                 onClick={() => handleSort("dispatch_status")}
-                className="w-[125px] px-2 py-1.5 border-r border-slate-700 cursor-pointer hover:bg-slate-700 transition-colors text-center"
+                className="px-2 py-1.5 border-r border-slate-700 cursor-pointer hover:bg-slate-700 transition-colors text-center"
               >
                 <div className="flex items-center justify-center space-x-1">
                   <span className="font-bold">STATUS</span>
@@ -243,62 +267,62 @@ export function DispatchGrid({
               </th>
 
               {/* Coluna 6: MOTIVO DO ABONO */}
-              <th className="w-[200px] px-2 py-1.5 border-r border-slate-700 font-bold">
+              <th className="px-2 py-1.5 border-r border-slate-700 font-bold">
                 MOTIVO DO ABONO / APROVAÇÃO
               </th>
 
               {/* Coluna 7: LOCAL */}
-              <th className="w-[95px] px-2 py-1.5 border-r border-slate-700 text-center font-bold">
+              <th className="px-2 py-1.5 border-r border-slate-700 text-center font-bold">
                 LOCAL
               </th>
 
               {/* Coluna 8: ENTRADA */}
-              <th className="w-[80px] px-2 py-1.5 border-r border-slate-700 text-center font-bold">
+              <th className="px-2 py-1.5 border-r border-slate-700 text-center font-bold">
                 ENTRADA
               </th>
 
               {/* Coluna 9: FROTA */}
-              <th className="w-[95px] px-2 py-1.5 border-r border-slate-700 text-center font-bold">
+              <th className="px-2 py-1.5 border-r border-slate-700 text-center font-bold">
                 FROTA
               </th>
 
               {/* Coluna 10: C/V */}
-              <th className="w-[50px] px-1.5 py-1.5 border-r border-slate-700 text-center font-bold">
+              <th className="px-1.5 py-1.5 border-r border-slate-700 text-center font-bold">
                 C/V
               </th>
 
               {/* Coluna 11: DESTINO */}
-              <th className="w-[110px] px-2 py-1.5 border-r border-slate-700 font-bold">
+              <th className="px-2 py-1.5 border-r border-slate-700 font-bold">
                 DESTINO
               </th>
 
               {/* Coluna 12: DESTINO FINAL */}
-              <th className="w-[110px] px-2 py-1.5 border-r border-slate-700 font-bold">
+              <th className="px-2 py-1.5 border-r border-slate-700 font-bold">
                 DESTINO FINAL
               </th>
 
               {/* Coluna 13: SAÍDA */}
-              <th className="w-[80px] px-2 py-1.5 border-r border-slate-700 text-center font-bold">
+              <th className="px-2 py-1.5 border-r border-slate-700 text-center font-bold">
                 SAÍDA
               </th>
 
               {/* Coluna 14: OBSERVAÇÃO */}
-              <th className="w-[170px] px-2 py-1.5 border-r border-slate-700 font-bold">
+              <th className="px-2 py-1.5 border-r border-slate-700 font-bold">
                 OBSERVAÇÃO
               </th>
 
               {/* Coluna 15: DIA DE ESCALA */}
-              <th className="w-[80px] px-2 py-1.5 border-r border-slate-700 text-center font-bold">
+              <th className="px-2 py-1.5 border-r border-slate-700 text-center font-bold">
                 DIA ESC.
               </th>
 
               {/* Coluna 16: PREV. PRÓX. */}
-              <th className="w-[85px] px-2 py-1.5 border-r border-slate-700 text-center text-emerald-400 font-bold">
+              <th className="px-2 py-1.5 border-r border-slate-700 text-center text-emerald-400 font-bold">
                 PREV. PRÓX.
               </th>
 
               {/* Coluna 17: TEMPO DE JORNADA */}
-              <th className="w-[95px] px-2 py-1.5 text-center text-amber-300 font-bold">
+              <th className="px-2 py-1.5 text-center text-amber-300 font-bold">
                 TEMPO JORNADA
               </th>
             </tr>
@@ -315,7 +339,7 @@ export function DispatchGrid({
                 <tr
                   key={row.id}
                   onClick={() => setSelectedRow(row.id)}
-                  className={`h-7 ${selectedRow === row.id ? "excel-selected-row" : ""} ${
+                  className={`h-8 ${selectedRow === row.id ? "excel-selected-row" : ""} ${
                     hasAbonoPending
                       ? "bg-amber-950/30 border-l-2 border-l-amber-500"
                       : isEven
@@ -323,57 +347,57 @@ export function DispatchGrid({
                       : "bg-slate-900/60"
                   }`}
                 >
-                  <td className="excel-row-number w-[42px] sticky left-0 z-20 text-center bg-slate-900 text-slate-500">
+                  <td className="excel-row-number sticky left-0 z-20 text-center bg-slate-900 text-slate-500 border-r border-slate-800">
                     {index + 1}
                   </td>
 
                   {/* 1. CONDUTOR (Fixado) */}
-                  <td className="px-2.5 py-0.5 sticky left-[42px] z-10 bg-slate-900 font-sans font-medium truncate group border-r border-slate-800">
-                    <div className="flex items-center justify-between">
-                      <span className="truncate text-slate-200" title={row.driver.name}>
+                  <td className="px-2.5 py-1 sticky left-[44px] z-10 bg-slate-900 font-sans font-medium group border-r border-slate-800 overflow-hidden">
+                    <div className="flex items-center justify-between gap-1 overflow-hidden">
+                      <span className="truncate text-slate-100 font-semibold text-xs" title={row.driver.name}>
                         {row.driver.name}
                       </span>
                       <button
                         onClick={() => handleCopy(row.driver.name, `cond-${row.id}`)}
-                        className="opacity-0 group-hover:opacity-100 p-0.5 hover:text-emerald-400 transition-opacity ml-1 shrink-0"
+                        className="opacity-0 group-hover:opacity-100 p-0.5 hover:text-emerald-400 transition-opacity ml-1 shrink-0 text-slate-500"
                         title="Copiar Nome"
                       >
                         {copiedCell === `cond-${row.id}` ? (
                           <Check className="w-3 h-3 text-emerald-400" />
                         ) : (
-                          <Copy className="w-3 h-3 text-slate-500" />
+                          <Copy className="w-3 h-3" />
                         )}
                       </button>
                     </div>
                   </td>
 
                   {/* 2. LOGIN (Fixado) */}
-                  <td className="px-2 py-0.5 sticky left-[262px] z-10 bg-slate-900 font-bold text-center group border-r border-slate-800">
+                  <td className="px-2 py-1 sticky left-[274px] z-10 bg-slate-900 font-bold text-center group border-r border-slate-800">
                     <div className="flex items-center justify-between">
-                      <span className="mx-auto text-slate-300">{row.driver.login_matricula}</span>
+                      <span className="mx-auto text-slate-300 font-mono">{row.driver.login_matricula}</span>
                       <button
                         onClick={() => handleCopy(row.driver.login_matricula, `login-${row.id}`)}
-                        className="opacity-0 group-hover:opacity-100 p-0.5 hover:text-emerald-400 transition-opacity shrink-0"
+                        className="opacity-0 group-hover:opacity-100 p-0.5 hover:text-emerald-400 transition-opacity shrink-0 text-slate-500"
                         title="Copiar Login"
                       >
                         {copiedCell === `login-${row.id}` ? (
                           <Check className="w-3 h-3 text-emerald-400" />
                         ) : (
-                          <Copy className="w-3 h-3 text-slate-500" />
+                          <Copy className="w-3 h-3" />
                         )}
                       </button>
                     </div>
                   </td>
 
                   {/* 3. HORÁRIO (Com cores de turno 04h, 12h, 20h) */}
-                  <td className="px-1.5 py-0.5 border-r border-slate-800 text-center">
+                  <td className="px-1 py-1 border-r border-slate-800 text-center whitespace-nowrap">
                     <span className={getHorarioBadge(row.driver.default_start_time, row.driver.default_shift)}>
                       {row.driver.default_start_time ? row.driver.default_start_time.slice(0, 5) : "--:--"}
                     </span>
                   </td>
 
                   {/* 4. PREVISÃO */}
-                  <td className="px-1 py-0.5 border-r border-slate-800 text-center">
+                  <td className="px-1 py-1 border-r border-slate-800 text-center">
                     <input
                       type="text"
                       value={row.forecast_start_time || ""}
@@ -384,7 +408,7 @@ export function DispatchGrid({
                   </td>
 
                   {/* 5. ACIONADO / STATUS */}
-                  <td className="px-1 py-0.5 border-r border-slate-800 text-center">
+                  <td className="px-1 py-1 border-r border-slate-800 text-center">
                     <select
                       value={row.dispatch_status}
                       onChange={(e) => onUpdateRow(row.id, { dispatch_status: e.target.value as DispatchStatus })}
@@ -401,7 +425,7 @@ export function DispatchGrid({
                   </td>
 
                   {/* 6. MOTIVO DO ABONO / APROVAÇÃO */}
-                  <td className="px-1.5 py-0.5 border-r border-slate-800">
+                  <td className="px-1.5 py-1 border-r border-slate-800">
                     <div className="flex items-center space-x-1">
                       <input
                         type="text"
@@ -432,7 +456,7 @@ export function DispatchGrid({
                   </td>
 
                   {/* 7. LOCAL */}
-                  <td className="px-1 py-0.5 border-r border-slate-800 text-center">
+                  <td className="px-1 py-1 border-r border-slate-800 text-center">
                     <select
                       value={row.origin_location_id || ""}
                       onChange={(e) => onUpdateRow(row.id, { origin_location_id: e.target.value || null })}
@@ -450,7 +474,7 @@ export function DispatchGrid({
                   </td>
 
                   {/* 8. ENTRADA */}
-                  <td className="px-1 py-0.5 border-r border-slate-800 text-center">
+                  <td className="px-1 py-1 border-r border-slate-800 text-center">
                     <input
                       type="text"
                       value={row.entry_time || ""}
@@ -461,7 +485,7 @@ export function DispatchGrid({
                   </td>
 
                   {/* 9. FROTA (Digitação Livre) */}
-                  <td className="px-1 py-0.5 border-r border-slate-800 text-center">
+                  <td className="px-1 py-1 border-r border-slate-800 text-center">
                     <input
                       type="text"
                       value={fleetDrafts[row.id] ?? (row.fleet_code || row.vehicle?.plate_code || "")}
@@ -486,7 +510,7 @@ export function DispatchGrid({
                   </td>
 
                   {/* 10. C/V */}
-                  <td className="px-0.5 py-0.5 border-r border-slate-800 text-center">
+                  <td className="px-0.5 py-1 border-r border-slate-800 text-center">
                     <select
                       value={row.cargo_status || ""}
                       onChange={(e) =>
@@ -507,7 +531,7 @@ export function DispatchGrid({
                   </td>
 
                   {/* 11. DESTINO */}
-                  <td className="px-1 py-0.5 border-r border-slate-800">
+                  <td className="px-1 py-1 border-r border-slate-800">
                     <select
                       value={row.destination_location_id || ""}
                       onChange={(e) => onUpdateRow(row.id, { destination_location_id: e.target.value || null })}
@@ -525,7 +549,7 @@ export function DispatchGrid({
                   </td>
 
                   {/* 12. DESTINO FINAL */}
-                  <td className="px-1 py-0.5 border-r border-slate-800">
+                  <td className="px-1 py-1 border-r border-slate-800">
                     <select
                       value={row.final_destination_location_id || ""}
                       onChange={(e) =>
@@ -545,7 +569,7 @@ export function DispatchGrid({
                   </td>
 
                   {/* 13. SAÍDA */}
-                  <td className="px-1 py-0.5 border-r border-slate-800 text-center">
+                  <td className="px-1 py-1 border-r border-slate-800 text-center">
                     <input
                       type="text"
                       value={row.exit_time || ""}
@@ -556,7 +580,7 @@ export function DispatchGrid({
                   </td>
 
                   {/* 14. OBSERVAÇÃO */}
-                  <td className="px-1.5 py-0.5 border-r border-slate-800">
+                  <td className="px-1.5 py-1 border-r border-slate-800">
                     <input
                       type="text"
                       value={row.observations || ""}
@@ -567,17 +591,17 @@ export function DispatchGrid({
                   </td>
 
                   {/* 15. DIA DE ESCALA */}
-                  <td className="px-1 py-0.5 border-r border-slate-800 text-center font-bold text-slate-300">
+                  <td className="px-1 py-1 border-r border-slate-800 text-center font-bold text-slate-300">
                     {row.scale_day_status || "-"}
                   </td>
 
                   {/* 16. PREV. PRÓX. DIA */}
-                  <td className="px-1 py-0.5 border-r border-slate-800 text-center font-semibold text-emerald-400">
+                  <td className="px-1 py-1 border-r border-slate-800 text-center font-semibold text-emerald-400">
                     {row.next_day_forecast_time ? row.next_day_forecast_time.slice(0, 5) : "--:--"}
                   </td>
 
                   {/* 17. TEMPO DE JORNADA */}
-                  <td className="px-1.5 py-0.5 text-center font-bold">
+                  <td className="px-1.5 py-1 text-center font-bold">
                     {row.is_ongoing ? (
                       <span className="flex items-center justify-center space-x-1 text-emerald-400 animate-pulse">
                         <Clock className="w-3 h-3 inline mr-0.5" />
