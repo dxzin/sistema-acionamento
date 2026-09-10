@@ -1,0 +1,25 @@
+# Dependencies and build output
+node_modules/
+.next/
+out/
+
+# Environment variables and deployment metadata
+.env
+.env.*
+!.env.example
+.vercel/
+
+# Local reference data
+referencias/*.xlsx
+referencias/*.xls
+
+# Logs, caches, and editor files
+*.log
+*.tsbuildinfo
+supabase/.temp/
+__pycache__/
+*.py[cod]
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
