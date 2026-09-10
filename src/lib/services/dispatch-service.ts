@@ -145,6 +145,7 @@ class DispatchService {
         driver,
         base,
         vehicle,
+        fleet_code: vehicle?.plate_code || "",
         origin_location: originLoc,
         destination_location: destLoc,
         final_destination_location: finalDestLoc,
@@ -155,9 +156,44 @@ class DispatchService {
     });
   }
 
-  async updateDispatch(id: string, updates: Partial<Dispatch>): Promise<Dispatch | null> {
+  async updateDispatch(id: string, updates: Partial<DispatchRowModel>): Promise<Dispatch | null> {
     // Recalcular jornada e próxima previsão se os horários foram alterados
-    const processedUpdates = { ...updates };
+    const { fleet_code, driver: _driver, base: _base, vehicle: _vehicle, origin_location: _origin, destination_location: _destination, final_destination_location: _finalDestination, formatted_worked_time: _formatted, is_overnight: _overnight, is_ongoing: _ongoing, ...dispatchUpdates } = updates;
+    const processedUpdates: Partial<Dispatch> = { ...dispatchUpdates };
+
+    if (fleet_code !== undefined) {
+      const normalizedFleet = fleet_code.trim().toUpperCase();
+      if (!normalizedFleet) {
+        processedUpdates.vehicle_id = null;
+      } else if (this.isSupabaseConfigured()) {
+        const supabase = createClient();
+        const { data: { session } } = await supabase.auth.getSession();
+        if (session?.access_token) {
+          const response = await fetch("/api/fleets/resolve", {
+            method: "POST",
+            headers: { "Content-Type": "application/json", Authorization: `Bearer ${session.access_token}` },
+            body: JSON.stringify({ fleetCode: normalizedFleet }),
+          });
+          const result = await response.json() as { id?: string; error?: string };
+          if (!response.ok || !result.id) throw new Error(result.error || "Falha ao registrar a frota digitada.");
+          processedUpdates.vehicle_id = result.id;
+        } else {
+          let vehicle = this.localVehicles.find((item) => item.plate_code === normalizedFleet);
+          if (!vehicle) {
+            vehicle = { id: crypto.randomUUID(), plate_code: normalizedFleet, vehicle_type: "CAVALO_MECANICO", is_active: true, created_at: new Date().toISOString() };
+            this.localVehicles.push(vehicle);
+          }
+          processedUpdates.vehicle_id = vehicle.id;
+        }
+      } else {
+        let vehicle = this.localVehicles.find((item) => item.plate_code === normalizedFleet);
+        if (!vehicle) {
+          vehicle = { id: crypto.randomUUID(), plate_code: normalizedFleet, vehicle_type: "CAVALO_MECANICO", is_active: true, created_at: new Date().toISOString() };
+          this.localVehicles.push(vehicle);
+        }
+        processedUpdates.vehicle_id = vehicle.id;
+      }
+    }
 
     if ("entry_time" in updates || "exit_time" in updates) {
       const existing = this.localDispatches.find((d) => d.id === id);

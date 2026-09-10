@@ -40,18 +40,18 @@ export const INITIAL_VEHICLES: Vehicle[] = [
 ];
 
 export const INITIAL_DRIVERS: Driver[] = [
-  { id: "d-1", name: "Henrique Ferreira Ambrosio", login_matricula: "34912", base_id: "b1", default_shift: "B", default_start_time: "12:00:00", is_active: true, created_at: "2026-06-01T00:00:00Z", updated_at: "2026-06-01T00:00:00Z" },
-  { id: "d-2", name: "Marcelo Leandro Carlos Oliveira", login_matricula: "21963", base_id: "b1", default_shift: "B", default_start_time: "12:00:00", is_active: true, created_at: "2026-06-01T00:00:00Z", updated_at: "2026-06-01T00:00:00Z" },
-  { id: "d-3", name: "Rafael Lima Amorim", login_matricula: "18560", base_id: "b1", default_shift: "B", default_start_time: "12:00:00", is_active: true, created_at: "2026-06-01T00:00:00Z", updated_at: "2026-06-01T00:00:00Z" },
-  { id: "d-4", name: "Marcos Roberto de Oliveira", login_matricula: "22833", base_id: "b1", default_shift: "A", default_start_time: "04:00:00", is_active: true, created_at: "2026-06-01T00:00:00Z", updated_at: "2026-06-01T00:00:00Z" },
-  { id: "d-5", name: "EMERSON ALMEIDA DE OLIVEIRA", login_matricula: "38396", base_id: "b1", default_shift: "C", default_start_time: "20:00:00", is_active: true, created_at: "2026-06-01T00:00:00Z", updated_at: "2026-06-01T00:00:00Z" },
-  { id: "d-6", name: "ALEXANDRO DO CARMO DE OLIVEIRA", login_matricula: "83677", base_id: "b2", default_shift: "C", default_start_time: "20:00:00", is_active: true, created_at: "2026-06-01T00:00:00Z", updated_at: "2026-06-01T00:00:00Z" },
-  { id: "d-7", name: "ANTENOR ROSA DOS SANTOS", login_matricula: "28156", base_id: "b2", default_shift: "C", default_start_time: "20:00:00", is_active: true, created_at: "2026-06-01T00:00:00Z", updated_at: "2026-06-01T00:00:00Z" },
-  { id: "d-8", name: "FERNADO A, SISCONETO", login_matricula: "10443", base_id: "b3", default_shift: "B", default_start_time: "12:00:00", is_active: true, created_at: "2026-06-01T00:00:00Z", updated_at: "2026-06-01T00:00:00Z" },
-  { id: "d-9", name: "Jean Carlos", login_matricula: "10458", base_id: "b3", default_shift: "B", default_start_time: "12:00:00", is_active: true, created_at: "2026-06-01T00:00:00Z", updated_at: "2026-06-01T00:00:00Z" },
-  { id: "d-10", name: "VENILSON FERREIRA DOS SANTOS", login_matricula: "70226", base_id: "b4", default_shift: "A", default_start_time: "04:00:00", is_active: true, created_at: "2026-06-01T00:00:00Z", updated_at: "2026-06-01T00:00:00Z" },
-  { id: "d-11", name: "PEDRO BRAZ FARIAS SILVA", login_matricula: "74561", base_id: "b2", default_shift: "B", default_start_time: "12:00:00", is_active: true, created_at: "2026-06-01T00:00:00Z", updated_at: "2026-06-01T00:00:00Z" },
-  { id: "d-12", name: "GENIVALDO BATISTA DA SILVA", login_matricula: "30641", base_id: "b1", default_shift: "C", default_start_time: "20:00:00", is_active: true, created_at: "2026-06-01T00:00:00Z", updated_at: "2026-06-01T00:00:00Z" },
+  { id: "d-1", name: "Henrique Ferreira Ambrosio", login_matricula: "33622", base_id: "b1", default_shift: "B", default_start_time: "12:00:00", is_active: true, created_at: "2026-06-01T00:00:00Z", updated_at: "2026-06-01T00:00:00Z" },
+  { id: "d-2", name: "Marcelo Leandro Carlos Oliveira", login_matricula: "35162", base_id: "b1", default_shift: "B", default_start_time: "12:00:00", is_active: true, created_at: "2026-06-01T00:00:00Z", updated_at: "2026-06-01T00:00:00Z" },
+  { id: "d-3", name: "Rafael Lima Amorim", login_matricula: "44655", base_id: "b1", default_shift: "B", default_start_time: "12:00:00", is_active: true, created_at: "2026-06-01T00:00:00Z", updated_at: "2026-06-01T00:00:00Z" },
+  { id: "d-4", name: "Marcos Roberto de Oliveira", login_matricula: "48031", base_id: "b1", default_shift: "A", default_start_time: "04:00:00", is_active: true, created_at: "2026-06-01T00:00:00Z", updated_at: "2026-06-01T00:00:00Z" },
+  { id: "d-5", name: "EMERSON ALMEIDA DE OLIVEIRA", login_matricula: "3248", base_id: "b1", default_shift: "C", default_start_time: "20:00:00", is_active: true, created_at: "2026-06-01T00:00:00Z", updated_at: "2026-06-01T00:00:00Z" },
+  { id: "d-6", name: "ALEXANDRO DO CARMO DE OLIVEIRA", login_matricula: "71479", base_id: "b2", default_shift: "C", default_start_time: "20:00:00", is_active: true, created_at: "2026-06-01T00:00:00Z", updated_at: "2026-06-01T00:00:00Z" },
+  { id: "d-7", name: "ANTENOR ROSA DOS SANTOS", login_matricula: "92778", base_id: "b2", default_shift: "C", default_start_time: "20:00:00", is_active: true, created_at: "2026-06-01T00:00:00Z", updated_at: "2026-06-01T00:00:00Z" },
+  { id: "d-8", name: "FERNANDO ALEXANDRE SISCONETO", login_matricula: "81449", base_id: "b3", default_shift: "B", default_start_time: "12:00:00", is_active: true, created_at: "2026-06-01T00:00:00Z", updated_at: "2026-06-01T00:00:00Z" },
+  { id: "d-9", name: "Jean Carlos", login_matricula: "12169", base_id: "b3", default_shift: "B", default_start_time: "12:00:00", is_active: true, created_at: "2026-06-01T00:00:00Z", updated_at: "2026-06-01T00:00:00Z" },
+  { id: "d-10", name: "VENILSON FERREIRA DOS SANTOS", login_matricula: "39207", base_id: "b4", default_shift: "A", default_start_time: "04:00:00", is_active: true, created_at: "2026-06-01T00:00:00Z", updated_at: "2026-06-01T00:00:00Z" },
+  { id: "d-11", name: "PEDRO BRAZ FARIAS SILVA", login_matricula: "59832", base_id: "b2", default_shift: "B", default_start_time: "12:00:00", is_active: true, created_at: "2026-06-01T00:00:00Z", updated_at: "2026-06-01T00:00:00Z" },
+  { id: "d-12", name: "GENIVALDO BATISTA DA SILVA", login_matricula: "3291", base_id: "b1", default_shift: "C", default_start_time: "20:00:00", is_active: true, created_at: "2026-06-01T00:00:00Z", updated_at: "2026-06-01T00:00:00Z" },
 ];
 
 export const INITIAL_DISPATCHES: Dispatch[] = [

@@ -8,12 +8,11 @@ import { DispatchFilters } from "@/components/acionamento/DispatchFilters";
 import { DispatchGrid } from "@/components/acionamento/DispatchGrid";
 import { dispatchService } from "@/lib/services/dispatch-service";
 import { DispatchRowModel, DispatchFilterOptions, DispatchSummaryKPIs } from "@/types/domain";
-import { Location, Vehicle } from "@/types/database";
+import { Location } from "@/types/database";
 
 export default function AcionamentoPage() {
   const [dispatches, setDispatches] = useState<DispatchRowModel[]>([]);
   const [locations, setLocations] = useState<Location[]>([]);
-  const [vehicles, setVehicles] = useState<Vehicle[]>([]);
   const [isLoading, setIsLoading] = useState<boolean>(true);
 
   // Filtros
@@ -29,15 +28,13 @@ export default function AcionamentoPage() {
   const loadData = useCallback(async () => {
     setIsLoading(true);
     try {
-      const [dispatchesData, locs, vecs] = await Promise.all([
+      const [dispatchesData, locs] = await Promise.all([
         dispatchService.getDispatchesForSheet(filters.date, filters.region),
         dispatchService.getLocations(),
-        dispatchService.getVehicles(),
       ]);
 
       setDispatches(dispatchesData);
       setLocations(locs);
-      setVehicles(vecs);
     } catch (error) {
       console.error("Erro ao carregar dados da folha diária:", error);
     } finally {
@@ -160,7 +157,6 @@ export default function AcionamentoPage() {
             dispatches={filteredDispatches}
             onUpdateRow={handleUpdateRow}
             locations={locations}
-            vehicles={vehicles}
           />
         </main>
       </div>

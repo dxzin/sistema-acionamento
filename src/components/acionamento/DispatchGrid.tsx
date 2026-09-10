@@ -9,7 +9,6 @@ interface DispatchGridProps {
   dispatches: DispatchRowModel[];
   onUpdateRow: (id: string, updates: Partial<DispatchRowModel>) => Promise<void>;
   locations: { id: string; name: string }[];
-  vehicles: { id: string; plate_code: string }[];
 }
 
 type SortField = keyof DispatchRowModel | "driver_name" | "login";
@@ -18,12 +17,12 @@ export function DispatchGrid({
   dispatches,
   onUpdateRow,
   locations,
-  vehicles,
 }: DispatchGridProps) {
   const [copiedCell, setCopiedCell] = useState<string | null>(null);
   const [sortField, setSortField] = useState<SortField>("forecast_start_time");
   const [sortAsc, setSortAsc] = useState<boolean>(true);
   const [selectedRow, setSelectedRow] = useState<string | null>(null);
+  const [fleetDrafts, setFleetDrafts] = useState<Record<string, string>>({});
 
   // Status de acionamento disponíveis
   const STATUS_OPTIONS: DispatchStatus[] = [
@@ -387,20 +386,20 @@ export function DispatchGrid({
 
                   {/* 9. FROTA */}
                   <td className="px-1 py-0.5 border-r border-slate-800 text-center">
-                    <select
-                      value={row.vehicle_id || ""}
-                      onChange={(e) => onUpdateRow(row.id, { vehicle_id: e.target.value || null })}
-                      className="w-full bg-transparent text-center text-slate-200 font-bold focus:bg-slate-800 focus:outline-none rounded cursor-pointer"
-                    >
-                      <option value="" className="bg-slate-900 text-slate-400">
-                        - Frota -
-                      </option>
-                      {vehicles.map((v) => (
-                        <option key={v.id} value={v.id} className="bg-slate-900 text-slate-200">
-                          {v.plate_code}
-                        </option>
-                      ))}
-                    </select>
+                    <input
+                      type="text"
+                      value={fleetDrafts[row.id] ?? row.fleet_code ?? ""}
+                      placeholder="Digite"
+                      maxLength={20}
+                      onChange={(event) => setFleetDrafts((current) => ({ ...current, [row.id]: event.target.value.toUpperCase().replace(/[^A-Z0-9-]/g, "") }))}
+                      onBlur={(event) => {
+                        const fleetCode = event.target.value.trim();
+                        if (fleetCode !== (row.fleet_code || "")) void onUpdateRow(row.id, { fleet_code: fleetCode });
+                        setFleetDrafts((current) => { const next = { ...current }; delete next[row.id]; return next; });
+                      }}
+                      className="w-full bg-transparent px-1 text-center font-bold uppercase text-slate-200 placeholder-slate-600 focus:bg-slate-800 focus:outline-none"
+                      aria-label={`Frota de ${row.driver.name}`}
+                    />
                   </td>
 
                   {/* 10. C/V */}

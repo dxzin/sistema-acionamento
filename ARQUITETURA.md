@@ -53,7 +53,7 @@ Este documento especifica a arquitetura técnica, modelo de dados relacional e m
 - `is_active` (BOOLEAN, DEFAULT TRUE)
 - `created_at` (TIMESTAMPTZ, DEFAULT NOW())
 
-#### `vehicles` (Frotas / Veículos)
+#### `vehicles` (Referência interna de frotas digitadas no acionamento)
 - `id` (UUID, PK)
 - `plate_code` (VARCHAR(20), UNIQUE, NOT NULL) — Ex.: `SJE7G29`, `PZB0F50`
 - `vehicle_type` (VARCHAR(50), DEFAULT 'CAVALO_MECANICO')
@@ -104,7 +104,7 @@ Este documento especifica a arquitetura técnica, modelo de dados relacional e m
 - `abono_authorized_by` (VARCHAR(50)) — Responsável pela autorização (`ANDERSON`, `ROBERTO`, `LEOVEGILDO`, `PENDENTE`)
 - `origin_location_id` (UUID, FK -> `locations.id`) — Local de partida herdado de D-1 ou informado
 - `entry_time` (TIME) — Horário de entrada
-- `vehicle_id` (UUID, FK -> `vehicles.id`) — Frota utilizada
+- `vehicle_id` (UUID, FK -> `vehicles.id`) — Referência criada automaticamente a partir da frota digitada
 - `cargo_status` (VARCHAR(5)) — `C` (Carregado) ou `V` (Vazio)
 - `destination_location_id` (UUID, FK -> `locations.id`) — Destino intermediário
 - `final_destination_location_id` (UUID, FK -> `locations.id`) — Destino final
