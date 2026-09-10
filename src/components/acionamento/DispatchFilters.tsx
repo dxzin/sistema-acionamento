@@ -18,7 +18,7 @@ export function DispatchFilters({
   isLoading = false,
 }: DispatchFiltersProps) {
   return (
-    <div className="bg-slate-800 border border-slate-700 rounded-t p-2.5 flex flex-wrap items-center justify-between gap-3 text-xs">
+    <div className="excel-toolbar p-2 flex flex-wrap items-center justify-between gap-2 text-xs">
       {/* Busca e Filtros Rápidos */}
       <div className="flex flex-wrap items-center gap-2.5 flex-1">
         {/* Campo de Busca por Condutor ou Matrícula */}

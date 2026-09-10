@@ -48,10 +48,10 @@ export function Sidebar() {
   ];
 
   return (
-    <aside className="w-52 bg-slate-900 border-r border-slate-700 flex flex-col justify-between select-none shrink-0">
+    <aside className="excel-sidebar w-44 flex flex-col justify-between select-none shrink-0">
       <div className="p-2 space-y-1">
-        <div className="px-3 py-2 text-[10px] font-bold uppercase tracking-wider text-slate-400">
-          Módulos Operacionais
+        <div className="excel-sidebar-title px-3 py-2 text-[10px] font-semibold">
+          Planilhas do arquivo
         </div>
         <nav className="space-y-0.5">
           {navigation.map((item) => {
@@ -61,13 +61,13 @@ export function Sidebar() {
               <Link
                 key={item.name}
                 href={item.href}
-                className={`flex items-center px-3 py-2 text-xs font-medium rounded transition-colors ${
+                className={`excel-sheet-link flex items-center px-3 py-2 text-xs font-medium transition-colors ${
                   isActive
-                    ? "bg-emerald-700 text-white shadow-sm font-semibold"
-                    : "text-slate-300 hover:bg-slate-800 hover:text-white"
+                    ? "is-active font-semibold"
+                    : ""
                 }`}
               >
-                <Icon className={`w-4 h-4 mr-2.5 shrink-0 ${isActive ? "text-white" : "text-slate-400"}`} />
+                <Icon className="w-4 h-4 mr-2.5 shrink-0" />
                 <span className="truncate">{item.name}</span>
               </Link>
             );
@@ -75,10 +75,10 @@ export function Sidebar() {
         </nav>
       </div>
 
-      <div className="p-3 border-t border-slate-800 text-[10px] text-slate-400 space-y-1">
-        <div className="font-semibold text-slate-300">Modo Operacional</div>
-        <div>Substituição Excel Ativa</div>
-        <div className="text-emerald-400 font-mono">v1.0.0 (Fase 1)</div>
+      <div className="excel-sidebar-footer p-3 text-[10px] space-y-1">
+        <div className="font-semibold">Pasta operacional</div>
+        <div>Salvamento automático</div>
+        <div className="font-mono">v1.1 · visual planilha</div>
       </div>
     </aside>
   );

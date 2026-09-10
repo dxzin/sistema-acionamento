@@ -139,11 +139,11 @@ export default function AcionamentoPage() {
   }, [filteredDispatches]);
 
   return (
-    <div className="flex-1 flex flex-col min-h-screen bg-slate-950">
+    <div className="excel-shell flex-1 flex flex-col min-h-screen">
       <Header />
       <div className="flex flex-1 overflow-hidden">
         <Sidebar />
-        <main className="flex-1 flex flex-col p-3 overflow-hidden">
+        <main className="excel-workspace flex-1 flex flex-col overflow-hidden">
           {/* Barra de Indicadores Operacionais */}
           <DispatchStatsBar summary={summaryKPIs} />
 

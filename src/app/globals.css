@@ -3,37 +3,113 @@
 @tailwind utilities;
 
 :root {
-  --background: #0B0F19;
-  --foreground: #F8FAFC;
+  --excel-green: #107c41;
+  --excel-green-dark: #0b5a30;
+  --excel-green-soft: #e2f0d9;
+  --excel-chrome: #f3f3f3;
+  --excel-border: #c9c9c9;
+  --excel-grid: #d9d9d9;
+  --excel-text: #222222;
+  --excel-selection: #21a366;
 }
 
 body {
-  color: var(--foreground);
-  background: var(--background);
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  color: var(--excel-text);
+  background: #e7e7e7;
+  font-family: "Segoe UI", Calibri, Arial, sans-serif;
   overflow-x: hidden;
 }
 
-/* Custom compact scrollbars for logistics monitors */
 ::-webkit-scrollbar {
-  width: 6px;
-  height: 6px;
+  width: 12px;
+  height: 12px;
 }
 
 ::-webkit-scrollbar-track {
-  background: #0F172A;
+  background: #f0f0f0;
+  border: 1px solid #d1d1d1;
 }
 
 ::-webkit-scrollbar-thumb {
-  background: #334155;
-  border-radius: 3px;
+  background: #c1c1c1;
+  border: 2px solid #f0f0f0;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: #475569;
+  background: #a8a8a8;
 }
 
-/* Focus outline refinement */
-input:focus, select:focus {
-  outline: none;
+.excel-shell { background: #e9e9e9; color: var(--excel-text); }
+.excel-titlebar { color: #fff; background: var(--excel-green); border-bottom: 1px solid #07552b; box-shadow: none; }
+.excel-app-icon { color: #fff; background: rgba(255,255,255,.12); border: 1px solid rgba(255,255,255,.28); }
+.excel-clock { color: #fff; background: rgba(0,0,0,.1); border: 1px solid rgba(255,255,255,.22); }
+
+.excel-sidebar { color: #292929; background: #f7f7f7; border-right: 1px solid #bfbfbf; }
+.excel-sidebar-title { color: #555; background: #ededed; border-bottom: 1px solid #d2d2d2; }
+.excel-sheet-link { color: #343434; border-left: 3px solid transparent; }
+.excel-sheet-link:hover { color: #111; background: #e9e9e9; }
+.excel-sheet-link.is-active { color: #0b5a30; background: #fff; border-left-color: var(--excel-green); box-shadow: inset 0 -1px 0 #d8d8d8, inset 0 1px 0 #d8d8d8; }
+.excel-sidebar-footer { color: #656565; background: #ededed; border-top: 1px solid #cfcfcf; }
+.excel-workspace { padding: 8px 8px 0; background: #dedede; }
+
+.excel-kpis { overflow: hidden; background: #bfbfbf; border: 1px solid #b7b7b7; }
+.excel-kpis > div { min-height: 48px; padding: 5px 8px !important; color: var(--excel-text) !important; background: #fff !important; border: 0 !important; border-radius: 0 !important; }
+.excel-kpis > div > div > div:first-child { color: #5b5b5b !important; font-size: 9px; letter-spacing: .02em; }
+.excel-kpis > div > div > div:last-child { color: #202020 !important; font-family: Calibri, "Segoe UI", sans-serif !important; font-size: 18px; }
+.excel-kpis svg { width: 16px; height: 16px; color: var(--excel-green) !important; opacity: .72 !important; animation: none !important; }
+
+.excel-toolbar { min-height: 42px; color: #222; background: var(--excel-chrome); border: 1px solid #bfbfbf; border-bottom: 0; border-radius: 0; box-shadow: inset 0 1px 0 #fff; }
+.excel-toolbar input, .excel-toolbar select, .excel-toolbar > div > div { color: #222 !important; background-color: #fff !important; border-color: #a9a9a9 !important; border-radius: 0 !important; }
+.excel-toolbar input::placeholder { color: #777 !important; }
+.excel-toolbar svg { color: #666 !important; }
+.excel-toolbar button { color: #fff !important; background: var(--excel-green) !important; border-color: var(--excel-green-dark) !important; border-radius: 1px !important; }
+.excel-toolbar button:hover { background: var(--excel-green-dark) !important; }
+
+.excel-grid { color: var(--excel-text); background: #fff; border: 1px solid #a6a6a6; box-shadow: none; }
+.excel-grid table { min-width: 1760px; background: #fff; }
+.excel-grid thead { color: #fff !important; background: var(--excel-green) !important; box-shadow: none !important; border-bottom: 1px solid var(--excel-green-dark) !important; }
+.excel-grid thead tr:last-child th { color: #fff !important; background: var(--excel-green) !important; border-right: 1px solid #4e9d72 !important; border-bottom: 1px solid #0a6033 !important; font-family: Calibri, "Segoe UI", sans-serif; font-size: 10px; letter-spacing: .025em; }
+.excel-grid thead tr:last-child th:hover { background: var(--excel-green-dark) !important; }
+.excel-grid .excel-column-letters th { height: 20px; padding: 0; color: #454545 !important; background: #e6e6e6 !important; border-right: 1px solid #bcbcbc !important; border-bottom: 1px solid #b8b8b8 !important; font-weight: 400; text-align: center; }
+.excel-grid .excel-column-letters th:nth-child(2) { width: 190px; }
+.excel-grid .excel-column-letters th:nth-child(3) { width: 85px; }
+.excel-grid .excel-column-letters th:nth-child(4) { width: 75px; }
+.excel-grid .excel-column-letters th:nth-child(5) { width: 85px; }
+.excel-grid .excel-column-letters th:nth-child(6) { width: 125px; }
+.excel-grid .excel-column-letters th:nth-child(7) { width: 200px; }
+.excel-grid .excel-column-letters th:nth-child(8) { width: 95px; }
+.excel-grid .excel-column-letters th:nth-child(9) { width: 80px; }
+.excel-grid .excel-column-letters th:nth-child(10) { width: 95px; }
+.excel-grid .excel-column-letters th:nth-child(11) { width: 50px; }
+.excel-grid .excel-column-letters th:nth-child(12) { width: 110px; }
+.excel-grid .excel-column-letters th:nth-child(13) { width: 110px; }
+.excel-grid .excel-column-letters th:nth-child(14) { width: 80px; }
+.excel-grid .excel-column-letters th:nth-child(15) { width: 170px; }
+.excel-grid .excel-column-letters th:nth-child(16) { width: 80px; }
+.excel-grid .excel-column-letters th:nth-child(17) { width: 85px; }
+.excel-grid .excel-column-letters th:nth-child(18) { width: 95px; }
+.excel-grid tbody { color: #222 !important; font-family: Calibri, "Segoe UI", sans-serif !important; }
+.excel-grid tbody tr { background: #fff !important; border: 0 !important; }
+.excel-grid tbody tr:nth-child(even) { background: #fbfbfb !important; }
+.excel-grid tbody tr:hover, .excel-grid tbody tr.excel-selected-row { background: var(--excel-green-soft) !important; }
+.excel-grid tbody tr.excel-selected-row td { border-top-color: var(--excel-selection) !important; border-bottom-color: var(--excel-selection) !important; }
+.excel-grid tbody td { height: 28px; color: #222 !important; background: inherit !important; border-right: 1px solid var(--excel-grid) !important; border-bottom: 1px solid var(--excel-grid) !important; }
+.excel-grid .excel-row-number { color: #555 !important; background: #ededed !important; border-right: 1px solid #bcbcbc !important; font-family: Calibri, "Segoe UI", sans-serif; font-weight: 400; }
+.excel-grid input, .excel-grid select { min-height: 22px; color: #222 !important; background: transparent !important; border: 1px solid transparent !important; border-radius: 0 !important; }
+.excel-grid input::placeholder { color: #8a8a8a !important; }
+.excel-grid input:focus, .excel-grid select:focus { background: #fff !important; border-color: var(--excel-selection) !important; outline: 1px solid var(--excel-selection) !important; outline-offset: -1px; }
+.excel-grid select[class*="bg-"] { background: #f2f2f2 !important; border-color: #c7c7c7 !important; }
+.excel-grid option { color: #222 !important; background: #fff !important; }
+.excel-grid > div:last-child { color: #4c4c4c !important; background: #efefef !important; border-top: 1px solid #bcbcbc !important; }
+.excel-grid > div:last-child strong { color: #1f1f1f !important; }
+.excel-grid kbd { color: #333 !important; background: #fff !important; border-color: #bcbcbc !important; border-radius: 1px !important; }
+
+input:focus-visible, select:focus-visible, button:focus-visible, a:focus-visible { outline: 2px solid #5aa9e6; outline-offset: 1px; }
+
+@media (max-width: 900px) {
+  .excel-sidebar { width: 52px; }
+  .excel-sidebar-title, .excel-sidebar-footer, .excel-sheet-link span { display: none; }
+  .excel-sheet-link { justify-content: center; padding: 10px 0; }
+  .excel-sheet-link svg { margin-right: 0; }
+  .excel-workspace { padding-left: 4px; padding-right: 4px; }
 }

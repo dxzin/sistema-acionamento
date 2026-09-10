@@ -26,35 +26,35 @@ export function Header() {
   }, []);
 
   return (
-    <header className="h-14 bg-slate-900 border-b border-slate-700 text-slate-100 flex items-center justify-between px-4 sticky top-0 z-30 select-none">
+    <header className="excel-titlebar h-12 flex items-center justify-between px-3 sticky top-0 z-30 select-none">
       <div className="flex items-center space-x-3">
-        <div className="w-8 h-8 rounded bg-emerald-600 flex items-center justify-center text-white shadow-sm font-bold">
+        <div className="excel-app-icon w-7 h-7 flex items-center justify-center font-bold">
           <Truck className="w-5 h-5" />
         </div>
         <div>
-          <h1 className="font-semibold text-sm tracking-wide text-white">
-            SISTEMA DE ACIONAMENTO LOGÍSTICO
+          <h1 className="font-semibold text-sm text-white">
+            Controle Operacional.xlsx
           </h1>
-          <p className="text-[11px] text-slate-400 font-mono">
-            Controle Diário de Alocação de Condutores e Frotas
+          <p className="text-[10px] text-emerald-100">
+            Sistema de Acionamento Logístico
           </p>
         </div>
       </div>
 
       <div className="flex items-center space-x-4">
         {/* Relógio do Sistema em Tempo Real */}
-        <div className="flex items-center space-x-1.5 bg-slate-800 px-3 py-1 rounded border border-slate-700 font-mono text-xs text-emerald-400">
-          <Clock className="w-3.5 h-3.5 text-emerald-400 animate-pulse" />
+        <div className="excel-clock flex items-center space-x-1.5 px-2.5 py-1 font-mono text-xs">
+          <Clock className="w-3.5 h-3.5" />
           <span className="font-bold tracking-wider">{time || "--:--:--"}</span>
-          <span className="text-[10px] text-slate-400">(Horário de Brasília)</span>
+          <span className="text-[10px] opacity-75">Brasília</span>
         </div>
 
         {/* Informações do Usuário */}
         {user && (
-          <div className="flex items-center space-x-3 pl-2 border-l border-slate-700">
+          <div className="flex items-center space-x-3 pl-3 border-l border-emerald-600">
             <div className="text-right">
-              <div className="text-xs font-medium text-slate-200">{user.name}</div>
-              <div className="text-[10px] text-emerald-400 capitalize flex items-center justify-end space-x-1">
+              <div className="text-xs font-medium text-white">{user.name}</div>
+              <div className="text-[10px] text-emerald-100 capitalize flex items-center justify-end space-x-1">
                 <Shield className="w-3 h-3" />
                 <span>{user.role}</span>
               </div>
@@ -62,7 +62,7 @@ export function Header() {
             <button
               onClick={() => logout()}
               title="Sair do Sistema"
-              className="p-1.5 rounded text-slate-400 hover:text-rose-400 hover:bg-slate-800 transition-colors"
+              className="p-1.5 text-emerald-100 hover:text-white hover:bg-emerald-700 transition-colors"
             >
               <LogOut className="w-4 h-4" />
             </button>

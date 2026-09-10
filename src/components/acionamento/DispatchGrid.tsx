@@ -23,6 +23,7 @@ export function DispatchGrid({
   const [copiedCell, setCopiedCell] = useState<string | null>(null);
   const [sortField, setSortField] = useState<SortField>("forecast_start_time");
   const [sortAsc, setSortAsc] = useState<boolean>(true);
+  const [selectedRow, setSelectedRow] = useState<string | null>(null);
 
   // Status de acionamento disponíveis
   const STATUS_OPTIONS: DispatchStatus[] = [
@@ -109,17 +110,24 @@ export function DispatchGrid({
   };
 
   return (
-    <div className="border border-slate-700 rounded-b bg-slate-900 overflow-hidden shadow-md flex flex-col flex-1">
+    <div className="excel-grid overflow-hidden flex flex-col flex-1">
       {/* Contêiner com rolagem horizontal e vertical */}
       <div className="overflow-x-auto overflow-y-auto max-h-[calc(100vh-210px)] relative select-none">
         <table className="w-full text-left border-collapse table-fixed text-[11px]">
           {/* Cabeçalho Fixo */}
-          <thead className="bg-slate-800 text-slate-200 uppercase font-bold sticky top-0 z-20 shadow-sm border-b border-slate-700">
+          <thead className="sticky top-0 z-20">
+            <tr className="excel-column-letters h-5" aria-hidden="true">
+              <th className="w-[42px] sticky left-0 z-40">#</th>
+              {"ABCDEFGHIJKLMNOPQ".split("").map((letter) => (
+                <th key={letter}>{letter}</th>
+              ))}
+            </tr>
             <tr className="h-8">
+              <th className="excel-row-number w-[42px] sticky left-0 z-40">#</th>
               {/* Coluna 1: CONDUTOR (Fixada à esquerda) */}
               <th
                 onClick={() => handleSort("driver_name")}
-                className="w-[190px] px-2.5 py-1.5 border-r border-slate-700 sticky left-0 bg-slate-800 z-30 cursor-pointer hover:bg-slate-700 transition-colors"
+                className="w-[190px] px-2.5 py-1.5 sticky left-[42px] z-30 cursor-pointer"
               >
                 <div className="flex items-center justify-between">
                   <span className="truncate">CONDUTOR</span>
@@ -130,7 +138,7 @@ export function DispatchGrid({
               {/* Coluna 2: LOGIN (Fixada à esquerda) */}
               <th
                 onClick={() => handleSort("login")}
-                className="w-[85px] px-2 py-1.5 border-r border-slate-700 sticky left-[190px] bg-slate-800 z-30 cursor-pointer hover:bg-slate-700 transition-colors"
+                className="w-[85px] px-2 py-1.5 sticky left-[232px] z-30 cursor-pointer"
               >
                 <div className="flex items-center justify-between">
                   <span>LOGIN</span>
@@ -236,7 +244,8 @@ export function DispatchGrid({
               return (
                 <tr
                   key={row.id}
-                  className={`h-7 transition-colors hover:bg-slate-800/80 ${
+                  onClick={() => setSelectedRow(row.id)}
+                  className={`h-7 ${selectedRow === row.id ? "excel-selected-row" : ""} ${
                     hasAbonoPending
                       ? "bg-amber-950/30 border-l-2 border-l-amber-500"
                       : isEven
@@ -244,8 +253,9 @@ export function DispatchGrid({
                       : "bg-slate-900/60"
                   }`}
                 >
+                  <td className="excel-row-number w-[42px] sticky left-0 z-20 text-center">{index + 1}</td>
                   {/* 1. CONDUTOR (Fixado) */}
-                  <td className="px-2.5 py-0.5 border-r border-slate-800 sticky left-0 bg-slate-900 z-10 font-sans font-medium text-slate-100 truncate group">
+                  <td className="px-2.5 py-0.5 sticky left-[42px] z-10 font-sans font-medium truncate group">
                     <div className="flex items-center justify-between">
                       <span className="truncate" title={row.driver.name}>
                         {row.driver.name}
@@ -265,7 +275,7 @@ export function DispatchGrid({
                   </td>
 
                   {/* 2. LOGIN (Fixado) */}
-                  <td className="px-2 py-0.5 border-r border-slate-800 sticky left-[190px] bg-slate-900 z-10 text-slate-400 font-bold text-center group">
+                  <td className="px-2 py-0.5 sticky left-[232px] z-10 font-bold text-center group">
                     <div className="flex items-center justify-between">
                       <span className="mx-auto">{row.driver.login_matricula}</span>
                       <button
@@ -521,7 +531,7 @@ export function DispatchGrid({
 
             {sortedDispatches.length === 0 && (
               <tr>
-                <td colSpan={17} className="text-center py-8 text-slate-500 font-sans">
+                <td colSpan={18} className="text-center py-8 font-sans">
                   Nenhum condutor encontrado com os filtros selecionados.
                 </td>
               </tr>
