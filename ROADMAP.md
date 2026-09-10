@@ -79,7 +79,7 @@ Este documento estabelece o plano de implementação para o desenvolvimento do s
 **Objetivo:** Permitir o cadastro de motoristas, veículos e importação/gestão das escalas mensais.
 - [x] Cadastro e gestão de condutores com edição completa de turno e base.
 - [x] Cadastro e gestão de frotas/veículos.
-- [ ] Editor interativo de Escala Mensal (grade 1 a 31 com atalhos de teclado).
+- [x] Editor interativo de Escala Mensal (grade 1 a 31 com atalhos de teclado).
 - [ ] Importador de escalas mensais (Excel/CSV) com validação de duplicidade e mapeamento automático de códigos (`1` a `6`, `F`, `FE`, `AT`, `AF`, `DESL`).
 - [ ] Resolução automática em lote de turno, horário e código do dia para os despachos diários.
 

@@ -98,6 +98,41 @@ body {
 .excel-modal-title p { color: #d9efe4; }
 .excel-modal input, .excel-modal select { color: #222; background: #fff; border: 1px solid #999; border-radius: 0; }
 
+.excel-schedule-toolbar { color: #222; background: var(--excel-chrome); border: 1px solid #aaa; border-bottom: 0; }
+.excel-schedule-toolbar input, .excel-schedule-toolbar select { color: #222; background: #fff; border: 1px solid #aaa; border-radius: 0; }
+.excel-schedule-toolbar > button { color: #fff; background: var(--excel-green); border: 1px solid var(--excel-green-dark); }
+.excel-schedule-toolbar > button:hover:not(:disabled) { background: var(--excel-green-dark); }
+.excel-schedule-legend { color: #333; background: #f7f7f7; border: 1px solid #aaa; border-bottom: 0; }
+.excel-schedule-legend span:not(.excel-source) { display: inline-flex; align-items: center; gap: 5px; }
+.excel-schedule-legend i { width: 12px; height: 12px; border: 1px solid #aaa; }
+.excel-schedule-legend i.is-work { background: #fff; }
+.excel-schedule-legend i.is-rest { background: #fce8e6; border-color: #e2aaa5; }
+.excel-schedule-legend i.is-exception { background: #fff2cc; border-color: #d6b656; }
+.excel-schedule-grid { color: #222; background: #fff; border: 1px solid #999; }
+.excel-schedule-grid table { min-width: max-content; font-variant-numeric: tabular-nums; }
+.excel-schedule-grid th { height: 38px; padding: 2px 4px; color: #fff; background: var(--excel-green); border-right: 1px solid #4e9d72; border-bottom: 1px solid var(--excel-green-dark); text-align: left; }
+.excel-schedule-grid thead th:nth-child(2) { left: 40px; }
+.excel-schedule-grid thead th:nth-child(3), .excel-schedule-grid .excel-shift-cell { left: 264px; }
+.excel-schedule-grid th.is-weekend { background: #185c37; }
+.excel-schedule-grid th strong, .excel-schedule-grid th small { display: block; line-height: 15px; }
+.excel-schedule-grid th small { color: #d9efe4; font-size: 9px; font-weight: 400; }
+.excel-schedule-grid td { height: 32px; padding: 0; background: #fff; border-right: 1px solid var(--excel-grid); border-bottom: 1px solid var(--excel-grid); }
+.excel-schedule-grid tbody tr:nth-child(even) td { background: #fbfbfb; }
+.excel-schedule-grid tbody tr:hover td { background: #f1f8f4; }
+.excel-schedule-grid .excel-row-number { width: 40px; min-width: 40px; color: #555; background: #ededed !important; text-align: center; }
+.excel-schedule-grid .excel-driver-cell { width: 224px; min-width: 224px; padding: 2px 8px; background: #fff !important; border-right-color: #999; overflow: hidden; white-space: nowrap; }
+.excel-schedule-grid .excel-driver-cell strong, .excel-schedule-grid .excel-driver-cell small { display: block; overflow: hidden; text-overflow: ellipsis; }
+.excel-schedule-grid .excel-driver-cell small { color: #777; font-size: 9px; font-weight: 400; }
+.excel-schedule-grid .excel-shift-cell { width: 64px; min-width: 64px; color: #185c37; background: #f3f3f3 !important; border-right-color: #888; text-align: center; font-weight: 700; }
+.excel-schedule-grid .excel-scale-cell { position: relative; width: 40px; min-width: 40px; text-align: center; }
+.excel-schedule-grid .excel-scale-cell.is-rest { background: #fce8e6; color: #9c2929; }
+.excel-schedule-grid .excel-scale-cell.is-exception { background: #fff2cc; color: #7f6000; }
+.excel-schedule-grid .excel-scale-cell.is-invalid { background: #ffd7d7; color: #a40000; }
+.excel-schedule-grid .excel-scale-cell.is-dirty::after { content: ""; position: absolute; top: 0; right: 0; border-top: 6px solid #e6a700; border-left: 6px solid transparent; pointer-events: none; }
+.excel-schedule-grid .excel-scale-cell input { width: 100%; height: 31px; padding: 0 1px; color: inherit; background: transparent; border: 0; outline: 0; text-align: center; font-size: 10px; font-weight: 700; text-transform: uppercase; }
+.excel-schedule-grid .excel-scale-cell:focus-within { z-index: 5; box-shadow: inset 0 0 0 2px var(--excel-green); }
+.excel-schedule-grid .excel-scale-cell input:focus { background: rgba(255,255,255,.35); }
+
 .excel-grid { color: var(--excel-text); background: #fff; border: 1px solid #a6a6a6; box-shadow: none; }
 .excel-grid table { min-width: 1760px; background: #fff; }
 .excel-grid thead { color: #fff !important; background: var(--excel-green) !important; box-shadow: none !important; border-bottom: 1px solid var(--excel-green-dark) !important; }
