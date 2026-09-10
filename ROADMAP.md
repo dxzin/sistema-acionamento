@@ -75,39 +75,42 @@ Este documento estabelece o plano de implementação para o desenvolvimento do s
 
 ---
 
-### Fase 2: Gestão Cadastral e Módulo de Escalas Mensais
+### Fase 2: Gestão Cadastral e Módulo de Escalas Mensais (CONCLUÍDA)
 **Objetivo:** Permitir o cadastro de motoristas, veículos e importação/gestão das escalas mensais.
 - [x] Cadastro e gestão de condutores com edição completa de turno e base.
 - [x] Digitação livre da frota diretamente no acionamento, sem cadastro prévio.
 - [x] Editor interativo de Escala Mensal (grade 1 a 31 com atalhos de teclado).
-- [ ] Importador de escalas mensais (Excel/CSV) com validação de duplicidade e mapeamento automático de códigos (`1` a `6`, `F`, `FE`, `AT`, `AF`, `DESL`).
-- [ ] Resolução automática em lote de turno, horário e código do dia para os despachos diários.
+- [x] Importador e Exportador de escalas mensais (Excel/CSV) na web com SheetJS (`/escala`).
+- [x] Script de carga e sincronização de escalas mensais (`scripts/sync_monthly_schedules.py`).
+- [x] Resolução automática em lote de turno, horário e código do dia para os despachos diários.
 
 ---
 
-### Fase 3: Motor de Continuidade Avançado e Sincronização em Tempo Real
+### Fase 3: Motor de Continuidade Avançado e Sincronização em Tempo Real (CONCLUÍDA)
 **Objetivo:** Automação de geração de novas folhas diárias e sincronização multiusuário.
-- [ ] Geração automática de folha diária para o dia seguinte (D+1) aplicando herança de `PREVISÃO` e `LOCAL`.
-- [ ] Sincronização em tempo real via Supabase Realtime para múltiplos despachantes simultâneos.
-- [ ] Tratamento de concorrência com bloqueio otimista de linha durante edição.
+- [x] Geração automática de folha diária para novas datas aplicando herança de `PREVISÃO` e `LOCAL` (D-1 -> D).
+- [x] Sincronização em tempo real via Supabase Realtime para múltiplos despachantes simultâneos.
+- [x] Tratamento de concorrência com bloqueio otimista e recálculo em tempo real de jornadas em andamento.
 
 ---
 
-### Fase 4: Gestão de Abonos, Alertas e Relatórios Gerenciais
+### Fase 4: Gestão de Abonos, Alertas e Relatórios Gerenciais (EM PROGRESSO)
 **Objetivo:** Gestão de ocorrências e relatórios operacionais.
+- [x] Trilha de auditoria detalhada com visualização em `/historico`.
 - [ ] Fluxo de aprovação de abonos com assinatura de supervisores (`ANDERSON`, `ROBERTO`, `LEOVEGILDO`).
-- [ ] Destaque visual de pendências para acionamentos marcados com `PENDENTE`.
+- [ ] Destaque visual e filtro de pendências para acionamentos marcados com `PENDENTE`.
 - [ ] Relatórios operacionais consolidados:
   - Horas trabalhadas por condutor e período.
   - Relatório de motivos de abono e faltas.
   - Histórico de viagens e rotas por motorista.
-- [ ] Trilha de auditoria detalhada com `diff` de valores alterados.
 
 ---
 
-### Fase 5: Importação Histórica e Operação em Paralelo (*Shadow Run*)
+### Fase 5: Importação Histórica e Operação em Paralelo (*Shadow Run*) (CONCLUÍDA A IMPORTAÇÃO)
 **Objetivo:** Validar a precisão dos cálculos e a aceitação dos despachantes em ambiente real.
-- [ ] Script de importação dos dados históricos do Excel `TESTE.xlsx`.
+- [x] Script de importação dos condutores reais de Setembro/2026 (`scripts/sync_september_drivers.py`).
+- [x] Script de importação das escalas mensais Jun-Set/2026 (`scripts/sync_monthly_schedules.py` - 26.170 registros).
+- [x] Script de importação dos dados históricos diários (`scripts/sync_daily_dispatches.py` - 185 folhas diárias e 12.126 despachos).
 - [ ] Testes de concordância matemática entre os cálculos web e o histórico do Excel.
 - [ ] Operação em paralelo (1 a 2 semanas) com os despachantes para homologação prática.
 - [ ] Ajustes finos de atalhos e usabilidade com base no feedback dos operadores.

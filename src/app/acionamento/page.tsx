@@ -7,6 +7,7 @@ import { DispatchStatsBar } from "@/components/acionamento/DispatchStatsBar";
 import { DispatchFilters } from "@/components/acionamento/DispatchFilters";
 import { DispatchGrid } from "@/components/acionamento/DispatchGrid";
 import { dispatchService } from "@/lib/services/dispatch-service";
+import { createClient } from "@/lib/supabase/client";
 import { DispatchRowModel, DispatchFilterOptions, DispatchSummaryKPIs } from "@/types/domain";
 import { Location } from "@/types/database";
 
@@ -21,7 +22,7 @@ export default function AcionamentoPage() {
     statusFilter: "",
     baseFilter: "",
     shiftFilter: "",
-    date: "2026-06-02",
+    date: "2026-09-01",
     region: "SP",
   });
 
@@ -44,6 +45,30 @@ export default function AcionamentoPage() {
 
   useEffect(() => {
     loadData();
+  }, [loadData]);
+
+  // Sincronização em tempo real via Supabase Realtime
+  useEffect(() => {
+    const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
+    const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+    if (!url || !key || url.includes("placeholder")) return;
+
+    const supabase = createClient();
+    const channel = supabase
+      .channel("dispatches_changes")
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "dispatches" },
+        () => {
+          // Recarregar dados com debounce leve
+          loadData();
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
   }, [loadData]);
 
   // Recalcular periodicamente as jornadas em andamento (tempo real a cada 10s)

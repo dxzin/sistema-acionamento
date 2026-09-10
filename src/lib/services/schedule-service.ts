@@ -1,6 +1,7 @@
 import { INITIAL_BASES, INITIAL_DRIVERS } from "@/lib/mock-data";
 import { createClient } from "@/lib/supabase/client";
 import { Driver, MonthlyScheduleEntry } from "@/types/database";
+import * as XLSX from "xlsx";
 
 export const SCALE_CODES = ["1", "2", "3", "4", "5", "6", "F", "FE", "AT", "AF", "DESL"] as const;
 
@@ -16,11 +17,31 @@ export interface ScheduleCatalog {
   source: "supabase" | "demo";
 }
 
+export interface ImportResult {
+  changes: ScheduleCellChange[];
+  matchedDriversCount: number;
+  unmatchedNames: string[];
+  totalEntries: number;
+}
+
 const REGION_BASE_CODES: Record<string, string[]> = {
   SP: ["LP", "CASTILHO"],
   MG: ["UB", "LZ", "JP"],
+  UBJP: ["UB", "LZ", "JP"],
   MS: ["MS"],
 };
+
+function normalizeCode(value: string) {
+  return value.toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 4);
+}
+
+function matchKey(value: string) {
+  return (value || "")
+    .normalize("NFKD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toUpperCase()
+    .replace(/[^A-Z0-9]/g, "");
+}
 
 function hasSupabaseConfig() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -127,4 +148,122 @@ export async function saveMonthlySchedule(month: number, year: number, region: s
     const { error } = await supabase.from("monthly_schedule_entries").delete().eq("schedule_id", schedule.id).eq("driver_id", change.driver_id).eq("day_of_month", change.day_of_month);
     if (error) throw new Error(error.message);
   }
+}
+
+export function parseScheduleFile(
+  buffer: ArrayBuffer,
+  drivers: Driver[],
+  daysInMonth: number
+): ImportResult {
+  const wb = XLSX.read(buffer, { type: "array" });
+  const sheetName = wb.SheetNames[0];
+  const sheet = wb.Sheets[sheetName];
+  const rows = XLSX.utils.sheet_to_json<any[]>(sheet, { header: 1 });
+
+  const driverByKey = new Map<string, Driver>();
+  const driverByLogin = new Map<string, Driver>();
+  for (const d of drivers) {
+    driverByKey.set(matchKey(d.name), d);
+    if (d.login_matricula) driverByLogin.set(d.login_matricula.trim(), d);
+  }
+
+  let headerRowIndex = 0;
+  let nameCol = 0;
+  let loginCol = -1;
+  let firstDayCol = 2;
+
+  for (let r = 0; r < Math.min(6, rows.length); r++) {
+    const row = rows[r];
+    if (!Array.isArray(row)) continue;
+    let foundDays = 0;
+    for (let c = 0; c < row.length; c++) {
+      const val = String(row[c] || "").trim().toLowerCase();
+      if (val === "1" || val === "01") {
+        foundDays++;
+        firstDayCol = c;
+      }
+      if (val.includes("nome") || val.includes("condutor") || val.includes("colaborador")) {
+        nameCol = c;
+      }
+      if (val.includes("login") || val.includes("matr")) {
+        loginCol = c;
+      }
+    }
+    if (foundDays > 0) {
+      headerRowIndex = r;
+      break;
+    }
+  }
+
+  const changes: ScheduleCellChange[] = [];
+  const matchedDrivers = new Set<string>();
+  const unmatchedNames: string[] = [];
+
+  for (let r = headerRowIndex + 1; r < rows.length; r++) {
+    const row = rows[r];
+    if (!Array.isArray(row) || !row[nameCol]) continue;
+    const rawName = String(row[nameCol]).trim();
+    const cleanName = rawName.replace(/\s+-\s+VOLTA\s+\d{1,2}\/\d{1,2}\s*$/i, "").trim();
+    const rawLogin = loginCol >= 0 && row[loginCol] ? String(row[loginCol]).trim() : "";
+
+    const driver = driverByKey.get(matchKey(cleanName)) || (rawLogin ? driverByLogin.get(rawLogin) : undefined);
+    if (!driver) {
+      unmatchedNames.push(cleanName);
+      continue;
+    }
+
+    matchedDrivers.add(driver.id);
+
+    for (let day = 1; day <= daysInMonth; day++) {
+      const colIdx = firstDayCol + (day - 1);
+      if (colIdx < row.length) {
+        const rawCode = row[colIdx];
+        if (rawCode !== undefined && rawCode !== null && String(rawCode).trim() !== "") {
+          let codeStr = String(rawCode).trim().toUpperCase();
+          if (codeStr.endsWith(".0")) codeStr = codeStr.slice(0, -2);
+          codeStr = normalizeCode(codeStr);
+          changes.push({
+            driver_id: driver.id,
+            day_of_month: day,
+            scale_code: codeStr,
+          });
+        }
+      }
+    }
+  }
+
+  return {
+    changes,
+    matchedDriversCount: matchedDrivers.size,
+    unmatchedNames,
+    totalEntries: changes.length,
+  };
+}
+
+export function exportScheduleToExcel(
+  month: number,
+  year: number,
+  region: string,
+  drivers: Driver[],
+  values: Record<string, string>
+) {
+  const daysInMonth = new Date(year, month, 0).getDate();
+  const headers = ["#", "Condutor", "Login", "Turno", ...Array.from({ length: daysInMonth }, (_, i) => String(i + 1))];
+  const dataRows = drivers.map((d, idx) => {
+    const row: (string | number)[] = [
+      idx + 1,
+      d.name,
+      d.login_matricula,
+      d.default_shift || "",
+    ];
+    for (let day = 1; day <= daysInMonth; day++) {
+      row.push(values[`${d.id}:${day}`] || "");
+    }
+    return row;
+  });
+
+  const ws = XLSX.utils.aoa_to_sheet([headers, ...dataRows]);
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, `Escala ${month}-${year}`);
+  XLSX.writeFile(wb, `escala_${region}_${year}_${String(month).padStart(2, "0")}.xlsx`);
 }

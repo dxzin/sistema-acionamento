@@ -3,6 +3,7 @@ import { Base, Dispatch, Driver, Location, Vehicle } from "@/types/database";
 import { DispatchRowModel } from "@/types/domain";
 import { calculateJornada } from "../calculations/jornada";
 import { calculateNextForecast } from "../calculations/interjornada";
+import { resolveDayContinuity } from "../calculations/continuity";
 import {
   INITIAL_BASES,
   INITIAL_DISPATCHES,
@@ -10,6 +11,13 @@ import {
   INITIAL_LOCATIONS,
   INITIAL_VEHICLES,
 } from "../mock-data";
+
+const REGION_BASES: Record<string, string[]> = {
+  SP: ["LP", "CASTILHO"],
+  UBJP: ["UB", "LZ", "JP"],
+  MG: ["UB", "LZ", "JP"],
+  MS: ["MS"],
+};
 
 class DispatchService {
   private localDispatches: Dispatch[] = [...INITIAL_DISPATCHES];
@@ -76,18 +84,26 @@ class DispatchService {
     return this.localDrivers;
   }
 
+  private getPreviousDate(dateStr: string): string {
+    const d = new Date(dateStr + "T12:00:00Z");
+    d.setUTCDate(d.getUTCDate() - 1);
+    return d.toISOString().split("T")[0];
+  }
+
   async getDispatchesForSheet(date: string, region: string = "SP"): Promise<DispatchRowModel[]> {
     let rawDispatches: Dispatch[] = [];
+    const normalizedRegion = region === "ALL" ? "SP" : region;
 
     if (this.isSupabaseConfigured()) {
       try {
         const supabase = createClient();
-        // Busca a folha diária ou cria se não existir
+        
+        // 1. Busca a folha diária existente
         const { data: sheet } = await supabase
           .from("daily_sheets")
           .select("id")
           .eq("date", date)
-          .eq("region", region)
+          .eq("region", normalizedRegion)
           .maybeSingle();
 
         if (sheet) {
@@ -99,6 +115,118 @@ class DispatchService {
 
           if (!error && data && data.length > 0) {
             rawDispatches = data;
+          }
+        }
+
+        // 2. Se a folha diária ainda não existir ou não tiver despachos, gera automaticamente
+        if (rawDispatches.length === 0) {
+          const targetBases = REGION_BASES[normalizedRegion] || ["LP", "CASTILHO"];
+          const { data: bases } = await supabase.from("bases").select("id,code").in("code", targetBases);
+          const baseIds = (bases || []).map((b) => b.id);
+
+          if (baseIds.length > 0) {
+            const { data: activeDrivers } = await supabase
+              .from("drivers")
+              .select("*")
+              .in("base_id", baseIds)
+              .eq("is_active", true)
+              .order("name");
+
+            if (activeDrivers && activeDrivers.length > 0) {
+              // Cria ou obtém a folha diária
+              const { data: newSheet, error: sheetErr } = await supabase
+                .from("daily_sheets")
+                .upsert({ date, region: normalizedRegion, status: "OPEN" }, { onConflict: "date,region" })
+                .select("id")
+                .single();
+
+              if (!sheetErr && newSheet) {
+                // Obter dia, mês e ano da data selecionada
+                const [yStr, mStr, dStr] = date.split("-");
+                const dayNum = parseInt(dStr, 10);
+                const monthNum = parseInt(mStr, 10);
+                const yearNum = parseInt(yStr, 10);
+                const scheduleRegion = normalizedRegion === "UBJP" ? "MG" : normalizedRegion;
+
+                // Buscar escalas mensais do dia
+                const { data: sched } = await supabase
+                  .from("monthly_schedules")
+                  .select("id")
+                  .eq("month", monthNum)
+                  .eq("year", yearNum)
+                  .eq("region", scheduleRegion)
+                  .maybeSingle();
+
+                let scheduleEntriesByDriver = new Map<string, { scale_code: string; shift_letter?: string | null; shift_time?: string | null }>();
+                if (sched) {
+                  const { data: entries } = await supabase
+                    .from("monthly_schedule_entries")
+                    .select("driver_id,scale_code,shift_letter,shift_time")
+                    .eq("schedule_id", sched.id)
+                    .eq("day_of_month", dayNum);
+
+                  if (entries) {
+                    for (const e of entries) {
+                      scheduleEntriesByDriver.set(e.driver_id, e);
+                    }
+                  }
+                }
+
+                // Buscar despachos de D-1 para continuidade
+                const prevDate = this.getPreviousDate(date);
+                const { data: prevSheet } = await supabase
+                  .from("daily_sheets")
+                  .select("id")
+                  .eq("date", prevDate)
+                  .eq("region", normalizedRegion)
+                  .maybeSingle();
+
+                let prevDispatchesByDriver = new Map<string, Dispatch>();
+                if (prevSheet) {
+                  const { data: prevDispatches } = await supabase
+                    .from("dispatches")
+                    .select("*")
+                    .eq("daily_sheet_id", prevSheet.id);
+
+                  if (prevDispatches) {
+                    for (const p of prevDispatches) {
+                      prevDispatchesByDriver.set(p.driver_id, p);
+                    }
+                  }
+                }
+
+                // Montar novos despachos para cada condutor ativo
+                const newDispatchesPayload = activeDrivers.map((d) => {
+                  const schedEntry = scheduleEntriesByDriver.get(d.id);
+                  const prevDisp = prevDispatchesByDriver.get(d.id);
+                  const continuity = resolveDayContinuity(d.id, prevDisp);
+
+                  const scaleCode = schedEntry?.scale_code || "";
+                  const isRestOrException = ["F", "FE", "AT", "AF", "DESL"].includes(scaleCode);
+                  const initialStatus = isRestOrException ? "ABONADO" : "ACIONADO";
+                  const initialReason = isRestOrException ? `ESCALA: ${scaleCode}` : null;
+
+                  return {
+                    daily_sheet_id: newSheet.id,
+                    driver_id: d.id,
+                    scale_day_status: scaleCode || null,
+                    forecast_start_time: continuity.forecastStartTime || schedEntry?.shift_time || d.default_start_time || null,
+                    dispatch_status: initialStatus,
+                    abono_reason: initialReason,
+                    origin_location_id: continuity.originLocationId || null,
+                  };
+                });
+
+                const { data: inserted, error: insertErr } = await supabase
+                  .from("dispatches")
+                  .upsert(newDispatchesPayload, { onConflict: "daily_sheet_id,driver_id" })
+                  .select();
+
+                if (!insertErr && inserted && inserted.length > 0) {
+                  rawDispatches = inserted;
+                }
+              }
+            }
           }
         }
       } catch (e) {
@@ -137,7 +265,6 @@ class DispatchService {
       const destLoc = disp.destination_location_id ? locationsMap.get(disp.destination_location_id) : undefined;
       const finalDestLoc = disp.final_destination_location_id ? locationsMap.get(disp.final_destination_location_id) : undefined;
 
-      // Cálculo de jornada
       const jornada = calculateJornada(disp.entry_time, disp.exit_time);
 
       return {
@@ -157,8 +284,19 @@ class DispatchService {
   }
 
   async updateDispatch(id: string, updates: Partial<DispatchRowModel>): Promise<Dispatch | null> {
-    // Recalcular jornada e próxima previsão se os horários foram alterados
-    const { fleet_code, driver: _driver, base: _base, vehicle: _vehicle, origin_location: _origin, destination_location: _destination, final_destination_location: _finalDestination, formatted_worked_time: _formatted, is_overnight: _overnight, is_ongoing: _ongoing, ...dispatchUpdates } = updates;
+    const {
+      fleet_code,
+      driver: _driver,
+      base: _base,
+      vehicle: _vehicle,
+      origin_location: _origin,
+      destination_location: _destination,
+      final_destination_location: _finalDestination,
+      formatted_worked_time: _formatted,
+      is_overnight: _overnight,
+      is_ongoing: _ongoing,
+      ...dispatchUpdates
+    } = updates;
     const processedUpdates: Partial<Dispatch> = { ...dispatchUpdates };
 
     if (fleet_code !== undefined) {
@@ -216,7 +354,6 @@ class DispatchService {
           .single();
 
         if (!error && data) {
-          // Atualiza cache local
           this.localDispatches = this.localDispatches.map((d) => (d.id === id ? { ...d, ...data } : d));
           return data;
         }
@@ -225,7 +362,6 @@ class DispatchService {
       }
     }
 
-    // Atualização local
     const index = this.localDispatches.findIndex((d) => d.id === id);
     if (index !== -1) {
       this.localDispatches[index] = {
