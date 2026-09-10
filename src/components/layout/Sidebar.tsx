@@ -8,6 +8,7 @@ import {
   ClipboardList,
   History,
   Settings,
+  Truck,
   Users,
 } from "lucide-react";
 
@@ -32,6 +33,12 @@ export function Sidebar() {
       href: "/condutores",
       icon: Users,
       description: "Cadastro e bases",
+    },
+    {
+      name: "Frotas",
+      href: "/frotas",
+      icon: Truck,
+      description: "Veículos operacionais",
     },
     {
       name: "Histórico",
