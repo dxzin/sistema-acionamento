@@ -450,18 +450,18 @@ export function DispatchGrid({
     // O horário visível é a fonte principal da cor. O turno cadastrado é
     // usado apenas quando o condutor ainda não possui um horário reconhecido.
     if (t.startsWith("04:")) {
-      return "bg-[#FFF2CC] text-[#7F4B00] border border-[#FDE68A] font-bold px-2 py-0.5 rounded text-[11px] whitespace-nowrap shadow-xs";
+      return "flex min-h-8 w-full items-center justify-center bg-[#FFF2CC] text-[#7F4B00] font-bold text-[11px] whitespace-nowrap";
     }
     if (t.startsWith("12:")) {
-      return "bg-[#DDEBF7] text-[#0369A1] border border-[#BAE6FD] font-bold px-2 py-0.5 rounded text-[11px] whitespace-nowrap shadow-xs";
+      return "flex min-h-8 w-full items-center justify-center bg-[#DDEBF7] text-[#0369A1] font-bold text-[11px] whitespace-nowrap";
     }
     if (t.startsWith("20:")) {
-      return "bg-[#EDE7F6] text-[#5B2C6F] border border-[#DDD6FE] font-bold px-2 py-0.5 rounded text-[11px] whitespace-nowrap shadow-xs";
+      return "flex min-h-8 w-full items-center justify-center bg-[#EDE7F6] text-[#5B2C6F] font-bold text-[11px] whitespace-nowrap";
     }
-    if (s === "A") return "bg-[#FFF2CC] text-[#7F4B00] border border-[#FDE68A] font-bold px-2 py-0.5 rounded text-[11px] whitespace-nowrap shadow-xs";
-    if (s === "B") return "bg-[#DDEBF7] text-[#0369A1] border border-[#BAE6FD] font-bold px-2 py-0.5 rounded text-[11px] whitespace-nowrap shadow-xs";
-    if (s === "C") return "bg-[#EDE7F6] text-[#5B2C6F] border border-[#DDD6FE] font-bold px-2 py-0.5 rounded text-[11px] whitespace-nowrap shadow-xs";
-    return "bg-slate-100 text-slate-700 border border-slate-300 font-bold px-2 py-0.5 rounded text-[11px] whitespace-nowrap";
+    if (s === "A") return "flex min-h-8 w-full items-center justify-center bg-[#FFF2CC] text-[#7F4B00] font-bold text-[11px] whitespace-nowrap";
+    if (s === "B") return "flex min-h-8 w-full items-center justify-center bg-[#DDEBF7] text-[#0369A1] font-bold text-[11px] whitespace-nowrap";
+    if (s === "C") return "flex min-h-8 w-full items-center justify-center bg-[#EDE7F6] text-[#5B2C6F] font-bold text-[11px] whitespace-nowrap";
+    return "flex min-h-8 w-full items-center justify-center bg-slate-100 text-slate-700 font-bold text-[11px] whitespace-nowrap";
   };
 
   // Badges de status operacional com cores exatas da planilha
@@ -1424,7 +1424,7 @@ export function DispatchGrid({
                   </td>
 
                   {/* 3. HORÁRIO (Com cores de turno 04h, 12h, 20h) */}
-                  <td className="px-1 py-1 text-center whitespace-nowrap">
+                  <td className="p-0 text-center whitespace-nowrap">
                     <span className={getHorarioBadge(row.driver.default_start_time, row.driver.default_shift)}>
                       {row.driver.default_start_time ? row.driver.default_start_time.slice(0, 5) : "--:--"}
                     </span>
