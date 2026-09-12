@@ -86,6 +86,7 @@ Este documento registra decisões confirmadas durante os testes. Alterações ne
 11. O modo escuro usa tons de grafite em menus, indicadores, filtros, grades, formulários, relatórios e janelas auxiliares.
 12. As cores operacionais de status e turnos permanecem preservadas e legíveis nos dois temas.
 13. No tema escuro, o texto do status mantém a cor de alto contraste correspondente ao fundo operacional.
+14. O texto do status fica geometricamente centralizado, sem deslocamento causado pelo indicador nativo da lista.
 
 ## Segurança e usuários
 
