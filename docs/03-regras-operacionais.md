@@ -79,6 +79,7 @@ Este documento registra decisões confirmadas durante os testes. Alterações ne
 4. Se o destino selecionado for maior que o bloco copiado, o padrão deve se repetir como no Excel.
 5. A colagem deve ser efetivamente salva no banco, não apenas exibida na tela.
 6. Ocultar uma coluna não deve esticar as colunas restantes.
+7. O conteúdo das linhas operacionais utiliza fonte de `13px` para facilitar a leitura.
 
 ## Segurança e usuários
 
