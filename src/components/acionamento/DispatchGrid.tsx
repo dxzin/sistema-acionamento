@@ -49,7 +49,7 @@ function getColumnValue(row: DispatchRowModel, key: ColumnFilterKey): string {
     login: row.driver.login_matricula,
     schedule: row.driver.default_start_time?.slice(0, 5),
     forecast: row.forecast_start_time,
-    status: row.dispatch_status === "TROCA" ? "BALDEIO" : row.dispatch_status,
+    status: row.dispatch_status,
     reason: row.abono_reason,
     origin: row.origin_location?.name,
     entry: row.entry_time,
@@ -316,20 +316,20 @@ function ExcelColumnFilter({ label, options, selected, onChange }: ExcelColumnFi
 }
 
 function EditableStatusCell({ value, listId, className, onCommit }: EditableStatusCellProps) {
-  const displayValue = value === "TROCA" ? "BALDEIO" : value;
+  const displayValue = value;
   const [draft, setDraft] = useState(displayValue);
 
   useEffect(() => setDraft(displayValue), [displayValue]);
 
   const commit = () => {
     const typed = draft.trim().replace(/\s+/g, " ").toUpperCase();
-    const normalized = typed === "BALDEIO" ? "TROCA" : typed;
+    const normalized = typed;
     if (!normalized) {
       setDraft("");
       if (value) onCommit("");
       return;
     }
-    setDraft(normalized === "TROCA" ? "BALDEIO" : normalized);
+    setDraft(normalized);
     if (normalized !== value) onCommit(normalized);
   };
 
@@ -413,6 +413,7 @@ export function DispatchGrid({
     "ACIONADO",
     "ABONADO",
     "APOIO",
+    "BALDEIO",
     "TROCA",
     "FALTA",
     "ATESTADO",
@@ -421,9 +422,6 @@ export function DispatchGrid({
     "SUSPENSÃO",
     "VIAGEM FECHADA",
   ];
-
-  const getStatusLabel = (status: DispatchStatus) =>
-    status === "TROCA" ? "BALDEIO" : status;
 
   // Aprovadores
   const APPROVER_OPTIONS = ["ANDERSON", "ROBERTO", "LEOVEGILDO", "PENDENTE"];
@@ -475,6 +473,7 @@ export function DispatchGrid({
         return "bg-[#FFC7CE] text-[#9C0006] border-[#F4B084]";
       case "APOIO":
         return "bg-[#FFEB9C] text-[#9C5700] border-[#FFD966]";
+      case "BALDEIO":
       case "TROCA":
         return "bg-[#BF9000] text-[#1F1F1F] border-[#806000]";
       case "FALTA":
@@ -626,7 +625,7 @@ export function DispatchGrid({
     const value = rawValue.trim();
     switch (column) {
       case 3: return { forecast_start_time: value || null };
-      case 4: return { dispatch_status: value.toUpperCase() === "BALDEIO" ? "TROCA" : value.toUpperCase() };
+      case 4: return { dispatch_status: value.toUpperCase() };
       case 5: return { abono_reason: value || null };
       case 6: {
         const location = locations.find((item) => item.name.toUpperCase() === value.toUpperCase());
@@ -979,7 +978,7 @@ export function DispatchGrid({
     >
       <datalist id="dispatch-status-options">
         {STATUS_OPTIONS.map((status) => (
-          <option key={status} value={getStatusLabel(status)} />
+          <option key={status} value={status} />
         ))}
       </datalist>
       <div className="relative flex items-center justify-end gap-2 border-b border-[#a6a6a6] bg-[#f3f3f3] px-2 py-1">
@@ -1447,7 +1446,7 @@ export function DispatchGrid({
                       value={row.dispatch_status}
                       listId="dispatch-status-options"
                       onCommit={(value) => commitUpdate(row.id, { dispatch_status: value })}
-                      className={`excel-status-select w-full py-0.5 px-1 rounded text-[10px] font-extrabold border cursor-pointer focus:outline-none shadow-xs ${getStatusClass(
+                      className={`excel-status-select w-full py-0.5 px-1 rounded text-center text-[10px] font-extrabold border cursor-pointer focus:outline-none shadow-xs ${getStatusClass(
                         row.dispatch_status
                       )}`}
                     />

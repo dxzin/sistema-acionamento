@@ -182,6 +182,7 @@ body {
 .excel-grid .excel-status-abonado { color: #9c0006 !important; background: #ffc7ce !important; border-color: #f4b084 !important; }
 .excel-grid .excel-status-apoio { color: #9c5700 !important; background: #ffeb9c !important; border-color: #ffd966 !important; }
 .excel-grid .excel-status-troca { color: #1f1f1f !important; background: #bf9000 !important; border-color: #806000 !important; }
+.excel-grid .excel-status-baldeio { color: #1f1f1f !important; background: #bf9000 !important; border-color: #806000 !important; }
 .excel-grid .excel-status-falta { color: #fff !important; background: #f00 !important; border-color: #c00 !important; }
 .excel-grid .excel-status-atestado { color: #1f497d !important; background: #b8cce4 !important; border-color: #8db4e2 !important; }
 .excel-grid .excel-status-afastado { color: #604a7b !important; background: #e1d5e7 !important; border-color: #d5c2e0 !important; }

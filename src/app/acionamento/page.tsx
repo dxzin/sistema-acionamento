@@ -219,7 +219,7 @@ export default function AcionamentoPage() {
       if (d.dispatch_status === "ACIONADO") acionados++;
       if (d.dispatch_status === "ABONADO") abonados++;
       if (d.dispatch_status === "APOIO") apoios++;
-      if (d.dispatch_status === "TROCA") trocas++;
+      if (["BALDEIO", "TROCA"].includes(d.dispatch_status)) trocas++;
       if (d.dispatch_status === "FALTA") faltas++;
       if (d.is_ongoing) emAndamento++;
       if (d.abono_authorized_by === "PENDENTE" && d.dispatch_status === "ABONADO") pendentesAbono++;

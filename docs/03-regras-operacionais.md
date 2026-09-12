@@ -15,6 +15,8 @@ Este documento registra decisões confirmadas durante os testes. Alterações ne
 2. Uma nova folha diária deve abrir com todos os status em branco.
 3. Apagar um status deve deixá-lo vazio; nenhum valor pode reaparecer automaticamente.
 4. O próprio banco usa status vazio como padrão; nenhuma inserção assume `ACIONADO` por omissão.
+5. `BALDEIO` e `TROCA` são opções distintas e permanecem disponíveis para o operador.
+6. O texto do status fica centralizado na célula.
 
 ## Criação da folha diária
 

@@ -67,7 +67,8 @@ export function DispatchFilters({
           <option value="ACIONADO">ACIONADO</option>
           <option value="ABONADO">ABONADO</option>
           <option value="APOIO">APOIO</option>
-          <option value="TROCA">BALDEIO</option>
+          <option value="BALDEIO">BALDEIO</option>
+          <option value="TROCA">TROCA</option>
           <option value="FALTA">FALTA</option>
           <option value="ATESTADO">ATESTADO</option>
           <option value="AFASTADO">AFASTADO</option>
