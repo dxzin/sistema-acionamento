@@ -12,6 +12,8 @@ interface DispatchGridProps {
   locations: { id: string; name: string }[];
   saveState: { status: "idle" | "saving" | "saved" | "error"; message?: string };
   readOnly?: boolean;
+  activeEditors?: Record<string, string[]>;
+  onActiveRowChange?: (rowId: string | null) => void;
 }
 
 interface GridHistoryChange {
@@ -361,6 +363,8 @@ export function DispatchGrid({
   locations,
   saveState,
   readOnly = false,
+  activeEditors = {},
+  onActiveRowChange,
 }: DispatchGridProps) {
   const [copiedCell, setCopiedCell] = useState<string | null>(null);
   const [sortField, setSortField] = useState<SortField>("schedule_time");
@@ -1128,6 +1132,7 @@ export function DispatchGrid({
             setContextMenu(null);
             const position = cellPosition(event.target);
             if (!position) return;
+            onActiveRowChange?.(processedDispatches[position.row]?.id || null);
             setIsSelecting(true);
             setSelection((current) => event.shiftKey && current
               ? { ...current, focus: position }
@@ -1377,14 +1382,19 @@ export function DispatchGrid({
             {processedDispatches.map((row, index) => {
               const hasAbonoPending =
                 row.abono_authorized_by === "PENDENTE" && row.dispatch_status === "ABONADO";
+              const rowEditors = activeEditors[row.id] || [];
 
               return (
                 <tr
                   key={row.id}
-                  onClick={() => setSelectedRow(row.id)}
+                  onClick={() => {
+                    setSelectedRow(row.id);
+                    onActiveRowChange?.(row.id);
+                  }}
                   className={`h-8 ${selectedRow === row.id ? "excel-selected-row" : ""} ${
                     hasAbonoPending ? "bg-amber-50" : ""
-                  }`}
+                  } ${rowEditors.length ? "excel-collaborator-row" : ""}`}
+                  title={rowEditors.length ? `${rowEditors.join(", ")} está nesta linha` : undefined}
                 >
                   <td
                     className="excel-row-number sticky left-0 z-20 cursor-pointer text-center hover:bg-[#d9ead3]"
@@ -1404,6 +1414,11 @@ export function DispatchGrid({
                       <span className="truncate text-slate-900 font-bold text-xs" title={row.driver.name}>
                         {row.driver.name}
                       </span>
+                      {rowEditors.length > 0 && (
+                        <span className="excel-row-editor shrink-0" title={`${rowEditors.join(", ")} está nesta linha`}>
+                          {rowEditors[0]}{rowEditors.length > 1 ? ` +${rowEditors.length - 1}` : ""}
+                        </span>
+                      )}
                       <button
                         onClick={(e) => {
                           e.stopPropagation();

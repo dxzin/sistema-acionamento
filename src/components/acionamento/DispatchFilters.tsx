@@ -2,8 +2,8 @@
 
 import React from "react";
 import { DispatchFilterOptions } from "@/types/domain";
-import { Calendar, LockKeyhole, LockOpen, RefreshCw, Search } from "lucide-react";
-import { SheetStatus } from "@/types/database";
+import { Calendar, LockKeyhole, LockOpen, RefreshCw, Search, UsersRound } from "lucide-react";
+import { OperatorPresence, SheetStatus } from "@/types/database";
 import { nextOperationalDate } from "@/lib/dates/operational-date";
 
 interface DispatchFiltersProps {
@@ -14,6 +14,8 @@ interface DispatchFiltersProps {
   sheetStatus: SheetStatus | null;
   onToggleSheetStatus: () => void;
   isChangingSheetStatus?: boolean;
+  onlineOperators?: OperatorPresence[];
+  currentUserId?: string;
 }
 
 export function DispatchFilters({
@@ -24,6 +26,8 @@ export function DispatchFilters({
   sheetStatus,
   onToggleSheetStatus,
   isChangingSheetStatus = false,
+  onlineOperators = [],
+  currentUserId,
 }: DispatchFiltersProps) {
   return (
     <div className="excel-toolbar p-2 flex flex-wrap items-center justify-between gap-2 text-xs">
@@ -95,6 +99,24 @@ export function DispatchFilters({
           <option value="B">Turno B (12:00)</option>
           <option value="C">Turno C (20:00)</option>
         </select>
+
+        <div className="excel-presence-strip flex min-h-7 items-center gap-1.5 border-l border-slate-600 pl-2" aria-label="Operadores online nesta planilha">
+          <UsersRound className="h-3.5 w-3.5 text-emerald-400" />
+          <span className="text-[10px] font-bold text-slate-300">Online</span>
+          {onlineOperators.length ? onlineOperators.map((operator) => (
+            <span
+              key={operator.user_id}
+              className={`excel-presence-chip ${operator.user_id === currentUserId ? "is-self" : ""}`}
+              title={`${operator.display_name} — ${operator.email}${operator.active_dispatch_id ? " — selecionando uma linha" : ""}`}
+            >
+              <i aria-hidden="true" />
+              {operator.email}
+              {operator.user_id === currentUserId ? " (você)" : ""}
+            </span>
+          )) : (
+            <span className="text-[10px] text-slate-400">conectando…</span>
+          )}
+        </div>
       </div>
 
       {/* Botão de Atualização / Recálculo */}

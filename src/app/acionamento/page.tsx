@@ -8,11 +8,13 @@ import { DispatchFilters } from "@/components/acionamento/DispatchFilters";
 import { DispatchGrid } from "@/components/acionamento/DispatchGrid";
 import { dispatchService } from "@/lib/services/dispatch-service";
 import { createClient } from "@/lib/supabase/client";
+import { useAuth } from "@/lib/auth-context";
 import { DispatchRowModel, DispatchFilterOptions, DispatchSummaryKPIs } from "@/types/domain";
-import { DailySheet, Location } from "@/types/database";
+import { DailySheet, Location, OperatorPresence } from "@/types/database";
 import { currentDateInBrasilia } from "@/lib/dates/operational-date";
 
 export default function AcionamentoPage() {
+  const { user } = useAuth();
   const [dispatches, setDispatches] = useState<DispatchRowModel[]>([]);
   const [locations, setLocations] = useState<Location[]>([]);
   const [dailySheet, setDailySheet] = useState<DailySheet | null>(null);
@@ -20,6 +22,8 @@ export default function AcionamentoPage() {
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [saveState, setSaveState] = useState<{ status: "idle" | "saving" | "saved" | "error"; message?: string }>({ status: "idle" });
+  const [onlineOperators, setOnlineOperators] = useState<OperatorPresence[]>([]);
+  const [activeDispatchId, setActiveDispatchId] = useState<string | null>(null);
   const loadRequestRef = useRef(0);
   const syncTokenRef = useRef<string | null>(null);
   const pendingWritesRef = useRef(0);
@@ -69,6 +73,42 @@ export default function AcionamentoPage() {
   useEffect(() => {
     loadData();
   }, [loadData]);
+
+  useEffect(() => setActiveDispatchId(null), [filters.date, filters.region]);
+
+  useEffect(() => {
+    if (!user) return;
+    let active = true;
+    let running = false;
+    const heartbeat = async () => {
+      if (running) return;
+      running = true;
+      try {
+        await dispatchService.touchOperatorPresence(
+          filters.date, filters.region, activeDispatchId, user.name, user.email
+        );
+        const presence = await dispatchService.getOperatorPresence(filters.date, filters.region);
+        if (active) setOnlineOperators(presence);
+      } catch (error) {
+        console.warn("Presença dos operadores temporariamente indisponível:", error);
+      } finally {
+        running = false;
+      }
+    };
+    void heartbeat();
+    const interval = window.setInterval(heartbeat, 4000);
+    return () => {
+      active = false;
+      window.clearInterval(interval);
+    };
+  }, [activeDispatchId, filters.date, filters.region, user]);
+
+  useEffect(() => {
+    const userId = user?.id;
+    return () => {
+      if (userId) void dispatchService.clearOperatorPresence(userId);
+    };
+  }, [user?.id]);
 
   const syncFromRemote = useCallback(() => {
     const activeElement = document.activeElement;
@@ -298,6 +338,18 @@ export default function AcionamentoPage() {
     };
   }, [filteredDispatches]);
 
+  const activeEditors = useMemo(() => {
+    const editors: Record<string, string[]> = {};
+    for (const presence of onlineOperators) {
+      if (!presence.active_dispatch_id || presence.user_id === user?.id) continue;
+      editors[presence.active_dispatch_id] = [
+        ...(editors[presence.active_dispatch_id] || []),
+        presence.display_name || presence.email,
+      ];
+    }
+    return editors;
+  }, [onlineOperators, user?.id]);
+
   return (
     <div className="excel-shell flex-1 flex flex-col min-h-screen">
       <Header />
@@ -316,6 +368,8 @@ export default function AcionamentoPage() {
             sheetStatus={dailySheet?.status || null}
             onToggleSheetStatus={handleToggleSheetStatus}
             isChangingSheetStatus={changingSheetStatus}
+            onlineOperators={onlineOperators}
+            currentUserId={user?.id}
           />
 
           {loadError && (
@@ -331,6 +385,8 @@ export default function AcionamentoPage() {
             locations={locations}
             saveState={saveState}
             readOnly={dailySheet?.status !== "OPEN"}
+            activeEditors={activeEditors}
+            onActiveRowChange={setActiveDispatchId}
           />
         </main>
       </div>

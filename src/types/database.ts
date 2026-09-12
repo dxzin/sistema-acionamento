@@ -89,6 +89,14 @@ export interface DailySheet {
   updated_at: string;
 }
 
+export interface OperatorPresence {
+  user_id: string;
+  display_name: string;
+  email: string;
+  active_dispatch_id?: string | null;
+  last_seen: string;
+}
+
 export interface Dispatch {
   id: string;
   daily_sheet_id: string;

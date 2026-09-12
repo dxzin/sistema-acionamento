@@ -1,5 +1,5 @@
 import { createClient } from "@/lib/supabase/client";
-import { Base, DailySheet, Dispatch, Driver, Location, SheetStatus, Vehicle } from "@/types/database";
+import { Base, DailySheet, Dispatch, Driver, Location, OperatorPresence, SheetStatus, Vehicle } from "@/types/database";
 import { DispatchRowModel } from "@/types/domain";
 import { calculateJornada } from "../calculations/jornada";
 import { calculateNextForecast } from "../calculations/interjornada";
@@ -169,6 +169,42 @@ class DispatchService {
     }).single();
     if (error) throw new Error(error.message);
     return data as DailySheet;
+  }
+
+  async touchOperatorPresence(
+    date: string,
+    region: string,
+    activeDispatchId: string | null,
+    displayName: string,
+    email: string
+  ): Promise<void> {
+    if (!this.isSupabaseConfigured()) return;
+    const supabase = createClient();
+    const { error } = await supabase.rpc("touch_operator_presence", {
+      p_sheet_date: date,
+      p_region: region === "ALL" ? "SP" : region,
+      p_active_dispatch_id: activeDispatchId,
+      p_display_name: displayName,
+      p_email: email,
+    });
+    if (error) throw new Error(error.message);
+  }
+
+  async getOperatorPresence(date: string, region: string): Promise<OperatorPresence[]> {
+    if (!this.isSupabaseConfigured()) return [];
+    const supabase = createClient();
+    const { data, error } = await supabase.rpc("list_operator_presence", {
+      p_sheet_date: date,
+      p_region: region === "ALL" ? "SP" : region,
+    });
+    if (error) throw new Error(error.message);
+    return (data || []) as OperatorPresence[];
+  }
+
+  async clearOperatorPresence(userId: string): Promise<void> {
+    if (!this.isSupabaseConfigured()) return;
+    const supabase = createClient();
+    await supabase.from("operator_presence").delete().eq("user_id", userId);
   }
 
   async getDispatchesForSheet(date: string, region: string = "SP"): Promise<DispatchRowModel[]> {

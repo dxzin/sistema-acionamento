@@ -140,6 +140,12 @@ body {
 .excel-grid tbody tr { background: #fff; border: 0; }
 .excel-grid tbody tr:nth-child(even) { background: #fbfbfb; }
 .excel-grid tbody tr:hover, .excel-grid tbody tr.excel-selected-row { background: var(--excel-green-soft) !important; }
+.excel-grid tbody tr.excel-collaborator-row { background: #f3e8ff !important; box-shadow: inset 0 2px #8b5cf6, inset 0 -2px #8b5cf6; }
+.excel-grid tbody tr.excel-collaborator-row td.sticky { background: #f3e8ff !important; }
+.excel-row-editor { max-width: 92px; overflow: hidden; border: 1px solid #7c3aed; background: #8b5cf6; color: #fff !important; padding: 1px 4px; text-overflow: ellipsis; white-space: nowrap; font-size: 9px !important; font-weight: 800; }
+.excel-presence-chip { display: inline-flex; max-width: 180px; align-items: center; gap: 4px; overflow: hidden; border: 1px solid #4b5563; background: #1f2937; color: #e5e7eb; padding: 2px 6px; text-overflow: ellipsis; white-space: nowrap; font-size: 10px; font-weight: 700; }
+.excel-presence-chip i { width: 6px; height: 6px; flex: 0 0 auto; border-radius: 999px; background: #22c55e; box-shadow: 0 0 0 2px rgba(34, 197, 94, .18); }
+.excel-presence-chip.is-self { border-color: #2f855a; background: #174d2d; }
 .excel-grid tbody tr.excel-selected-row td { border-top-color: var(--excel-selection) !important; border-bottom-color: var(--excel-selection) !important; }
 .excel-grid tbody td { height: 30px; color: #111 !important; border-right: 1px solid var(--excel-grid) !important; border-bottom: 1px solid var(--excel-grid) !important; }
 .excel-grid .excel-row-number { color: #555 !important; background: #ededed !important; border-right: 1px solid #bcbcbc !important; font-family: Calibri, "Segoe UI", sans-serif; font-weight: 400; }
@@ -198,6 +204,8 @@ body {
 [data-app-theme="dark"] .excel-grid tbody tr:nth-child(even) { background: #292f36; }
 [data-app-theme="dark"] .excel-grid tbody tr:hover,
 [data-app-theme="dark"] .excel-grid tbody tr.excel-selected-row { background: #263f35 !important; }
+[data-app-theme="dark"] .excel-grid tbody tr.excel-collaborator-row { background: #34284a !important; box-shadow: inset 0 2px #a78bfa, inset 0 -2px #a78bfa; }
+[data-app-theme="dark"] .excel-grid tbody tr.excel-collaborator-row td.sticky { background: #34284a !important; }
 [data-app-theme="dark"] .excel-grid tbody td { color: #e5e7eb !important; border-color: #454c55 !important; }
 [data-app-theme="dark"] .excel-grid tbody [class~="text-slate-900"],
 [data-app-theme="dark"] .excel-grid tbody [class~="text-slate-800"] { color: #f1f5f9 !important; }
