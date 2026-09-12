@@ -31,6 +31,7 @@
 - `Delete` limpa o intervalo; `Ctrl+Z` desfaz e `Ctrl+Y` refaz.
 - Clique no número para selecionar uma linha, na letra para selecionar uma coluna e use `Ctrl+A` para selecionar a grade.
 - Use **Colunas** para ocultar/reexibir ou restaurar larguras.
+- Use **Exportar Excel** para baixar as linhas que estão visíveis. Se houver filtros ativos, apenas o resultado filtrado será exportado.
 
 ## Conferência
 
@@ -38,6 +39,7 @@
 - Confira as cores de `ACIONADO`, `ABONADO`, `APOIO` e `BALDEIO`.
 - Em **Relatórios**, escolha o período e a região para ver o consolidado, exportar Excel ou imprimir em PDF.
 - Em **Histórico**, confira quem alterou os campos importantes.
+- A faixa **Pontos de atenção** resume pendências da visualização atual; ao aplicar um filtro, os números também acompanham o filtro.
 
 ## Se algo não funcionar
 

@@ -30,12 +30,12 @@ Cinco dias úteis de operação paralela sem perda de dados, sem status automát
 ## Prioridade 3 — segurança, gestão e confiabilidade
 
 - [ ] Trocar o acesso compartilhado por usuários individuais.
-- [ ] Revisar permissões de operador, supervisor e administrador.
-- [ ] Validar a auditoria de cada alteração importante e a identificação do usuário.
-- [ ] Definir política de backup, restauração e retenção de dados.
+- [x] Revisar permissões de operador, supervisor e administrador.
+- [x] Validar a auditoria de cada alteração importante e a identificação do usuário.
+- [x] Definir política inicial de backup e restauração de dados.
 - [x] Criar procedimento de fechamento/reabertura de uma folha diária.
-- [ ] Criar testes automatizados para regras críticas e salvamento em lote.
-- [ ] Implementar salvamento em lote transacional para grandes colagens.
+- [x] Criar testes automatizados para regras críticas e salvamento em lote.
+- [x] Implementar salvamento em lote transacional para grandes colagens.
 
 ## Prioridade 4 — dados e expansão
 

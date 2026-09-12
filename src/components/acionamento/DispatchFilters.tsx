@@ -2,7 +2,7 @@
 
 import React from "react";
 import { DispatchFilterOptions } from "@/types/domain";
-import { Calendar, CloudOff, LockKeyhole, LockOpen, RefreshCw, Search, UsersRound, Wifi } from "lucide-react";
+import { Calendar, CloudOff, Download, LockKeyhole, LockOpen, RefreshCw, Search, UsersRound, Wifi } from "lucide-react";
 import { OperatorPresence, SheetStatus } from "@/types/database";
 import { nextOperationalDate } from "@/lib/dates/operational-date";
 
@@ -17,6 +17,8 @@ interface DispatchFiltersProps {
   onlineOperators?: OperatorPresence[];
   currentUserId?: string;
   syncStatus?: "live" | "fallback" | "offline";
+  onExport: () => void;
+  isExporting?: boolean;
 }
 
 export function DispatchFilters({
@@ -30,6 +32,8 @@ export function DispatchFilters({
   onlineOperators = [],
   currentUserId,
   syncStatus = "fallback",
+  onExport,
+  isExporting = false,
 }: DispatchFiltersProps) {
   return (
     <div className="excel-toolbar p-2 flex flex-wrap items-center justify-between gap-2 text-xs">
@@ -146,6 +150,16 @@ export function DispatchFilters({
             <span>{sheetStatus === "OPEN" ? "Fechar folha" : "Reabrir folha"}</span>
           </button>
         )}
+        <button
+          type="button"
+          onClick={onExport}
+          disabled={isLoading || isExporting}
+          className="flex items-center space-x-1 border border-emerald-600 bg-emerald-800 px-3 py-1.5 text-xs font-bold text-white transition-colors hover:bg-emerald-700 disabled:opacity-50"
+          title="Exportar exatamente as linhas visíveis para Excel"
+        >
+          <Download className="h-3.5 w-3.5" />
+          <span>{isExporting ? "Gerando…" : "Exportar Excel"}</span>
+        </button>
         <button
           onClick={onRefresh}
           disabled={isLoading}

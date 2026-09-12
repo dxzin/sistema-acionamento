@@ -39,6 +39,9 @@
 - Presença colaborativa mostra os logins online na mesma planilha e destaca a linha selecionada por outro operador.
 - Eventos em tempo real agrupados durante colagens grandes, evitando recargas concorrentes e valores aparentemente desaparecendo.
 - Em produção, uma falha no banco não mostra dados de demonstração: a grade fica vazia e apresenta um aviso explícito para evitar acionamentos fictícios.
+- A folha diária pode ser exportada diretamente para `.xlsx`; filtros de busca, status e turno determinam quais linhas entram no arquivo.
+- Uma faixa compacta sinaliza acionados sem entrada, jornadas abertas, abonos pendentes e jornadas acima de 11h10.
+- Falhas inesperadas de interface exibem uma tela de recuperação sem sugerir que os dados salvos foram perdidos.
 
 ## Regras entre escala e acionamento
 

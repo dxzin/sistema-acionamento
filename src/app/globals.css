@@ -178,6 +178,14 @@ body {
 .excel-save-dot.is-saving { background: #d97706; animation: pulse 1s ease-in-out infinite; }
 .excel-save-dot.is-saved { background: #107c41; }
 .excel-save-dot.is-error { background: #dc2626; }
+.excel-operational-alerts { display: flex; min-height: 30px; align-items: center; gap: 7px; overflow-x: auto; margin: 0 0 8px; padding: 4px 8px; border: 1px solid #c4a000; background: #fffbe6; color: #594a00; font-size: 10px; white-space: nowrap; }
+.excel-operational-alerts > strong { padding-right: 7px; border-right: 1px solid #d6c46a; font-size: 11px; }
+.excel-operational-alerts > span { display: inline-flex; align-items: center; gap: 4px; min-height: 20px; padding: 1px 7px; border: 1px solid #d6c46a; background: #fff; font-weight: 600; }
+.excel-operational-alerts svg { width: 13px; height: 13px; }
+.excel-operational-alerts .is-danger { border-color: #e6b8b7; background: #ffc7ce; color: #8f0010; }
+.excel-operational-alerts .is-warning { border-color: #ffd966; background: #ffeb9c; color: #7a4200; }
+.excel-operational-alerts .is-info { border-color: #9dc3e6; background: #ddebf7; color: #173f6b; }
+.excel-operational-alerts.is-clear { border-color: #a9d08e; background: #e2f0d9; color: #176235; font-weight: 700; }
 .excel-grid option { color: #111 !important; background: #fff !important; }
 
 /* Modo escuro da folha de acionamento: grafite, sem preto puro e sem apagar os parâmetros operacionais. */
@@ -204,6 +212,9 @@ body {
 [data-app-theme="dark"] .excel-sync-indicator.is-live { color: #bbf7d0; background: #174d2d; border-color: #2f855a; }
 [data-app-theme="dark"] .excel-sync-indicator.is-fallback { color: #fde68a; background: #4b3517; border-color: #8a6425; }
 [data-app-theme="dark"] .excel-sync-indicator.is-offline { color: #fecaca; background: #542626; border-color: #8f3c3c; }
+[data-app-theme="dark"] .excel-operational-alerts { border-color: #756622; background: #3c371f; color: #f5e9a8; }
+[data-app-theme="dark"] .excel-operational-alerts > strong { border-color: #756622; }
+[data-app-theme="dark"] .excel-operational-alerts.is-clear { border-color: #2f855a; background: #174d2d; color: #bbf7d0; }
 [data-app-theme="dark"] .excel-grid { color: #e5e7eb; background: #20242a; border-color: #4b5159; }
 [data-app-theme="dark"] .excel-grid .excel-grid-actions,
 [data-app-theme="dark"] .excel-grid .excel-statusbar { color: #cbd5e1; background: #292e35; border-color: #4b5159; }

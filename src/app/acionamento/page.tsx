@@ -12,6 +12,8 @@ import { useAuth } from "@/lib/auth-context";
 import { DispatchRowModel, DispatchFilterOptions, DispatchSummaryKPIs } from "@/types/domain";
 import { DailySheet, Location, OperatorPresence } from "@/types/database";
 import { currentDateInBrasilia } from "@/lib/dates/operational-date";
+import { OperationalAlerts } from "@/components/acionamento/OperationalAlerts";
+import { summarizeOperationalAlerts } from "@/lib/calculations/operational-alerts";
 
 export default function AcionamentoPage() {
   const { user } = useAuth();
@@ -25,6 +27,7 @@ export default function AcionamentoPage() {
   const [onlineOperators, setOnlineOperators] = useState<OperatorPresence[]>([]);
   const [activeDispatchId, setActiveDispatchId] = useState<string | null>(null);
   const [syncStatus, setSyncStatus] = useState<"live" | "fallback" | "offline">("fallback");
+  const [isExporting, setIsExporting] = useState(false);
   const loadRequestRef = useRef(0);
   const syncTokenRef = useRef<string | null>(null);
   const pendingWritesRef = useRef(0);
@@ -408,6 +411,29 @@ export default function AcionamentoPage() {
     return editors;
   }, [onlineOperators, user?.id]);
 
+  const operationalAlerts = useMemo(
+    () => summarizeOperationalAlerts(filteredDispatches),
+    [filteredDispatches]
+  );
+
+  const handleExport = async () => {
+    if (!filteredDispatches.length || isExporting) return;
+    setIsExporting(true);
+    setSaveState({ status: "saving" });
+    try {
+      const { exportDispatchSheet } = await import("@/lib/exports/dispatch-sheet");
+      await exportDispatchSheet(filteredDispatches, filters.date, filters.region);
+      setSaveState({ status: "saved" });
+    } catch (error) {
+      setSaveState({
+        status: "error",
+        message: error instanceof Error ? error.message : "Não foi possível exportar a folha.",
+      });
+    } finally {
+      setIsExporting(false);
+    }
+  };
+
   return (
     <div className="excel-shell flex-1 flex flex-col min-h-screen">
       <Header />
@@ -429,7 +455,11 @@ export default function AcionamentoPage() {
             onlineOperators={onlineOperators}
             currentUserId={user?.id}
             syncStatus={syncStatus}
+            onExport={handleExport}
+            isExporting={isExporting}
           />
+
+          {!isLoading && !loadError && <OperationalAlerts summary={operationalAlerts} />}
 
           {loadError && (
             <div role="alert" className="mx-3 mb-2 border border-rose-400 bg-rose-50 px-3 py-2 text-xs font-semibold text-rose-800">
