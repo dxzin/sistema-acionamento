@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { resolveDayContinuity } from "../src/lib/calculations/continuity";
+import { resolveDayContinuity, shouldRefreshContinuityOrigin } from "../src/lib/calculations/continuity";
 import type { Dispatch } from "../src/types/database";
 
 function previousDispatch(values: Partial<Dispatch>): Dispatch {
@@ -58,3 +58,14 @@ test("retorna continuidade vazia quando não existe dia anterior", () => {
   });
 });
 
+test("atualiza origem automática quando o destino final anterior muda", () => {
+  assert.equal(shouldRefreshContinuityOrigin("CONTINUITY", "origem-antiga", "origem-correta"), true);
+});
+
+test("preserva origem digitada manualmente pelo operador", () => {
+  assert.equal(shouldRefreshContinuityOrigin("MANUAL", "origem-manual", "origem-correta"), false);
+});
+
+test("limpa origem automática quando o destino final anterior é apagado", () => {
+  assert.equal(shouldRefreshContinuityOrigin("CONTINUITY", "origem-antiga", null), true);
+});

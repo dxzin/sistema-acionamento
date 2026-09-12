@@ -100,6 +100,7 @@ export interface Dispatch {
   abono_reason?: string | null;
   abono_authorized_by?: string | null;
   origin_location_id?: string | null;
+  origin_source?: "SCHEDULE" | "CONTINUITY" | "BASE" | "MANUAL";
   entry_time?: string | null; // HH:mm:ss
   vehicle_id?: string | null;
   cargo_status?: CargoStatus | null;

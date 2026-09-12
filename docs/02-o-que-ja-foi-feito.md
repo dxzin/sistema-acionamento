@@ -45,6 +45,7 @@
 - Uma folha diária nova inicia com o status em branco.
 - O campo `LOCAL` do dia atual herda somente o `DESTINO FINAL` preenchido no dia anterior.
 - Se o `DESTINO FINAL` anterior estiver vazio, o sistema aguarda o operador; não usa o `DESTINO` normal como substituto.
+- A origem do `LOCAL` é registrada: valores automáticos acompanham correções do dia anterior, enquanto ajustes manuais ficam protegidos.
 
 ## Dados de Setembro/2026 — SP
 
@@ -63,6 +64,7 @@
 - Correção do local do dia 11 usando apenas destino final.
 - Importação de folha diária.
 - Auditoria somente leitura de folgas, status futuros e continuidade entre dias.
+- Limpeza segura de registros vazios em dias de folga, preservando linhas históricas com preenchimento operacional.
 
 ## Validações técnicas realizadas
 

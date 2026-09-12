@@ -20,7 +20,7 @@ const { data: sheets, error: sheetsError } = await supabase
 if (sheetsError) throw sheetsError;
 const sheetIds = (sheets || []).map((sheet) => sheet.id);
 const { data: rows, error: rowsError } = sheetIds.length
-  ? await supabase.from("dispatches").select("id,daily_sheet_id,driver_id,origin_location_id,final_destination_location_id").in("daily_sheet_id", sheetIds)
+  ? await supabase.from("dispatches").select("id,daily_sheet_id,driver_id,origin_location_id,origin_source,final_destination_location_id").in("daily_sheet_id", sheetIds)
   : { data: [], error: null };
 if (rowsError) throw rowsError;
 
@@ -35,14 +35,16 @@ for (const sheet of sheets || []) {
   if (!previousSheet) continue;
   for (const current of (rows || []).filter((row) => row.daily_sheet_id === sheet.id)) {
     const previous = rowsBySheetDriver.get(`${previousSheet.id}:${current.driver_id}`);
-    if (!previous?.final_destination_location_id) continue;
-    if (current.origin_location_id !== previous.final_destination_location_id) {
+    if (!previous) continue;
+    if (current.origin_source === "MANUAL") continue;
+    const expectedOrigin = previous.final_destination_location_id || null;
+    if ((current.origin_location_id || null) !== expectedOrigin) {
       fixes.push({
         id: current.id,
         date: sheet.date,
         driverId: current.driver_id,
         previousOrigin: current.origin_location_id,
-        expectedOrigin: previous.final_destination_location_id,
+        expectedOrigin,
       });
     }
   }
@@ -50,10 +52,9 @@ for (const sheet of sheets || []) {
 
 if (apply) {
   for (const fix of fixes) {
-    const { error } = await supabase.from("dispatches").update({ origin_location_id: fix.expectedOrigin }).eq("id", fix.id);
+    const { error } = await supabase.from("dispatches").update({ origin_location_id: fix.expectedOrigin, origin_source: "CONTINUITY" }).eq("id", fix.id);
     if (error) throw error;
   }
 }
 
 console.log(JSON.stringify({ mode: apply ? "applied" : "dry-run", count: fixes.length, fixes }, null, 2));
-

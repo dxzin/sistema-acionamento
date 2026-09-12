@@ -3,7 +3,7 @@ import { Base, Dispatch, Driver, Location, Vehicle } from "@/types/database";
 import { DispatchRowModel } from "@/types/domain";
 import { calculateJornada } from "../calculations/jornada";
 import { calculateNextForecast } from "../calculations/interjornada";
-import { resolveDayContinuity } from "../calculations/continuity";
+import { resolveDayContinuity, shouldRefreshContinuityOrigin } from "../calculations/continuity";
 import { resolveFirstDayBaseOrigin, resolveFirstDayForecast } from "../calculations/first-day-origin";
 import { canCreateDailySheet, currentDateInBrasilia } from "../dates/operational-date";
 import {
@@ -172,8 +172,13 @@ class DispatchService {
               const continuityUpdates = rawDispatches.flatMap((row) => {
                 const previous = previousByDriver.get(row.driver_id);
                 const updates: Partial<Dispatch> = {};
-                if (!row.origin_location_id && previous?.final_destination_location_id) {
-                  updates.origin_location_id = previous.final_destination_location_id;
+                if (previous && shouldRefreshContinuityOrigin(
+                    row.origin_source,
+                    row.origin_location_id,
+                    previous.final_destination_location_id
+                  )) {
+                  updates.origin_location_id = previous.final_destination_location_id || null;
+                  updates.origin_source = "CONTINUITY";
                 }
                 if (
                   canRefreshForecast &&
@@ -324,6 +329,7 @@ class DispatchService {
                     dispatch_status: "",
                     abono_reason: null,
                     origin_location_id: continuity.originLocationId || null,
+                    origin_source: continuity.originLocationId ? "CONTINUITY" : "SCHEDULE",
                   }];
                 });
 
@@ -367,6 +373,7 @@ class DispatchService {
     // No primeiro dia do ciclo, quando não há destino final anterior, o LOCAL
     // começa na base cadastrada do condutor (ex.: CASTILHO ou LP).
     const firstDayOrigins = rawDispatches.flatMap((row) => {
+      if (row.origin_source === "MANUAL") return [];
       const originId = resolveFirstDayBaseOrigin(
         currentScaleCodeByDriver.get(row.driver_id) || row.scale_day_status,
         row.origin_location_id,
@@ -391,7 +398,7 @@ class DispatchService {
       if (this.isSupabaseConfigured()) {
         const updateClient = createClient();
         const results = await Promise.all(firstDayOrigins.map(({ id, originId }) =>
-          updateClient.from("dispatches").update({ origin_location_id: originId }).eq("id", id)
+          updateClient.from("dispatches").update({ origin_location_id: originId, origin_source: "BASE" }).eq("id", id)
         ));
         const failed = results.find((result) => result.error);
         if (failed?.error) throw new Error(failed.error.message);
@@ -399,7 +406,10 @@ class DispatchService {
       const originsById = new Map(firstDayOrigins.map((item) => [item.id, item.originId]));
       rawDispatches = rawDispatches.map((row) => ({
         ...row,
-        origin_location_id: row.origin_location_id || originsById.get(row.id) || null,
+        ...(originsById.has(row.id) ? {
+          origin_location_id: originsById.get(row.id),
+          origin_source: "BASE" as const,
+        } : {}),
       }));
     }
 
@@ -486,6 +496,9 @@ class DispatchService {
 
     if ("forecast_start_time" in updates) {
       processedUpdates.forecast_source = "MANUAL";
+    }
+    if ("origin_location_id" in updates) {
+      processedUpdates.origin_source = "MANUAL";
     }
 
     const resolveLocationId = async (rawName: string): Promise<string | null> => {

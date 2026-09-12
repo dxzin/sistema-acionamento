@@ -65,7 +65,7 @@ const sheetIds = (sheets || []).map((sheet) => sheet.id);
 const dispatches = sheetIds.length
   ? await allPages((from, to) => supabase
     .from("dispatches")
-    .select("id,daily_sheet_id,driver_id,forecast_start_time,forecast_source,dispatch_status,abono_reason,abono_authorized_by,origin_location_id,entry_time,vehicle_id,cargo_status,destination_location_id,final_destination_location_id,exit_time,observations,next_day_forecast_time")
+    .select("id,daily_sheet_id,driver_id,forecast_start_time,forecast_source,dispatch_status,abono_reason,abono_authorized_by,origin_location_id,origin_source,entry_time,vehicle_id,cargo_status,destination_location_id,final_destination_location_id,exit_time,observations,next_day_forecast_time")
     .in("daily_sheet_id", sheetIds)
     .order("daily_sheet_id")
     .order("driver_id")
@@ -122,6 +122,7 @@ const sheetSummary = (sheets || []).map((sheet) => {
 });
 
 const continuityIssues = [];
+const manualOriginOverrides = [];
 const forecastContinuityIssues = [];
 for (const sheet of sheets || []) {
   const date = new Date(`${sheet.date}T12:00:00Z`);
@@ -131,9 +132,10 @@ for (const sheet of sheets || []) {
   for (const driver of drivers) {
     const previous = dispatchBySheetDriver.get(`${previousSheet.id}:${driver.id}`);
     const current = dispatchBySheetDriver.get(`${sheet.id}:${driver.id}`);
-    if (!previous?.final_destination_location_id || !current) continue;
-    if (current.origin_location_id !== previous.final_destination_location_id) {
-      continuityIssues.push({
+    if (!previous || !current) continue;
+    if ((current.origin_location_id || null) !== (previous.final_destination_location_id || null)) {
+      const collection = current.origin_source === "MANUAL" ? manualOriginOverrides : continuityIssues;
+      collection.push({
         date: sheet.date,
         driver: driver.name,
         type: current.origin_location_id ? "origem divergente" : "origem ausente",
@@ -206,6 +208,7 @@ console.log(JSON.stringify({
   restDayDispatches: { count: restDayDispatches.length, samples: restDayDispatches.slice(0, 20) },
   futureStatuses: { count: futureStatuses.length, samples: futureStatuses.slice(0, 20) },
   continuityIssues: { count: continuityIssues.length, samples: continuityIssues.slice(0, 20) },
+  manualOriginOverrides: { count: manualOriginOverrides.length, samples: manualOriginOverrides.slice(0, 20) },
   forecastContinuityIssues: { count: forecastContinuityIssues.length, samples: forecastContinuityIssues.slice(0, 20) },
   firstDayMissingOrigins: { count: firstDayMissingOrigins.length, samples: firstDayMissingOrigins.slice(0, 20) },
   firstDayForecastIssues: { count: firstDayForecastIssues.length, samples: firstDayForecastIssues.slice(0, 20) },

@@ -70,6 +70,8 @@ Este documento registra decisões confirmadas durante os testes. Alterações ne
 2. O `DESTINO` normal do dia anterior nunca deve ser usado como alternativa.
 3. Se o destino final do dia anterior não estiver preenchido, o local do dia seguinte deve permanecer vazio e aguardar o operador.
 4. A regra também vale na virada de mês.
+5. Se o `DESTINO FINAL` anterior for corrigido depois, um `LOCAL` calculado pelo sistema acompanha a correção.
+6. Um `LOCAL` digitado ou apagado manualmente pelo operador nunca é sobrescrito pela continuidade automática.
 
 ## Uso semelhante ao Excel
 

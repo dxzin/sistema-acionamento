@@ -25,3 +25,16 @@ export function resolveDayContinuity(
     originLocationId: previousDayDispatch.final_destination_location_id || null,
   };
 }
+
+/**
+ * Uma origem calculada pode acompanhar correções feitas no DESTINO FINAL de D-1.
+ * Uma origem digitada pelo operador é definitiva e nunca é sobrescrita.
+ */
+export function shouldRefreshContinuityOrigin(
+  originSource: Dispatch["origin_source"],
+  currentOriginId: string | null | undefined,
+  expectedOriginId: string | null | undefined
+) {
+  return originSource !== "MANUAL" &&
+    (currentOriginId || null) !== (expectedOriginId || null);
+}
