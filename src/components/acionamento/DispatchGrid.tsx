@@ -11,6 +11,7 @@ interface DispatchGridProps {
   onUpdateRow: (id: string, updates: Partial<DispatchRowModel>) => Promise<void>;
   locations: { id: string; name: string }[];
   saveState: { status: "idle" | "saving" | "saved" | "error"; message?: string };
+  readOnly?: boolean;
 }
 
 interface GridHistoryChange {
@@ -359,6 +360,7 @@ export function DispatchGrid({
   onUpdateRow,
   locations,
   saveState,
+  readOnly = false,
 }: DispatchGridProps) {
   const [copiedCell, setCopiedCell] = useState<string | null>(null);
   const [sortField, setSortField] = useState<SortField>("schedule_time");
@@ -680,12 +682,14 @@ export function DispatchGrid({
   };
 
   const commitUpdate = async (id: string, updates: Partial<DispatchRowModel>, recordHistory = true) => {
+    if (readOnly) return;
     const change = recordHistory ? historyChangeFor(id, updates) : null;
     await onUpdateRow(id, updates);
     if (change) rememberAction([change]);
   };
 
   const commitBatch = async (updatesByRow: Map<string, Partial<DispatchRowModel>>) => {
+    if (readOnly) return;
     const changes = Array.from(updatesByRow, ([id, updates]) => historyChangeFor(id, updates))
       .filter((change): change is GridHistoryChange => Boolean(change));
     for (const [id, updates] of updatesByRow) {
@@ -924,7 +928,13 @@ export function DispatchGrid({
     <div
       className="excel-grid overflow-hidden flex flex-col flex-1"
       tabIndex={0}
-      onPaste={handleGridPaste}
+      onPaste={(event) => {
+        if (readOnly) {
+          event.preventDefault();
+          return;
+        }
+        handleGridPaste(event);
+      }}
       onKeyDown={(event) => {
         const key = event.key.toLowerCase();
         if ((event.ctrlKey || event.metaKey) && key === "c") {
@@ -1363,7 +1373,7 @@ export function DispatchGrid({
           </thead>
 
           {/* Corpo da Tabela */}
-          <tbody className="text-[11px]">
+          <tbody className={`text-[11px] ${readOnly ? "opacity-90" : ""}`} inert={readOnly}>
             {processedDispatches.map((row, index) => {
               const hasAbonoPending =
                 row.abono_authorized_by === "PENDENTE" && row.dispatch_status === "ABONADO";
@@ -1695,7 +1705,7 @@ export function DispatchGrid({
           {saveState.status === "saving" && "Salvando alteração..."}
           {saveState.status === "saved" && "Alteração salva"}
           {saveState.status === "error" && (saveState.message || "Erro ao salvar alteração")}
-          {saveState.status === "idle" && "Pronto"}
+          {saveState.status === "idle" && (readOnly ? "Folha fechada — somente leitura" : "Pronto")}
         </span>
         <span className="ml-auto">{processedDispatches.length} linhas</span>
         <span className="border-l border-slate-300 pl-2">Ctrl+C · Ctrl+V · Delete · Ctrl+Z · Ctrl+D · Ctrl+R</span>

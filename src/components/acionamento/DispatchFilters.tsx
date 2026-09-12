@@ -2,7 +2,8 @@
 
 import React from "react";
 import { DispatchFilterOptions } from "@/types/domain";
-import { Calendar, Filter, RefreshCw, Search } from "lucide-react";
+import { Calendar, LockKeyhole, LockOpen, RefreshCw, Search } from "lucide-react";
+import { SheetStatus } from "@/types/database";
 import { nextOperationalDate } from "@/lib/dates/operational-date";
 
 interface DispatchFiltersProps {
@@ -10,6 +11,9 @@ interface DispatchFiltersProps {
   onFilterChange: (newFilters: Partial<DispatchFilterOptions>) => void;
   onRefresh: () => void;
   isLoading?: boolean;
+  sheetStatus: SheetStatus | null;
+  onToggleSheetStatus: () => void;
+  isChangingSheetStatus?: boolean;
 }
 
 export function DispatchFilters({
@@ -17,6 +21,9 @@ export function DispatchFilters({
   onFilterChange,
   onRefresh,
   isLoading = false,
+  sheetStatus,
+  onToggleSheetStatus,
+  isChangingSheetStatus = false,
 }: DispatchFiltersProps) {
   return (
     <div className="excel-toolbar p-2 flex flex-wrap items-center justify-between gap-2 text-xs">
@@ -92,6 +99,22 @@ export function DispatchFilters({
 
       {/* Botão de Atualização / Recálculo */}
       <div className="flex items-center space-x-2">
+        {sheetStatus && (
+          <button
+            type="button"
+            onClick={onToggleSheetStatus}
+            disabled={isLoading || isChangingSheetStatus}
+            className={`flex items-center space-x-1 border px-3 py-1.5 text-xs font-bold transition-colors disabled:opacity-50 ${
+              sheetStatus === "OPEN"
+                ? "border-amber-400 bg-amber-100 text-amber-900 hover:bg-amber-200"
+                : "border-emerald-500 bg-emerald-700 text-white hover:bg-emerald-600"
+            }`}
+            title={sheetStatus === "OPEN" ? "Fechar e bloquear esta folha" : "Reabrir esta folha para edição"}
+          >
+            {sheetStatus === "OPEN" ? <LockKeyhole className="h-3.5 w-3.5" /> : <LockOpen className="h-3.5 w-3.5" />}
+            <span>{sheetStatus === "OPEN" ? "Fechar folha" : "Reabrir folha"}</span>
+          </button>
+        )}
         <button
           onClick={onRefresh}
           disabled={isLoading}

@@ -95,3 +95,11 @@ Este documento registra decisões confirmadas durante os testes. Alterações ne
 1. O acesso compartilhado atual serve somente para homologação com a equipe.
 2. Senhas nunca devem ser registradas nesta documentação ou no código.
 3. Antes do uso definitivo, cada pessoa deve possuir uma conta individual e um perfil compatível com sua função.
+
+## Fechamento da folha diária
+
+1. Uma folha aberta permite preenchimento normal pela operação.
+2. Ao fechar a folha, todos os lançamentos ficam disponíveis somente para consulta.
+3. A folha pode ser reaberta quando uma correção operacional for necessária.
+4. Fechamento e reabertura ficam registrados no histórico com usuário, data e região.
+5. Se outra pessoa alterar uma linha antes do salvamento, o sistema recusa a sobrescrita, recarrega a informação atual e avisa o operador.

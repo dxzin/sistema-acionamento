@@ -9,12 +9,14 @@ import { DispatchGrid } from "@/components/acionamento/DispatchGrid";
 import { dispatchService } from "@/lib/services/dispatch-service";
 import { createClient } from "@/lib/supabase/client";
 import { DispatchRowModel, DispatchFilterOptions, DispatchSummaryKPIs } from "@/types/domain";
-import { Location } from "@/types/database";
+import { DailySheet, Location } from "@/types/database";
 import { currentDateInBrasilia } from "@/lib/dates/operational-date";
 
 export default function AcionamentoPage() {
   const [dispatches, setDispatches] = useState<DispatchRowModel[]>([]);
   const [locations, setLocations] = useState<Location[]>([]);
+  const [dailySheet, setDailySheet] = useState<DailySheet | null>(null);
+  const [changingSheetStatus, setChangingSheetStatus] = useState(false);
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [saveState, setSaveState] = useState<{ status: "idle" | "saving" | "saved" | "error"; message?: string }>({ status: "idle" });
@@ -35,9 +37,10 @@ export default function AcionamentoPage() {
     setIsLoading(true);
     setLoadError(null);
     try {
-      const [dispatchesData, locs] = await Promise.all([
-        dispatchService.getDispatchesForSheet(filters.date, filters.region),
+      const dispatchesData = await dispatchService.getDispatchesForSheet(filters.date, filters.region);
+      const [locs, sheet] = await Promise.all([
         dispatchService.getLocations(),
+        dispatchService.getDailySheet(filters.date, filters.region),
       ]);
 
       // Uma resposta de uma data/região antiga nunca pode sobrescrever a
@@ -45,11 +48,13 @@ export default function AcionamentoPage() {
       if (requestId === loadRequestRef.current) {
         setDispatches(dispatchesData);
         setLocations(locs);
+        setDailySheet(sheet);
       }
     } catch (error) {
       console.error("Erro ao carregar dados da folha diária:", error);
       if (requestId === loadRequestRef.current) {
         setDispatches([]);
+        setDailySheet(null);
         setLoadError(error instanceof Error ? error.message : "Não foi possível carregar a folha diária.");
       }
     } finally {
@@ -80,6 +85,11 @@ export default function AcionamentoPage() {
           if (refreshTimer) clearTimeout(refreshTimer);
           refreshTimer = setTimeout(() => loadData(), 700);
         }
+      )
+      .on(
+        "postgres_changes",
+        { event: "UPDATE", schema: "public", table: "daily_sheets" },
+        () => loadData()
       )
       .subscribe();
 
@@ -112,6 +122,9 @@ export default function AcionamentoPage() {
 
   const handleUpdateRow = async (id: string, updates: Partial<DispatchRowModel>) => {
     const originalRow = dispatches.find((row) => row.id === id);
+    if (dailySheet?.status !== "OPEN") {
+      throw new Error("Esta folha está fechada e disponível somente para consulta.");
+    }
     setSaveState({ status: "saving" });
 
     // Atualização otimista imediata na UI
@@ -120,7 +133,7 @@ export default function AcionamentoPage() {
     );
 
     try {
-      const saved = await dispatchService.updateDispatch(id, updates);
+      const saved = await dispatchService.updateDispatch(id, updates, originalRow?.updated_at);
       if (!saved) throw new Error("O banco não confirmou a alteração.");
 
       setDispatches((prev) =>
@@ -144,27 +157,6 @@ export default function AcionamentoPage() {
         });
       }
 
-      if (originalRow) {
-        const changedEntries = Object.entries(updates).filter(([, value]) =>
-          value === null || ["string", "number", "boolean"].includes(typeof value)
-        );
-        const newValues = Object.fromEntries(changedEntries);
-        const oldValues = Object.fromEntries(
-          changedEntries.map(([key]) => [key, originalRow[key as keyof DispatchRowModel] ?? null])
-        );
-        try {
-          await dispatchService.recordDispatchAudit(id, oldValues, newValues);
-        } catch (auditError) {
-          setSaveState({
-            status: "error",
-            message: auditError instanceof Error
-              ? `Alteração salva; auditoria: ${auditError.message}`
-              : "Alteração salva, mas a auditoria falhou.",
-          });
-          return;
-        }
-      }
-
       setSaveState({ status: "saved" });
     } catch (error) {
       if (originalRow) {
@@ -175,7 +167,34 @@ export default function AcionamentoPage() {
         status: "error",
         message: saveError.message,
       });
+      if (saveError.message.startsWith("Conflito:") || saveError.message.includes("folha está fechada")) {
+        await loadData();
+      }
       throw saveError;
+    }
+  };
+
+  const handleToggleSheetStatus = async () => {
+    if (!dailySheet || changingSheetStatus) return;
+    const closing = dailySheet.status === "OPEN";
+    const confirmed = window.confirm(closing
+      ? `Fechar a folha de ${filters.date}? Ela ficará bloqueada para edição.`
+      : `Reabrir a folha de ${filters.date} para edição?`);
+    if (!confirmed) return;
+
+    setChangingSheetStatus(true);
+    setSaveState({ status: "saving" });
+    try {
+      const updated = await dispatchService.setDailySheetStatus(dailySheet.id, closing ? "CLOSED" : "OPEN");
+      setDailySheet(updated);
+      setSaveState({ status: "saved" });
+    } catch (error) {
+      setSaveState({
+        status: "error",
+        message: error instanceof Error ? error.message : "Não foi possível alterar o estado da folha.",
+      });
+    } finally {
+      setChangingSheetStatus(false);
     }
   };
 
@@ -252,6 +271,9 @@ export default function AcionamentoPage() {
             onFilterChange={handleFilterChange}
             onRefresh={loadData}
             isLoading={isLoading}
+            sheetStatus={dailySheet?.status || null}
+            onToggleSheetStatus={handleToggleSheetStatus}
+            isChangingSheetStatus={changingSheetStatus}
           />
 
           {loadError && (
@@ -266,6 +288,7 @@ export default function AcionamentoPage() {
             onUpdateRow={handleUpdateRow}
             locations={locations}
             saveState={saveState}
+            readOnly={dailySheet?.status !== "OPEN"}
           />
         </main>
       </div>

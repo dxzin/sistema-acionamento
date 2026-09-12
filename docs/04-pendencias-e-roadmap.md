@@ -33,7 +33,7 @@ Cinco dias úteis de operação paralela sem perda de dados, sem status automát
 - [ ] Revisar permissões de operador, supervisor e administrador.
 - [ ] Validar a auditoria de cada alteração importante e a identificação do usuário.
 - [ ] Definir política de backup, restauração e retenção de dados.
-- [ ] Criar procedimento de fechamento/reabertura de uma folha diária.
+- [x] Criar procedimento de fechamento/reabertura de uma folha diária.
 - [ ] Criar testes automatizados para regras críticas e salvamento em lote.
 - [ ] Implementar salvamento em lote transacional para grandes colagens.
 

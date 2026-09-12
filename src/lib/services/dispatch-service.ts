@@ -1,5 +1,5 @@
 import { createClient } from "@/lib/supabase/client";
-import { Base, Dispatch, Driver, Location, Vehicle } from "@/types/database";
+import { Base, DailySheet, Dispatch, Driver, Location, SheetStatus, Vehicle } from "@/types/database";
 import { DispatchRowModel } from "@/types/domain";
 import { calculateJornada } from "../calculations/jornada";
 import { calculateNextForecast } from "../calculations/interjornada";
@@ -122,12 +122,38 @@ class DispatchService {
     return d.toISOString().split("T")[0];
   }
 
+  async getDailySheet(date: string, region: string = "SP"): Promise<DailySheet | null> {
+    if (!this.isSupabaseConfigured()) return null;
+    const normalizedRegion = region === "ALL" ? "SP" : region;
+    const supabase = createClient();
+    const { data, error } = await supabase
+      .from("daily_sheets")
+      .select("*")
+      .eq("date", date)
+      .eq("region", normalizedRegion)
+      .maybeSingle();
+    if (error) throw new Error(error.message);
+    return data;
+  }
+
+  async setDailySheetStatus(id: string, status: Extract<SheetStatus, "OPEN" | "CLOSED">): Promise<DailySheet> {
+    if (!this.isSupabaseConfigured()) throw new Error("Fechamento disponível somente com o banco conectado.");
+    const supabase = createClient();
+    const { data, error } = await supabase.rpc("set_daily_sheet_status", {
+      p_sheet_id: id,
+      p_status: status,
+    }).single();
+    if (error) throw new Error(error.message);
+    return data as DailySheet;
+  }
+
   async getDispatchesForSheet(date: string, region: string = "SP"): Promise<DispatchRowModel[]> {
     let rawDispatches: Dispatch[] = [];
     const restDriverIds = new Set<string>();
     const currentScaleCodeByDriver = new Map<string, string>();
     const currentScaleShiftByDriver = new Map<string, string>();
     const normalizedRegion = region === "ALL" ? "SP" : region;
+    let currentSheetStatus: SheetStatus | null = null;
 
     if (this.isSupabaseConfigured()) {
       try {
@@ -136,12 +162,13 @@ class DispatchService {
         // 1. Busca a folha diária existente
         const { data: sheet } = await supabase
           .from("daily_sheets")
-          .select("id")
+          .select("id,status")
           .eq("date", date)
           .eq("region", normalizedRegion)
           .maybeSingle();
 
         if (sheet) {
+          currentSheetStatus = sheet.status as SheetStatus;
           const { data, error } = await supabase
             .from("dispatches")
             .select("*")
@@ -161,7 +188,7 @@ class DispatchService {
               .eq("region", normalizedRegion)
               .maybeSingle();
 
-            if (previousSheet) {
+            if (previousSheet && sheet.status === "OPEN") {
               const { data: previousRows } = await supabase
                 .from("dispatches")
                 .select("driver_id,final_destination_location_id,next_day_forecast_time")
@@ -235,7 +262,7 @@ class DispatchService {
         // 2. Se a folha diária ainda não existir ou não tiver despachos, gera automaticamente
         // Consultar datas antigas ou mais distantes nunca pode criar dados.
         // Uma folha ausente só é preparada para o próximo dia operacional.
-        if (rawDispatches.length === 0 && canCreateDailySheet(date)) {
+        if (rawDispatches.length === 0 && canCreateDailySheet(date) && (!sheet || sheet.status === "OPEN")) {
           const targetBases = REGION_BASES[normalizedRegion] || ["LP", "CASTILHO"];
           const { data: bases } = await supabase.from("bases").select("id,code").in("code", targetBases);
           const baseIds = (bases || []).map((b) => b.id);
@@ -253,10 +280,11 @@ class DispatchService {
               const { data: newSheet, error: sheetErr } = await supabase
                 .from("daily_sheets")
                 .upsert({ date, region: normalizedRegion, status: "OPEN" }, { onConflict: "date,region" })
-                .select("id")
+                .select("id,status")
                 .single();
 
               if (!sheetErr && newSheet) {
+                currentSheetStatus = newSheet.status as SheetStatus;
                 // Obter dia, mês e ano da data selecionada
                 const [yStr, mStr, dStr] = date.split("-");
                 const dayNum = parseInt(dStr, 10);
@@ -373,6 +401,7 @@ class DispatchService {
     // No primeiro dia do ciclo, quando não há destino final anterior, o LOCAL
     // começa na base cadastrada do condutor (ex.: CASTILHO ou LP).
     const firstDayOrigins = rawDispatches.flatMap((row) => {
+      if (currentSheetStatus && currentSheetStatus !== "OPEN") return [];
       if (row.origin_source === "MANUAL") return [];
       const originId = resolveFirstDayBaseOrigin(
         currentScaleCodeByDriver.get(row.driver_id) || row.scale_day_status,
@@ -385,6 +414,7 @@ class DispatchService {
     });
 
     const firstDayForecasts = rawDispatches.flatMap((row) => {
+      if (currentSheetStatus && currentSheetStatus !== "OPEN") return [];
       const driver = driversMap.get(row.driver_id);
       const forecast = resolveFirstDayForecast(
         currentScaleCodeByDriver.get(row.driver_id) || row.scale_day_status,
@@ -476,7 +506,7 @@ class DispatchService {
     });
   }
 
-  async updateDispatch(id: string, updates: Partial<DispatchRowModel>): Promise<Dispatch | null> {
+  async updateDispatch(id: string, updates: Partial<DispatchRowModel>, expectedUpdatedAt?: string): Promise<Dispatch | null> {
     const {
       fleet_code,
       driver: _driver,
@@ -589,17 +619,25 @@ class DispatchService {
     if (this.isSupabaseConfigured()) {
       try {
         const supabase = createClient();
-        const { data, error } = await supabase
-          .from("dispatches")
-          .update(processedUpdates)
-          .eq("id", id)
-          .select()
-          .single();
+        const { data, error } = await supabase.rpc("update_dispatch_with_audit", {
+          p_dispatch_id: id,
+          p_expected_updated_at: expectedUpdatedAt || null,
+          p_changes: processedUpdates,
+        }).single();
 
-        if (error) throw new Error(error.message);
+        if (error) {
+          if (error.message.includes("DISPATCH_CONFLICT")) {
+            throw new Error("Conflito: esta linha foi alterada por outra pessoa. Os dados foram recarregados; confira antes de tentar novamente.");
+          }
+          if (error.message.includes("DAILY_SHEET_CLOSED")) {
+            throw new Error("Esta folha está fechada e não aceita alterações.");
+          }
+          throw new Error(error.message);
+        }
         if (data) {
-          this.localDispatches = this.localDispatches.map((d) => (d.id === id ? { ...d, ...data } : d));
-          return data;
+          const saved = data as Dispatch;
+          this.localDispatches = this.localDispatches.map((d) => (d.id === id ? { ...d, ...saved } : d));
+          return saved;
         }
       } catch (e) {
         console.error("Falha ao salvar despacho no Supabase:", e);

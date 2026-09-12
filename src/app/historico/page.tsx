@@ -16,17 +16,21 @@ interface AuditEvent {
 
 const FIELD_LABELS: Record<string, string> = {
   forecast_start_time: "Previsão",
-  status: "Status",
+  dispatch_status: "Status",
   abono_reason: "Motivo do abono",
-  authorized_by: "Autorizado por",
-  location_id: "Local",
+  abono_authorized_by: "Autorizado por",
+  origin_location_id: "Local",
+  origin_source: "Origem do local",
+  forecast_source: "Origem da previsão",
   entry_time: "Entrada",
-  fleet: "Frota",
+  vehicle_id: "Frota",
   cargo_status: "C/V",
-  destination_name: "Destino",
-  final_destination_name: "Destino final",
+  destination_location_id: "Destino",
+  final_destination_location_id: "Destino final",
   exit_time: "Saída",
   observations: "Observação",
+  next_day_forecast_time: "Previsão do próximo dia",
+  total_worked_minutes: "Tempo de jornada (min)",
 };
 
 function displayValue(value: unknown) {
