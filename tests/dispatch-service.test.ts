@@ -16,3 +16,10 @@ test("editar somente a saída preserva a entrada e recalcula a próxima previsã
   assert.equal(saved.total_worked_minutes, 720);
   assert.equal(saved.next_day_forecast_time, "00:29:00");
 });
+
+test("previsão digitada pelo operador fica protegida como manual", async () => {
+  const saved = await dispatchService.updateDispatch("disp-3", { forecast_start_time: "09:15:00" });
+  assert.ok(saved);
+  assert.equal(saved.forecast_start_time, "09:15:00");
+  assert.equal(saved.forecast_source, "MANUAL");
+});

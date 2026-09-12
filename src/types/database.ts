@@ -93,6 +93,7 @@ export interface Dispatch {
   driver_id: string;
   previous_dispatch_id?: string | null;
   forecast_start_time?: string | null; // HH:mm:ss
+  forecast_source?: "SCHEDULE" | "CONTINUITY" | "MANUAL";
   dispatch_status: DispatchStatus;
   abono_reason?: string | null;
   abono_authorized_by?: string | null;

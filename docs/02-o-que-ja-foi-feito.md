@@ -72,6 +72,7 @@
 - Senha de homologação removida do código enviado ao navegador; somente o e-mail da conta de teste é exibido.
 - Testes automáticos adicionados para jornada normal, jornada noturna, jornada em andamento, interjornada e continuidade baseada exclusivamente no destino final.
 - Edição isolada de entrada ou saída preserva o outro horário já salvo ao recalcular jornada e próxima previsão.
+- Previsão do acionamento sincronizada com a `PREV. PRÓX.` do dia anterior, preservando ajustes manuais do operador.
 - Framework atualizado para Next.js 16 LTS e React 19, eliminando os alertas críticos identificados na versão anterior.
 - Importação web migrada para ExcelJS e limitada a `.xlsx` de até 5 MB, 2.000 linhas e 100 colunas.
 

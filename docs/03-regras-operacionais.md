@@ -22,6 +22,13 @@ Este documento registra decisões confirmadas durante os testes. Alterações ne
 2. Exemplo: durante o dia 10, somente a folha do dia 11 pode ser preparada; ao entrar no dia 11, a próxima permitida passa a ser a do dia 12.
 3. Datas anteriores continuam disponíveis para consulta, mas consultar uma data sem folha não cria registros.
 4. Selecionar uma data além do dia seguinte nunca pode gerar folha ou condutores automaticamente.
+
+## Previsão de acionamento
+
+1. A `PREVISÃO` do dia usa primeiro a `PREV. PRÓX.` calculada no dia anterior.
+2. O horário da escala é utilizado somente quando não existe previsão do dia anterior.
+3. Se a saída do dia anterior for preenchida depois que a próxima folha já existe, a previsão do dia seguinte é atualizada automaticamente.
+4. Uma previsão alterada manualmente pelo operador não pode ser sobrescrita pela continuidade automática.
 4. As opções conhecidas continuam disponíveis como ajuda de preenchimento.
 5. As cores de `ACIONADO`, `ABONADO`, `APOIO`, `BALDEIO` e demais estados conhecidos são parâmetros visuais da operação e devem ser preservadas.
 

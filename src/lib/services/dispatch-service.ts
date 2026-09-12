@@ -4,7 +4,7 @@ import { DispatchRowModel } from "@/types/domain";
 import { calculateJornada } from "../calculations/jornada";
 import { calculateNextForecast } from "../calculations/interjornada";
 import { resolveDayContinuity } from "../calculations/continuity";
-import { canCreateDailySheet } from "../dates/operational-date";
+import { canCreateDailySheet, currentDateInBrasilia } from "../dates/operational-date";
 import {
   INITIAL_BASES,
   INITIAL_DISPATCHES,
@@ -161,25 +161,37 @@ class DispatchService {
             if (previousSheet) {
               const { data: previousRows } = await supabase
                 .from("dispatches")
-                .select("driver_id,destination_location_id,final_destination_location_id")
+                .select("driver_id,final_destination_location_id,next_day_forecast_time")
                 .eq("daily_sheet_id", previousSheet.id);
               const previousByDriver = new Map((previousRows || []).map((row) => [row.driver_id, row]));
 
-              const missingOrigins = rawDispatches.flatMap((row) => {
-                if (row.origin_location_id) return [];
+              const canRefreshForecast = date === currentDateInBrasilia() || canCreateDailySheet(date);
+              const continuityUpdates = rawDispatches.flatMap((row) => {
                 const previous = previousByDriver.get(row.driver_id);
-                const originId = previous?.final_destination_location_id;
-                return originId ? [{ id: row.id, originId }] : [];
+                const updates: Partial<Dispatch> = {};
+                if (!row.origin_location_id && previous?.final_destination_location_id) {
+                  updates.origin_location_id = previous.final_destination_location_id;
+                }
+                if (
+                  canRefreshForecast &&
+                  row.forecast_source !== "MANUAL" &&
+                  previous?.next_day_forecast_time &&
+                  row.forecast_start_time !== previous.next_day_forecast_time
+                ) {
+                  updates.forecast_start_time = previous.next_day_forecast_time;
+                  updates.forecast_source = "CONTINUITY";
+                }
+                return Object.keys(updates).length ? [{ id: row.id, updates }] : [];
               });
 
-              if (missingOrigins.length) {
-                await Promise.all(missingOrigins.map(({ id, originId }) =>
-                  supabase.from("dispatches").update({ origin_location_id: originId }).eq("id", id)
+              if (continuityUpdates.length) {
+                await Promise.all(continuityUpdates.map(({ id, updates }) =>
+                  supabase.from("dispatches").update(updates).eq("id", id)
                 ));
-                const originsById = new Map(missingOrigins.map((item) => [item.id, item.originId]));
+                const updatesById = new Map(continuityUpdates.map((item) => [item.id, item.updates]));
                 rawDispatches = rawDispatches.map((row) => ({
                   ...row,
-                  origin_location_id: row.origin_location_id || originsById.get(row.id) || null,
+                  ...(updatesById.get(row.id) || {}),
                 }));
               }
             }
@@ -300,6 +312,7 @@ class DispatchService {
                     driver_id: d.id,
                     scale_day_status: scaleCode || null,
                     forecast_start_time: continuity.forecastStartTime || schedEntry?.shift_time || d.default_start_time || null,
+                    forecast_source: continuity.forecastStartTime ? "CONTINUITY" : "SCHEDULE",
                     // O status é uma decisão do operador e começa vazio.
                     dispatch_status: "",
                     abono_reason: null,
@@ -405,6 +418,10 @@ class DispatchService {
       ...dispatchUpdates
     } = updates;
     const processedUpdates: Partial<Dispatch> = { ...dispatchUpdates };
+
+    if ("forecast_start_time" in updates) {
+      processedUpdates.forecast_source = "MANUAL";
+    }
 
     const resolveLocationId = async (rawName: string): Promise<string | null> => {
       const name = rawName.trim().replace(/\s+/g, " ").toUpperCase().slice(0, 100);

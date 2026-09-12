@@ -63,7 +63,7 @@ const sheetIds = (sheets || []).map((sheet) => sheet.id);
 const dispatches = sheetIds.length
   ? await allPages((from, to) => supabase
     .from("dispatches")
-    .select("id,daily_sheet_id,driver_id,dispatch_status,abono_reason,abono_authorized_by,origin_location_id,entry_time,vehicle_id,cargo_status,destination_location_id,final_destination_location_id,exit_time,observations")
+    .select("id,daily_sheet_id,driver_id,forecast_start_time,dispatch_status,abono_reason,abono_authorized_by,origin_location_id,entry_time,vehicle_id,cargo_status,destination_location_id,final_destination_location_id,exit_time,observations,next_day_forecast_time")
     .in("daily_sheet_id", sheetIds)
     .order("daily_sheet_id")
     .order("driver_id")
@@ -115,6 +115,7 @@ const sheetSummary = (sheets || []).map((sheet) => {
 });
 
 const continuityIssues = [];
+const forecastContinuityIssues = [];
 for (const sheet of sheets || []) {
   const date = new Date(`${sheet.date}T12:00:00Z`);
   date.setUTCDate(date.getUTCDate() - 1);
@@ -129,6 +130,19 @@ for (const sheet of sheets || []) {
         date: sheet.date,
         driver: driver.name,
         type: current.origin_location_id ? "origem divergente" : "origem ausente",
+      });
+    }
+  }
+  for (const driver of drivers) {
+    const previous = dispatchBySheetDriver.get(`${previousSheet.id}:${driver.id}`);
+    const current = dispatchBySheetDriver.get(`${sheet.id}:${driver.id}`);
+    if (!previous?.next_day_forecast_time || !current) continue;
+    if (current.forecast_start_time !== previous.next_day_forecast_time) {
+      forecastContinuityIssues.push({
+        date: sheet.date,
+        driver: driver.name,
+        currentForecast: current.forecast_start_time,
+        expectedForecast: previous.next_day_forecast_time,
       });
     }
   }
@@ -155,5 +169,6 @@ console.log(JSON.stringify({
   restDayDispatches: { count: restDayDispatches.length, samples: restDayDispatches.slice(0, 20) },
   futureStatuses: { count: futureStatuses.length, samples: futureStatuses.slice(0, 20) },
   continuityIssues: { count: continuityIssues.length, samples: continuityIssues.slice(0, 20) },
+  forecastContinuityIssues: { count: forecastContinuityIssues.length, samples: forecastContinuityIssues.slice(0, 20) },
   anizioDay10,
 }, null, 2));
