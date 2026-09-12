@@ -25,10 +25,11 @@ Este documento registra decisões confirmadas durante os testes. Alterações ne
 
 ## Previsão de acionamento
 
-1. A `PREVISÃO` do dia usa primeiro a `PREV. PRÓX.` calculada no dia anterior.
-2. O horário da escala é utilizado somente quando não existe previsão do dia anterior.
-3. Se a saída do dia anterior for preenchida depois que a próxima folha já existe, a previsão do dia seguinte é atualizada automaticamente.
-4. Uma previsão alterada manualmente pelo operador não pode ser sobrescrita pela continuidade automática.
+1. No primeiro dia da escala (código `1`), a previsão é sempre quatro horas antes do turno: `04h → 00h`, `12h → 08h` e `20h → 16h`.
+2. Nos demais dias, a `PREVISÃO` usa primeiro a `PREV. PRÓX.` calculada no dia anterior.
+3. O horário da escala é utilizado como alternativa quando não existe previsão do dia anterior.
+4. Se a saída do dia anterior for preenchida depois que a próxima folha já existe, a previsão do dia seguinte é atualizada automaticamente.
+5. Uma previsão alterada manualmente pelo operador não pode ser sobrescrita por nenhuma regra automática.
 
 ## Local no primeiro dia da escala
 

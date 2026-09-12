@@ -4,7 +4,7 @@ import { DispatchRowModel } from "@/types/domain";
 import { calculateJornada } from "../calculations/jornada";
 import { calculateNextForecast } from "../calculations/interjornada";
 import { resolveDayContinuity } from "../calculations/continuity";
-import { resolveFirstDayBaseOrigin } from "../calculations/first-day-origin";
+import { resolveFirstDayBaseOrigin, resolveFirstDayForecast } from "../calculations/first-day-origin";
 import { canCreateDailySheet, currentDateInBrasilia } from "../dates/operational-date";
 import {
   INITIAL_BASES,
@@ -126,6 +126,7 @@ class DispatchService {
     let rawDispatches: Dispatch[] = [];
     const restDriverIds = new Set<string>();
     const currentScaleCodeByDriver = new Map<string, string>();
+    const currentScaleShiftByDriver = new Map<string, string>();
     const normalizedRegion = region === "ALL" ? "SP" : region;
 
     if (this.isSupabaseConfigured()) {
@@ -215,12 +216,13 @@ class DispatchService {
         if (currentSchedule) {
           const { data: dayEntries } = await supabase
             .from("monthly_schedule_entries")
-            .select("driver_id,scale_code")
+            .select("driver_id,scale_code,shift_time")
             .eq("schedule_id", currentSchedule.id)
             .eq("day_of_month", Number(dayText));
           for (const entry of dayEntries || []) {
             const scaleCode = String(entry.scale_code || "").trim().toUpperCase();
             currentScaleCodeByDriver.set(entry.driver_id, scaleCode);
+            if (entry.shift_time) currentScaleShiftByDriver.set(entry.driver_id, entry.shift_time);
             if (["F", "FE"].includes(scaleCode)) restDriverIds.add(entry.driver_id);
           }
         }
@@ -375,6 +377,16 @@ class DispatchService {
       return originId ? [{ id: row.id, originId }] : [];
     });
 
+    const firstDayForecasts = rawDispatches.flatMap((row) => {
+      const driver = driversMap.get(row.driver_id);
+      const forecast = resolveFirstDayForecast(
+        currentScaleCodeByDriver.get(row.driver_id) || row.scale_day_status,
+        currentScaleShiftByDriver.get(row.driver_id) || driver?.default_start_time
+      );
+      if (!forecast || row.forecast_source === "MANUAL" || row.forecast_start_time === forecast) return [];
+      return [{ id: row.id, forecast }];
+    });
+
     if (firstDayOrigins.length) {
       if (this.isSupabaseConfigured()) {
         const updateClient = createClient();
@@ -388,6 +400,25 @@ class DispatchService {
       rawDispatches = rawDispatches.map((row) => ({
         ...row,
         origin_location_id: row.origin_location_id || originsById.get(row.id) || null,
+      }));
+    }
+
+    if (firstDayForecasts.length) {
+      if (this.isSupabaseConfigured()) {
+        const updateClient = createClient();
+        const results = await Promise.all(firstDayForecasts.map(({ id, forecast }) =>
+          updateClient.from("dispatches").update({ forecast_start_time: forecast, forecast_source: "SCHEDULE" }).eq("id", id)
+        ));
+        const failed = results.find((result) => result.error);
+        if (failed?.error) throw new Error(failed.error.message);
+      }
+      const forecastsById = new Map(firstDayForecasts.map((item) => [item.id, item.forecast]));
+      rawDispatches = rawDispatches.map((row) => ({
+        ...row,
+        ...(forecastsById.has(row.id) ? {
+          forecast_start_time: forecastsById.get(row.id),
+          forecast_source: "SCHEDULE" as const,
+        } : {}),
       }));
     }
 

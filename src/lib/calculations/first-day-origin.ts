@@ -1,4 +1,5 @@
 import { Base, Driver, Location } from "@/types/database";
+import { minutesToTime, timeToMinutes } from "./jornada";
 
 function normalize(value: string | null | undefined) {
   return (value || "").trim().toLocaleUpperCase("pt-BR");
@@ -21,4 +22,12 @@ export function resolveFirstDayBaseOrigin(
     const locationName = normalize(location.name);
     return locationName === baseCode || locationName === baseName;
   })?.id || null;
+}
+
+export function resolveFirstDayForecast(
+  scaleCode: string | null | undefined,
+  shiftTime: string | null | undefined
+) {
+  if (normalize(scaleCode) !== "1" || !shiftTime?.trim()) return null;
+  return minutesToTime(timeToMinutes(shiftTime) - 240);
 }

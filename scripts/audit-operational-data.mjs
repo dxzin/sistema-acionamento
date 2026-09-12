@@ -44,7 +44,7 @@ async function allPages(makeQuery) {
 const [{ data: schedule, error: scheduleError }, { data: sheets, error: sheetsError }, drivers, { data: bases, error: basesError }] = await Promise.all([
   supabase.from("monthly_schedules").select("id").eq("month", month).eq("year", year).eq("region", region).maybeSingle(),
   supabase.from("daily_sheets").select("id,date").eq("region", region).gte("date", startDate).lte("date", endDate).order("date"),
-  allPages((from, to) => supabase.from("drivers").select("id,name,login_matricula,base_id").order("id").range(from, to)),
+  allPages((from, to) => supabase.from("drivers").select("id,name,login_matricula,base_id,default_start_time").order("id").range(from, to)),
   supabase.from("bases").select("id,code,name"),
 ]);
 if (scheduleError) throw scheduleError;
@@ -54,7 +54,7 @@ if (basesError) throw basesError;
 const scheduleEntries = schedule?.id
   ? await allPages((from, to) => supabase
     .from("monthly_schedule_entries")
-    .select("driver_id,day_of_month,scale_code")
+    .select("driver_id,day_of_month,scale_code,shift_time")
     .eq("schedule_id", schedule.id)
     .order("driver_id")
     .order("day_of_month")
@@ -65,7 +65,7 @@ const sheetIds = (sheets || []).map((sheet) => sheet.id);
 const dispatches = sheetIds.length
   ? await allPages((from, to) => supabase
     .from("dispatches")
-    .select("id,daily_sheet_id,driver_id,forecast_start_time,dispatch_status,abono_reason,abono_authorized_by,origin_location_id,entry_time,vehicle_id,cargo_status,destination_location_id,final_destination_location_id,exit_time,observations,next_day_forecast_time")
+    .select("id,daily_sheet_id,driver_id,forecast_start_time,forecast_source,dispatch_status,abono_reason,abono_authorized_by,origin_location_id,entry_time,vehicle_id,cargo_status,destination_location_id,final_destination_location_id,exit_time,observations,next_day_forecast_time")
     .in("daily_sheet_id", sheetIds)
     .order("daily_sheet_id")
     .order("driver_id")
@@ -79,6 +79,10 @@ const sheetByDate = new Map((sheets || []).map((sheet) => [sheet.date, sheet]));
 const scheduleByCell = new Map(scheduleEntries.map((entry) => [
   `${entry.driver_id}:${entry.day_of_month}`,
   String(entry.scale_code || "").trim().toUpperCase(),
+]));
+const shiftByCell = new Map(scheduleEntries.map((entry) => [
+  `${entry.driver_id}:${entry.day_of_month}`,
+  entry.shift_time,
 ]));
 const dispatchBySheetDriver = new Map(dispatches.map((dispatch) => [
   `${dispatch.daily_sheet_id}:${dispatch.driver_id}`,
@@ -173,6 +177,22 @@ const firstDayMissingOrigins = dispatches.filter((dispatch) => {
   };
 });
 
+const subtractFourHours = (time) => {
+  const [hours, minutes = "0"] = String(time || "").split(":");
+  if (!hours) return null;
+  const total = ((Number(hours) * 60 + Number(minutes) - 240) % 1440 + 1440) % 1440;
+  return `${String(Math.floor(total / 60)).padStart(2, "0")}:${String(total % 60).padStart(2, "0")}:00`;
+};
+const firstDayForecastIssues = dispatches.flatMap((dispatch) => {
+  const date = sheetById.get(dispatch.daily_sheet_id)?.date;
+  const day = date ? Number(date.slice(8, 10)) : 0;
+  if (scheduleByCell.get(`${dispatch.driver_id}:${day}`) !== "1" || dispatch.forecast_source === "MANUAL") return [];
+  const driver = driverById.get(dispatch.driver_id);
+  const expected = subtractFourHours(shiftByCell.get(`${dispatch.driver_id}:${day}`) || driver?.default_start_time);
+  if (!expected || dispatch.forecast_start_time === expected) return [];
+  return [{ date, driver: driver?.name, currentForecast: dispatch.forecast_start_time, expectedForecast: expected }];
+});
+
 console.log(JSON.stringify({
   auditedAt: new Date().toISOString(),
   period: { startDate, endDate, region },
@@ -188,5 +208,6 @@ console.log(JSON.stringify({
   continuityIssues: { count: continuityIssues.length, samples: continuityIssues.slice(0, 20) },
   forecastContinuityIssues: { count: forecastContinuityIssues.length, samples: forecastContinuityIssues.slice(0, 20) },
   firstDayMissingOrigins: { count: firstDayMissingOrigins.length, samples: firstDayMissingOrigins.slice(0, 20) },
+  firstDayForecastIssues: { count: firstDayForecastIssues.length, samples: firstDayForecastIssues.slice(0, 20) },
   anizioDay10,
 }, null, 2));
