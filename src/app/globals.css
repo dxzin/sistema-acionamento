@@ -164,6 +164,37 @@ body {
 .excel-save-dot.is-error { background: #dc2626; }
 .excel-grid option { color: #111 !important; background: #fff !important; }
 
+/* Modo escuro da folha de acionamento: grafite, sem preto puro e sem apagar os parâmetros operacionais. */
+.excel-grid-dark { color: #e5e7eb; background: #20242a; border-color: #4b5159; }
+.excel-grid-dark .excel-grid-actions,
+.excel-grid-dark .excel-statusbar { color: #cbd5e1; background: #292e35; border-color: #4b5159; }
+.excel-grid-dark .excel-grid-actions > button,
+.excel-grid-dark .excel-grid-actions > label { color: #e5e7eb; background: #343a42; border-color: #59616b; }
+.excel-grid-dark .excel-grid-actions select { color: #e5e7eb !important; }
+.excel-grid-dark .excel-grid-canvas,
+.excel-grid-dark table { background: #20242a !important; }
+.excel-grid-dark .excel-column-letters th { color: #cbd5e1 !important; background: #30353c !important; border-color: #555d67 !important; }
+.excel-grid-dark tbody tr,
+.excel-grid-dark tbody tr:nth-child(even) { background: #252a31; }
+.excel-grid-dark tbody tr:nth-child(even) { background: #292f36; }
+.excel-grid-dark tbody tr:hover,
+.excel-grid-dark tbody tr.excel-selected-row { background: #263f35 !important; }
+.excel-grid-dark tbody td { color: #e5e7eb !important; border-color: #454c55 !important; }
+.excel-grid-dark tbody tr td.sticky,
+.excel-grid-dark tbody tr:nth-child(even) td.sticky { background-color: #252a31; }
+.excel-grid-dark tbody tr:nth-child(even) td.sticky { background-color: #292f36; }
+.excel-grid-dark tbody tr:hover td.sticky,
+.excel-grid-dark tbody tr.excel-selected-row td.sticky { background-color: #263f35 !important; }
+.excel-grid-dark .excel-row-number { color: #b8c0ca !important; background: #30353c !important; border-color: #555d67 !important; }
+.excel-grid-dark tbody input,
+.excel-grid-dark tbody select { color: #f1f5f9 !important; }
+.excel-grid-dark tbody input::placeholder { color: #929ba7 !important; }
+.excel-grid-dark tbody input:focus,
+.excel-grid-dark tbody select:focus { color: #f8fafc !important; background: #343a42 !important; }
+.excel-grid-dark .excel-combobox-cell > button { color: #d1d5db; background: #343a42; border-color: #59616b; }
+.excel-grid-dark .excel-combobox-cell > div { color: #e5e7eb; background: #30353c; border-color: #59616b; }
+.excel-grid-dark .excel-combobox-cell > div button { color: #e5e7eb; }
+
 /* Status operacional: mantém as cores de referência da planilha no campo e na célula. */
 .excel-grid tbody td.excel-status-cell,
 .excel-grid select.excel-status-select,

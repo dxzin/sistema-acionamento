@@ -4,7 +4,7 @@ import React, { useEffect, useState, useMemo, useRef } from "react";
 import { DispatchRowModel } from "@/types/domain";
 import { DispatchStatus, CargoStatus } from "@/types/database";
 import { normalizeClockTime } from "@/lib/calculations/jornada";
-import { ArrowUpDown, Check, ChevronDown, Columns3, Copy, Clock, Eye, EyeOff, Minus, Plus, Search, X } from "lucide-react";
+import { ArrowUpDown, Check, ChevronDown, Columns3, Copy, Clock, Eye, EyeOff, Minus, Moon, Plus, Search, Sun, X } from "lucide-react";
 
 interface DispatchGridProps {
   dispatches: DispatchRowModel[];
@@ -24,6 +24,7 @@ interface GridHistoryAction {
 }
 
 type SortField = keyof DispatchRowModel | "driver_name" | "login" | "schedule_time";
+type ThemePreference = "light" | "dark" | "auto";
 type ColumnFilterKey =
   | "driver" | "login" | "schedule" | "forecast" | "status" | "reason"
   | "origin" | "entry" | "fleet" | "cargo" | "destination" | "finalDestination"
@@ -377,6 +378,8 @@ export function DispatchGrid({
   const [hiddenColumns, setHiddenColumns] = useState<number[]>([]);
   const [columnWidths, setColumnWidths] = useState<number[]>([...COLUMN_WIDTHS]);
   const [gridZoom, setGridZoom] = useState(100);
+  const [themePreference, setThemePreference] = useState<ThemePreference>("light");
+  const [systemDark, setSystemDark] = useState(false);
   const [showColumnMenu, setShowColumnMenu] = useState(false);
   const [showFindReplace, setShowFindReplace] = useState(false);
   const [findText, setFindText] = useState("");
@@ -404,6 +407,8 @@ export function DispatchGrid({
       }
       const savedZoom = Number(localStorage.getItem("dispatch-grid-zoom"));
       if (Number.isFinite(savedZoom) && savedZoom >= 75 && savedZoom <= 150) setGridZoom(savedZoom);
+      const savedTheme = localStorage.getItem("dispatch-grid-theme");
+      if (["light", "dark", "auto"].includes(savedTheme || "")) setThemePreference(savedTheme as ThemePreference);
     } catch { /* preferência local inválida: usa todas as colunas */ }
   }, []);
 
@@ -414,6 +419,20 @@ export function DispatchGrid({
   useEffect(() => {
     localStorage.setItem("dispatch-grid-zoom", String(gridZoom));
   }, [gridZoom]);
+
+  useEffect(() => {
+    localStorage.setItem("dispatch-grid-theme", themePreference);
+  }, [themePreference]);
+
+  useEffect(() => {
+    const media = window.matchMedia("(prefers-color-scheme: dark)");
+    const syncTheme = () => setSystemDark(media.matches);
+    syncTheme();
+    media.addEventListener("change", syncTheme);
+    return () => media.removeEventListener("change", syncTheme);
+  }, []);
+
+  const darkMode = themePreference === "dark" || (themePreference === "auto" && systemDark);
 
   // Status de acionamento disponíveis
   const STATUS_OPTIONS: DispatchStatus[] = [
@@ -921,7 +940,7 @@ export function DispatchGrid({
 
   return (
     <div
-      className="excel-grid overflow-hidden flex flex-col flex-1"
+      className={`excel-grid overflow-hidden flex flex-col flex-1 ${darkMode ? "excel-grid-dark" : ""}`}
       tabIndex={0}
       onPaste={handleGridPaste}
       onKeyDown={(event) => {
@@ -988,7 +1007,7 @@ export function DispatchGrid({
           <option key={status} value={status} />
         ))}
       </datalist>
-      <div className="relative flex items-center justify-end gap-2 border-b border-[#a6a6a6] bg-[#f3f3f3] px-2 py-1">
+      <div className="excel-grid-actions relative flex items-center justify-end gap-2 border-b border-[#a6a6a6] bg-[#f3f3f3] px-2 py-1">
         {hiddenColumns.length > 0 && (
           <span className="text-[10px] font-semibold text-slate-600">{hiddenColumns.length} oculta(s)</span>
         )}
@@ -1010,6 +1029,19 @@ export function DispatchGrid({
         >
           <Columns3 className="h-3.5 w-3.5" /> Colunas
         </button>
+        <label className="flex items-center gap-1 border border-[#a6a6a6] bg-white px-1.5 text-[10px] font-bold text-slate-700" title="Tema da planilha">
+          {darkMode ? <Moon className="h-3.5 w-3.5" /> : <Sun className="h-3.5 w-3.5" />}
+          <select
+            value={themePreference}
+            onChange={(event) => setThemePreference(event.target.value as ThemePreference)}
+            className="h-6 !min-h-0 border-0 !bg-transparent text-[10px] font-bold outline-none"
+            aria-label="Tema da planilha"
+          >
+            <option value="light">Claro</option>
+            <option value="dark">Escuro</option>
+            <option value="auto">Automático</option>
+          </select>
+        </label>
         {showFindReplace && (
           <div className="absolute right-24 top-8 z-[100] w-80 border border-[#7f7f7f] bg-white p-3 shadow-xl">
             <div className="mb-2 flex items-center justify-between border-b pb-1">
@@ -1104,7 +1136,7 @@ export function DispatchGrid({
         )}
       </div>
       {/* Contêiner com rolagem horizontal e vertical */}
-      <div className="h-[calc(100vh-210px)] min-h-[320px] overflow-x-auto overflow-y-auto bg-white relative select-none">
+      <div className="excel-grid-canvas h-[calc(100vh-210px)] min-h-[320px] overflow-x-auto overflow-y-auto bg-white relative select-none">
         <table
           ref={tableRef}
           style={{
