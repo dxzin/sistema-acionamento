@@ -450,18 +450,18 @@ export function DispatchGrid({
     // O horário visível é a fonte principal da cor. O turno cadastrado é
     // usado apenas quando o condutor ainda não possui um horário reconhecido.
     if (t.startsWith("04:")) {
-      return "flex min-h-8 w-full items-center justify-center bg-[#FFF2CC] text-[#7F4B00] font-bold text-[11px] whitespace-nowrap";
+      return "flex min-h-8 w-full items-center justify-center bg-[#FFF2CC] text-[#7F4B00] font-bold text-[13px] whitespace-nowrap";
     }
     if (t.startsWith("12:")) {
-      return "flex min-h-8 w-full items-center justify-center bg-[#DDEBF7] text-[#0369A1] font-bold text-[11px] whitespace-nowrap";
+      return "flex min-h-8 w-full items-center justify-center bg-[#DDEBF7] text-[#0369A1] font-bold text-[13px] whitespace-nowrap";
     }
     if (t.startsWith("20:")) {
-      return "flex min-h-8 w-full items-center justify-center bg-[#EDE7F6] text-[#5B2C6F] font-bold text-[11px] whitespace-nowrap";
+      return "flex min-h-8 w-full items-center justify-center bg-[#EDE7F6] text-[#5B2C6F] font-bold text-[13px] whitespace-nowrap";
     }
-    if (s === "A") return "flex min-h-8 w-full items-center justify-center bg-[#FFF2CC] text-[#7F4B00] font-bold text-[11px] whitespace-nowrap";
-    if (s === "B") return "flex min-h-8 w-full items-center justify-center bg-[#DDEBF7] text-[#0369A1] font-bold text-[11px] whitespace-nowrap";
-    if (s === "C") return "flex min-h-8 w-full items-center justify-center bg-[#EDE7F6] text-[#5B2C6F] font-bold text-[11px] whitespace-nowrap";
-    return "flex min-h-8 w-full items-center justify-center bg-slate-100 text-slate-700 font-bold text-[11px] whitespace-nowrap";
+    if (s === "A") return "flex min-h-8 w-full items-center justify-center bg-[#FFF2CC] text-[#7F4B00] font-bold text-[13px] whitespace-nowrap";
+    if (s === "B") return "flex min-h-8 w-full items-center justify-center bg-[#DDEBF7] text-[#0369A1] font-bold text-[13px] whitespace-nowrap";
+    if (s === "C") return "flex min-h-8 w-full items-center justify-center bg-[#EDE7F6] text-[#5B2C6F] font-bold text-[13px] whitespace-nowrap";
+    return "flex min-h-8 w-full items-center justify-center bg-slate-100 text-slate-700 font-bold text-[13px] whitespace-nowrap";
   };
 
   // Badges de status operacional com cores exatas da planilha
