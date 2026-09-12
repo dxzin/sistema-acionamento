@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import React, { useEffect, useState } from "react";
 import { Header } from "@/components/layout/Header";
@@ -14,40 +14,39 @@ interface AuditEvent {
   details: string;
 }
 
-const SAMPLE_AUDIT_EVENTS: AuditEvent[] = [
-  {
-    id: "log-1",
-    timestamp: "2026-09-01 12:50:14",
-    user: "Operador de Despacho",
-    action: "REGISTRO DE SAÍDA",
-    details: "Condutor: Marcelo Leandro | Saída: 12:50:00 | Jornada: 11h31min | Próx. Prev: 00:00:00",
-  },
-  {
-    id: "log-2",
-    timestamp: "2026-09-01 11:00:05",
-    user: "Operador de Despacho",
-    action: "REGISTRO DE SAÍDA",
-    details: "Condutor: Rafael Lima Amorim | Saída: 11:00:00 | Jornada: 10h06min | Próx. Prev: 22:10:00",
-  },
-  {
-    id: "log-3",
-    timestamp: "2026-09-01 04:00:22",
-    user: "Supervisor Roberto",
-    action: "AUTORIZAÇÃO DE ABONO",
-    details: "Condutor: Marcos Roberto de Oliveira | Motivo: ESTOURO DE JORNADA | Status: Aprovado",
-  },
-  {
-    id: "log-4",
-    timestamp: "2026-09-01 01:19:00",
-    user: "Operador de Despacho",
-    action: "REGISTRO DE ENTRADA",
-    details: "Condutor: Marcelo Leandro | Entrada: 01:19:00 | Frota: PZB0F50 | Destino: LP",
-  },
-];
+const FIELD_LABELS: Record<string, string> = {
+  forecast_start_time: "Previsão",
+  status: "Status",
+  abono_reason: "Motivo do abono",
+  authorized_by: "Autorizado por",
+  location_id: "Local",
+  entry_time: "Entrada",
+  fleet: "Frota",
+  cargo_status: "C/V",
+  destination_name: "Destino",
+  final_destination_name: "Destino final",
+  exit_time: "Saída",
+  observations: "Observação",
+};
+
+function displayValue(value: unknown) {
+  if (value === null || value === undefined || value === "") return "vazio";
+  return String(value);
+}
+
+function describeChanges(oldValues: Record<string, unknown>, newValues: Record<string, unknown>) {
+  return Object.entries(newValues)
+    .map(([field, value]) => {
+      const label = FIELD_LABELS[field] || field.replaceAll("_", " ");
+      const before = displayValue(oldValues[field]);
+      return `${label}: ${before} → ${displayValue(value)}`;
+    })
+    .join(" | ");
+}
 
 export default function HistoricoPage() {
-  const [events, setEvents] = useState<AuditEvent[]>(SAMPLE_AUDIT_EVENTS);
-  const [source, setSource] = useState<"supabase" | "demo">("demo");
+  const [events, setEvents] = useState<AuditEvent[]>([]);
+  const [source, setSource] = useState<"supabase" | "unavailable">("unavailable");
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -57,19 +56,19 @@ export default function HistoricoPage() {
       if (url && key && !url.includes("placeholder")) {
         try {
           const supabase = createClient();
-          const { data, error } = await supabase
-            .from("audit_logs")
-            .select("*")
-            .order("timestamp", { ascending: false })
-            .limit(50);
+          const [{ data, error }, { data: profiles }] = await Promise.all([
+            supabase.from("audit_logs").select("*").order("timestamp", { ascending: false }).limit(50),
+            supabase.from("profiles").select("id, name"),
+          ]);
 
-          if (!error && data && data.length > 0) {
+          if (!error && data) {
+            const profileNames = new Map((profiles || []).map((profile) => [profile.id, profile.name]));
             const mapped = data.map((item) => ({
               id: item.id,
               timestamp: new Date(item.timestamp).toLocaleString("pt-BR"),
-              user: item.user_id || "Operador",
-              action: item.action,
-              details: JSON.stringify(item.new_values || item.old_values || {}),
+              user: profileNames.get(item.user_id) || "Operador",
+              action: item.action === "UPDATE" ? "ALTERAÇÃO" : item.action,
+              details: describeChanges(item.old_values || {}, item.new_values || {}),
             }));
             setEvents(mapped);
             setSource("supabase");
@@ -79,39 +78,39 @@ export default function HistoricoPage() {
           // fallback para mock
         }
       }
-      setEvents(SAMPLE_AUDIT_EVENTS);
-      setSource("demo");
+      setEvents([]);
+      setSource("unavailable");
     }
 
     loadLogs().finally(() => setLoading(false));
   }, []);
 
   return (
-    <div className="flex-1 flex flex-col min-h-screen bg-slate-950 text-slate-100">
+    <div className="excel-shell flex-1 flex flex-col min-h-screen">
       <Header />
       <div className="flex flex-1 overflow-hidden">
         <Sidebar />
-        <main className="flex-1 flex flex-col p-3 overflow-hidden gap-3">
-          <div className="bg-slate-900 border border-slate-800 rounded p-3 flex items-center justify-between">
+        <main className="excel-workspace flex-1 flex flex-col overflow-hidden gap-3">
+          <div className="excel-toolbar border border-[#a6a6a6] bg-[#f3f3f3] rounded p-3 flex items-center justify-between shadow-xs">
             <div>
-              <h2 className="text-sm font-bold text-white uppercase tracking-wider flex items-center space-x-2">
-                <History className="w-4 h-4 text-emerald-400" />
+              <h2 className="text-xs font-bold text-slate-900 uppercase tracking-wider flex items-center space-x-2">
+                <History className="w-4 h-4 text-[#107c41]" />
                 <span>Trilha de Auditoria e Histórico de Despachos</span>
               </h2>
-              <p className="text-xs text-slate-400 mt-0.5">
+              <p className="text-[11px] text-slate-600 mt-0.5">
                 Rastreabilidade de alterações cadastrais e operacionais em conformidade com as regras de negócio.
               </p>
             </div>
-            <span className="flex items-center gap-1 rounded bg-slate-800 px-2.5 py-1 text-xs font-semibold text-emerald-400 border border-slate-700">
-              <Database className="h-3 w-3" />
-              {source === "supabase" ? "Supabase (Ao Vivo)" : "Demonstração Local"}
+            <span className="flex items-center gap-1 rounded bg-[#e2f0d9] border border-[#a9c99b] text-[#174d2d] px-2.5 py-1 text-xs font-bold">
+              <Database className="h-3.5 w-3.5" />
+              {source === "supabase" ? "Supabase (Ao Vivo)" : "Auditoria indisponível"}
             </span>
           </div>
 
-          <div className="flex-1 bg-slate-900 border border-slate-800 rounded overflow-hidden flex flex-col">
-            <div className="bg-slate-850 p-2.5 border-b border-slate-800 flex items-center justify-between text-xs text-slate-400">
-              <span className="font-semibold text-slate-300">Registros Recentes de Atividade</span>
-              <div className="flex items-center space-x-1 text-emerald-400 font-medium">
+          <div className="flex-1 bg-white border border-[#a6a6a6] rounded overflow-hidden flex flex-col shadow-xs">
+            <div className="bg-[#f3f3f3] p-2.5 border-b border-slate-300 flex items-center justify-between text-xs text-slate-700">
+              <span className="font-bold text-slate-800">Registros Recentes de Atividade</span>
+              <div className="flex items-center space-x-1 text-[#107c41] font-bold">
                 <ShieldCheck className="w-3.5 h-3.5" />
                 <span>Auditoria Ativa</span>
               </div>
@@ -119,29 +118,34 @@ export default function HistoricoPage() {
 
             <div className="flex-1 overflow-auto p-3">
               {loading ? (
-                <div className="flex h-full items-center justify-center gap-2 text-xs text-slate-400">
-                  <Loader2 className="h-4 w-4 animate-spin text-emerald-400" />
+                <div className="flex h-full items-center justify-center gap-2 text-xs text-slate-600 font-semibold">
+                  <Loader2 className="h-4 w-4 animate-spin text-[#107c41]" />
                   Carregando trilha de auditoria...
                 </div>
               ) : (
                 <div className="space-y-2">
+                  {events.length === 0 && (
+                    <div className="rounded border border-dashed border-slate-300 bg-slate-50 p-8 text-center text-xs text-slate-600">
+                      Nenhuma alteração registrada até o momento.
+                    </div>
+                  )}
                   {events.map((event) => (
                     <div
                       key={event.id}
-                      className="bg-slate-950 border border-slate-800 rounded p-3 text-xs flex flex-col md:flex-row md:items-center justify-between gap-2 hover:border-slate-700 transition"
+                      className="bg-slate-50 border border-slate-300 rounded p-3 text-xs flex flex-col md:flex-row md:items-center justify-between gap-2 hover:bg-slate-100 transition"
                     >
                       <div className="flex items-start md:items-center space-x-3">
-                        <div className="px-2 py-0.5 bg-emerald-950 border border-emerald-800 text-emerald-300 rounded text-[10px] font-mono font-semibold">
+                        <div className="px-2 py-0.5 bg-[#e2f0d9] border border-[#a9c99b] text-[#174d2d] rounded text-[10px] font-mono font-bold">
                           {event.action}
                         </div>
                         <div>
-                          <div className="text-slate-200 font-medium">{event.details}</div>
-                          <div className="text-[11px] text-slate-500 mt-0.5">
-                            Realizado por: <span className="text-slate-400">{event.user}</span>
+                          <div className="text-slate-900 font-semibold">{event.details}</div>
+                          <div className="text-[11px] text-slate-500 mt-0.5 font-sans">
+                            Realizado por: <span className="text-slate-700 font-medium">{event.user}</span>
                           </div>
                         </div>
                       </div>
-                      <div className="text-[11px] text-slate-400 font-mono shrink-0">
+                      <div className="text-[11px] text-slate-500 font-mono shrink-0 font-medium">
                         {event.timestamp}
                       </div>
                     </div>

@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { ChangeEvent, KeyboardEvent, useEffect, useMemo, useRef, useState } from "react";
 import { Header } from "@/components/layout/Header";
@@ -19,7 +19,6 @@ import {
   CheckCircle2,
   Database,
   Download,
-  FileSpreadsheet,
   Loader2,
   Save,
   Search,
@@ -42,11 +41,27 @@ function normalizeCode(value: string) {
   return value.toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 4);
 }
 
-function codeClass(code: string) {
-  if (code === "F" || code === "FE") return "is-rest";
-  if (["AT", "AF", "DESL"].includes(code)) return "is-exception";
-  if (/^[1-6]$/.test(code)) return "is-work";
-  return code ? "is-invalid" : "";
+function getShiftBadge(shift?: string | null) {
+  const s = (shift || "").toUpperCase().trim();
+  if (s === "A" || s.startsWith("04:")) {
+    return "bg-[#FFF2CC] text-[#7F4B00] border border-[#FDE68A] font-bold px-2 py-0.5 rounded text-[11px] whitespace-nowrap shadow-xs";
+  }
+  if (s === "B" || s.startsWith("12:")) {
+    return "bg-[#DDEBF7] text-[#0369A1] border border-[#BAE6FD] font-bold px-2 py-0.5 rounded text-[11px] whitespace-nowrap shadow-xs";
+  }
+  if (s === "C" || s.startsWith("20:")) {
+    return "bg-[#EDE7F6] text-[#5B2C6F] border border-[#DDD6FE] font-bold px-2 py-0.5 rounded text-[11px] whitespace-nowrap shadow-xs";
+  }
+  return "bg-slate-100 text-slate-700 border border-slate-300 font-bold px-2 py-0.5 rounded text-[11px] whitespace-nowrap";
+}
+
+function getCodeCellClass(code: string, dirty: boolean) {
+  if (dirty) return "bg-[#FFF8E1] text-[#B45309] font-bold ring-1 ring-amber-400";
+  if (code === "F" || code === "FE") return "bg-[#FFD8D8] text-[#9C0006] font-bold";
+  if (["AT", "AF", "DESL"].includes(code)) return "bg-[#FFF2CC] text-[#9C5700] font-bold";
+  if (/^[1-6]$/.test(code)) return "bg-[#E2F0D9] text-[#0B5A30] font-bold";
+  if (code) return "bg-[#FCE8E6] text-[#DC2626] font-bold";
+  return "bg-white text-slate-900";
 }
 
 export default function EscalaPage() {
@@ -109,7 +124,7 @@ export default function EscalaPage() {
       (driver) =>
         !query ||
         driver.name.toLocaleLowerCase("pt-BR").includes(query) ||
-        driver.login_matricula.includes(query)
+        driver.login_matricula.toLowerCase().includes(query)
     );
   }, [drivers, search]);
 
@@ -163,7 +178,7 @@ export default function EscalaPage() {
     try {
       await saveMonthlySchedule(month, year, region, pending, source);
       setChanges({});
-      setSuccess(`${pending.length} ${pending.length === 1 ? "célula salva" : "células salvas"}.`);
+      setSuccess(`${pending.length} ${pending.length === 1 ? "célula salva" : "células salvas"} com sucesso.`);
     } catch (reason) {
       setError((reason as Error).message);
     } finally {
@@ -180,15 +195,20 @@ export default function EscalaPage() {
     setSuccess(null);
 
     try {
+      if (!file.name.toLowerCase().endsWith(".xlsx")) {
+        throw new Error("Use um arquivo .xlsx. Formatos .xls e .csv não são aceitos nesta versão segura.");
+      }
+      if (file.size > 5 * 1024 * 1024) {
+        throw new Error("O arquivo excede o limite seguro de 5 MB.");
+      }
       const buffer = await file.arrayBuffer();
-      const result = parseScheduleFile(buffer, drivers, daysInMonth);
+      const result = await parseScheduleFile(buffer, drivers, daysInMonth);
 
       if (result.changes.length === 0) {
         setError("Nenhuma escala compatível foi encontrada na planilha importada.");
         return;
       }
 
-      // Aplica as alterações no estado local
       const newValues = { ...values };
       const newChanges = { ...changes };
 
@@ -211,155 +231,193 @@ export default function EscalaPage() {
     }
   }
 
-  function handleExport() {
-    exportScheduleToExcel(month, year, region, filteredDrivers, values);
+  async function handleExport() {
+    setError(null);
+    try {
+      await exportScheduleToExcel(month, year, region, filteredDrivers, values);
+    } catch (reason) {
+      setError(`Erro ao exportar arquivo: ${(reason as Error).message}`);
+    }
   }
 
   const pendingCount = Object.keys(changes).length;
 
   return (
-    <div className="flex h-screen overflow-hidden bg-slate-950 text-slate-100">
-      <Sidebar />
-      <div className="flex flex-1 flex-col overflow-hidden">
-        <Header />
-        <main className="flex flex-1 flex-col overflow-hidden p-3 gap-2">
-          {/* Barra de Ferramentas */}
-          <section className="excel-schedule-toolbar flex flex-wrap items-center gap-2 rounded border border-slate-800 bg-slate-900/90 px-3 py-2 text-xs">
-            <div className="flex items-center gap-2 mr-2">
-              <CalendarDays className="h-4 w-4 text-emerald-400" />
-              <div>
-                <h1 className="text-xs font-semibold text-slate-100">Escala Mensal</h1>
-                <p className="text-[10px] text-slate-400">Navegação por setas · Edição inline</p>
+    <div className="excel-shell flex-1 flex flex-col min-h-screen">
+      <Header />
+      <div className="flex flex-1 overflow-hidden">
+        <Sidebar />
+        <main className="excel-workspace flex-1 flex flex-col overflow-hidden gap-2">
+          {/* Barra de Ferramentas Estilo Excel */}
+          <section className="excel-toolbar flex flex-wrap items-center justify-between gap-2 px-3 py-2 border border-[#a6a6a6] bg-[#f3f3f3] shadow-xs text-xs">
+            <div className="flex flex-wrap items-center gap-2.5">
+              <div className="flex items-center gap-2 mr-2">
+                <div className="w-7 h-7 bg-[#107c41] text-white flex items-center justify-center rounded shadow-xs">
+                  <CalendarDays className="h-4 w-4" />
+                </div>
+                <div>
+                  <h1 className="text-xs font-bold text-slate-900 leading-none">Escala Mensal</h1>
+                  <p className="text-[10px] text-slate-600 mt-0.5">Planejamento e edição inline</p>
+                </div>
+              </div>
+
+              {/* Mês */}
+              <div className="flex items-center gap-1">
+                <span className="text-[11px] font-semibold text-slate-700">Mês:</span>
+                <select
+                  aria-label="Mês"
+                  value={month}
+                  onChange={(e) => setMonth(Number(e.target.value))}
+                  className="h-7 rounded border border-slate-400 bg-white px-2 text-xs font-medium text-slate-800 focus:border-[#107c41] focus:outline-none"
+                >
+                  {MONTHS.map((name, index) => (
+                    <option key={name} value={index + 1}>
+                      {name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Ano */}
+              <div className="flex items-center gap-1">
+                <span className="text-[11px] font-semibold text-slate-700">Ano:</span>
+                <select
+                  aria-label="Ano"
+                  value={year}
+                  onChange={(e) => setYear(Number(e.target.value))}
+                  className="h-7 rounded border border-slate-400 bg-white px-2 text-xs font-medium text-slate-800 focus:border-[#107c41] focus:outline-none"
+                >
+                  {Array.from({ length: 7 }, (_, index) => today.getFullYear() - 2 + index).map(
+                    (val) => (
+                      <option key={val} value={val}>
+                        {val}
+                      </option>
+                    )
+                  )}
+                </select>
+              </div>
+
+              {/* Região */}
+              <div className="flex items-center gap-1">
+                <span className="text-[11px] font-semibold text-slate-700">Região:</span>
+                <select
+                  aria-label="Região"
+                  value={region}
+                  onChange={(e) => setRegion(e.target.value)}
+                  className="h-7 rounded border border-slate-400 bg-white px-2 text-xs font-bold text-slate-800 focus:border-[#107c41] focus:outline-none"
+                >
+                  <option value="SP">SP · LP / Castilho</option>
+                  <option value="MG">MG · UB / LZ / JP</option>
+                  <option value="MS">MS</option>
+                </select>
+              </div>
+
+              {/* Busca de Condutor */}
+              <div className="relative">
+                <Search className="absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-slate-500" />
+                <input
+                  type="search"
+                  aria-label="Buscar condutor"
+                  placeholder="Buscar condutor ou login..."
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                  className="h-7 w-48 rounded border border-slate-400 bg-white pl-8 pr-7 text-xs font-semibold text-slate-900 placeholder-slate-500 focus:border-[#107c41] focus:outline-none"
+                />
+                {search && (
+                  <button
+                    onClick={() => setSearch("")}
+                    className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-800"
+                    title="Limpar busca"
+                  >
+                    <X className="h-3 w-3" />
+                  </button>
+                )}
               </div>
             </div>
 
-            <select
-              aria-label="Mês"
-              value={month}
-              onChange={(e) => setMonth(Number(e.target.value))}
-              className="h-8 rounded border border-slate-700 bg-slate-800 px-2 text-xs text-slate-200 focus:border-emerald-500 focus:outline-none"
-            >
-              {MONTHS.map((name, index) => (
-                <option key={name} value={index + 1}>
-                  {name}
-                </option>
-              ))}
-            </select>
-
-            <select
-              aria-label="Ano"
-              value={year}
-              onChange={(e) => setYear(Number(e.target.value))}
-              className="h-8 rounded border border-slate-700 bg-slate-800 px-2 text-xs text-slate-200 focus:border-emerald-500 focus:outline-none"
-            >
-              {Array.from({ length: 7 }, (_, index) => today.getFullYear() - 2 + index).map(
-                (val) => (
-                  <option key={val} value={val}>
-                    {val}
-                  </option>
-                )
-              )}
-            </select>
-
-            <select
-              aria-label="Região"
-              value={region}
-              onChange={(e) => setRegion(e.target.value)}
-              className="h-8 rounded border border-slate-700 bg-slate-800 px-2 text-xs font-semibold text-slate-200 focus:border-emerald-500 focus:outline-none"
-            >
-              <option value="SP">SP · LP / Castilho</option>
-              <option value="MG">MG · UB / LZ / JP</option>
-              <option value="MS">MS</option>
-            </select>
-
-            <div className="relative">
-              <Search className="absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-slate-400" />
+            <div className="flex flex-wrap items-center gap-2">
               <input
-                type="search"
-                aria-label="Buscar condutor"
-                placeholder="Condutor ou login..."
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                className="h-8 w-44 rounded border border-slate-700 bg-slate-800 pl-8 pr-2 text-xs text-slate-200 placeholder-slate-400 focus:border-emerald-500 focus:outline-none"
+                type="file"
+                ref={fileInputRef}
+                onChange={handleFileUpload}
+                accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                className="hidden"
               />
+
+              <button
+                onClick={() => fileInputRef.current?.click()}
+                disabled={importing || loading}
+                className="flex h-7 items-center gap-1.5 rounded border border-slate-400 bg-white px-2.5 text-xs font-semibold text-slate-800 hover:bg-slate-100 disabled:opacity-50 transition-colors shadow-2xs"
+                title="Importar planilha Excel .xlsx (máximo 5 MB)"
+              >
+                {importing ? (
+                  <Loader2 className="h-3.5 w-3.5 animate-spin text-[#107c41]" />
+                ) : (
+                  <Upload className="h-3.5 w-3.5 text-[#107c41]" />
+                )}
+                <span>Importar</span>
+              </button>
+
+              <button
+                onClick={handleExport}
+                disabled={loading || !filteredDrivers.length}
+                className="flex h-7 items-center gap-1.5 rounded border border-slate-400 bg-white px-2.5 text-xs font-semibold text-slate-800 hover:bg-slate-100 disabled:opacity-50 transition-colors shadow-2xs"
+                title="Exportar escala formatada para Excel"
+              >
+                <Download className="h-3.5 w-3.5 text-[#107c41]" />
+                <span>Exportar (.xlsx)</span>
+              </button>
+
+              <button
+                onClick={handleSave}
+                disabled={saving || pendingCount === 0}
+                className="flex h-7 items-center gap-1.5 rounded border border-[#0b5a30] bg-[#107c41] px-3 text-xs font-bold text-white hover:bg-[#0b5a30] disabled:opacity-50 transition-colors shadow-xs"
+                title="Salvar alterações na escala"
+              >
+                {saving ? (
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                ) : (
+                  <Save className="h-3.5 w-3.5" />
+                )}
+                <span>Salvar {pendingCount > 0 ? `(${pendingCount})` : ""}</span>
+              </button>
+
+              <span
+                className={`flex items-center gap-1 rounded border px-2 py-0.5 text-[10px] font-bold uppercase ${
+                  source === "supabase"
+                    ? "border-[#a9c99b] bg-[#e2f0d9] text-[#174d2d]"
+                    : "border-[#fde68a] bg-[#fff2cc] text-[#7f4b00]"
+                }`}
+              >
+                <Database className="h-3 w-3" />
+                {source === "supabase" ? "Supabase (Ao Vivo)" : "Modo Demonstração"}
+              </span>
             </div>
-
-            {/* Input oculto para importação de arquivos */}
-            <input
-              type="file"
-              ref={fileInputRef}
-              onChange={handleFileUpload}
-              accept=".xlsx,.xls,.csv"
-              className="hidden"
-            />
-
-            <button
-              onClick={() => fileInputRef.current?.click()}
-              disabled={importing || loading}
-              className="flex h-8 items-center gap-1.5 rounded border border-slate-700 bg-slate-800 px-2.5 text-xs text-slate-200 hover:bg-slate-700 disabled:opacity-50"
-              title="Importar planilha Excel ou CSV"
-            >
-              {importing ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Upload className="h-3.5 w-3.5 text-emerald-400" />}
-              Importar
-            </button>
-
-            <button
-              onClick={handleExport}
-              disabled={loading || !filteredDrivers.length}
-              className="flex h-8 items-center gap-1.5 rounded border border-slate-700 bg-slate-800 px-2.5 text-xs text-slate-200 hover:bg-slate-700 disabled:opacity-50"
-              title="Exportar escala atual para Excel"
-            >
-              <Download className="h-3.5 w-3.5 text-blue-400" />
-              Exportar
-            </button>
-
-            <button
-              onClick={handleSave}
-              disabled={!pendingCount || saving}
-              className="ml-auto flex h-8 min-w-28 items-center justify-center gap-1.5 rounded bg-emerald-600 px-3 text-xs font-semibold text-white hover:bg-emerald-500 disabled:bg-slate-800 disabled:text-slate-500"
-            >
-              {saving ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Save className="h-3.5 w-3.5" />}
-              {pendingCount ? `Salvar (${pendingCount})` : "Salvo"}
-            </button>
           </section>
 
-          {/* Legenda e KPIs */}
-          <section className="excel-schedule-legend flex flex-wrap items-center gap-x-4 gap-y-1 rounded border border-slate-800 bg-slate-900/60 px-3 py-1.5 text-[11px] text-slate-300">
-            <span className="excel-source flex items-center gap-1 rounded bg-slate-800 px-2 py-0.5 font-semibold text-emerald-400">
-              <Database className="h-3 w-3" />
-              {source === "supabase" ? "Supabase (Ao Vivo)" : "Demonstração Local"}
-            </span>
-            <span className="flex items-center gap-1">
-              <i className="inline-block h-2 w-2 rounded-full bg-emerald-500" /> 1–6 Trabalho
-            </span>
-            <span className="flex items-center gap-1">
-              <i className="inline-block h-2 w-2 rounded-full bg-blue-500" /> F / FE Folga
-            </span>
-            <span className="flex items-center gap-1">
-              <i className="inline-block h-2 w-2 rounded-full bg-amber-500" /> AT / AF / DESL Ocorrência
-            </span>
-            <span className="ml-auto text-slate-400 font-mono">
-              {filteredDrivers.length} condutores · {daysInMonth} dias
-            </span>
-          </section>
-
-          {/* Notificações */}
+          {/* Avisos / Notificações */}
           {(error || success) && (
             <div
-              className={`flex items-center gap-2 rounded px-3 py-2 text-xs ${
+              className={`flex items-center justify-between gap-2 px-3 py-2 text-xs rounded border font-medium ${
                 error
-                  ? "bg-rose-950/80 border border-rose-800 text-rose-200"
-                  : "bg-emerald-950/80 border border-emerald-800 text-emerald-200"
+                  ? "border-[#e2aaa5] bg-[#fce8e6] text-[#8b1a1a]"
+                  : "border-[#a9c99b] bg-[#e2f0d9] text-[#174d2d]"
               }`}
             >
-              {error ? <AlertCircle className="h-4 w-4" /> : <CheckCircle2 className="h-4 w-4" />}
-              <span>{error || success}</span>
+              <div className="flex items-center gap-2">
+                {error ? (
+                  <AlertCircle className="h-4 w-4 shrink-0" />
+                ) : (
+                  <CheckCircle2 className="h-4 w-4 shrink-0" />
+                )}
+                <span>{error || success}</span>
+              </div>
               <button
-                className="ml-auto hover:opacity-75"
                 onClick={() => {
                   setError(null);
                   setSuccess(null);
                 }}
+                className="p-0.5 hover:opacity-75"
                 aria-label="Fechar aviso"
               >
                 <X className="h-3.5 w-3.5" />
@@ -367,96 +425,127 @@ export default function EscalaPage() {
             </div>
           )}
 
-          {/* Grade de Escala */}
-          <section className="excel-schedule-grid flex-1 overflow-auto rounded border border-slate-800 bg-slate-900">
+          {/* Grade de Escala Estilo Excel */}
+          <section className="excel-schedule-grid flex-1 overflow-hidden flex flex-col border border-[#a6a6a6] bg-white shadow-sm relative">
             {loading ? (
-              <div className="flex h-full items-center justify-center gap-2 text-xs text-slate-400">
-                <Loader2 className="h-4 w-4 animate-spin text-emerald-400" />
+              <div className="flex h-full items-center justify-center gap-2 text-xs font-semibold text-slate-600">
+                <Loader2 className="h-4 w-4 animate-spin text-[#107c41]" />
                 Carregando escala mensal...
               </div>
             ) : (
-              <table className="border-collapse text-[11px] w-full font-mono">
-                <thead className="sticky top-0 z-30 bg-slate-800 text-slate-300">
-                  <tr>
-                    <th className="sticky left-0 z-40 w-10 min-w-10 bg-slate-800 p-1 text-center border-b border-r border-slate-700">
-                      #
-                    </th>
-                    <th className="sticky left-10 z-40 w-64 min-w-64 bg-slate-800 p-1 text-left border-b border-r border-slate-700">
-                      Condutor
-                    </th>
-                    <th className="sticky left-74 z-40 w-16 min-w-16 bg-slate-800 p-1 text-center border-b border-r border-slate-700">
-                      Turno
-                    </th>
-                    {days.map((day) => {
-                      const date = new Date(year, month - 1, day);
-                      const isWeekend = date.getDay() === 0 || date.getDay() === 6;
-                      return (
-                        <th
-                          key={day}
-                          className={`w-9 min-w-9 p-1 text-center border-b border-r border-slate-700 ${
-                            isWeekend ? "bg-slate-700/60 text-amber-300" : ""
-                          }`}
-                        >
-                          <div className="font-bold">{day}</div>
-                          <div className="text-[9px] font-sans opacity-75">{WEEKDAYS[date.getDay()]}</div>
-                        </th>
-                      );
-                    })}
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-800">
-                  {filteredDrivers.map((driver, row) => (
-                    <tr key={driver.id} className="hover:bg-slate-800/40">
-                      <td className="sticky left-0 z-20 bg-slate-900 p-1 text-center text-slate-500 border-r border-slate-800 text-[10px]">
-                        {row + 1}
-                      </td>
-                      <td
-                        className="sticky left-10 z-20 bg-slate-900 px-2 py-1 text-left border-r border-slate-800 font-sans truncate max-w-[250px]"
-                        title={driver.name}
-                      >
-                        <div className="font-semibold text-slate-200 truncate">{driver.name}</div>
-                        <div className="text-[10px] text-slate-400 font-mono">{driver.login_matricula}</div>
-                      </td>
-                      <td className="sticky left-74 z-20 bg-slate-900 p-1 text-center border-r border-slate-800 text-slate-400 font-bold">
-                        {driver.default_shift || "—"}
-                      </td>
-                      {days.map((day) => {
-                        const key = cellKey(driver.id, day);
-                        const value = values[key] || "";
-                        const dirty = changes[key] !== undefined;
+              <div className="overflow-x-auto overflow-y-auto max-h-[calc(100vh-175px)] relative select-none">
+                <table className="border-collapse text-[11px] min-w-full font-sans table-fixed">
+                  <colgroup>
+                    <col style={{ width: "44px" }} />
+                    <col style={{ width: "250px" }} />
+                    <col style={{ width: "70px" }} />
+                    <col style={{ width: "82px" }} />
+                    {days.map((day) => (
+                      <col key={day} style={{ width: "38px" }} />
+                    ))}
+                  </colgroup>
 
+                  <thead className="sticky top-0 z-30">
+                    <tr className="h-9">
+                      <th className="excel-row-number sticky left-0 z-40 bg-[#107c41] text-white p-1 text-center font-bold text-xs border-r border-[#4e9d72]">
+                        #
+                      </th>
+                      <th className="sticky left-[44px] z-40 bg-[#107c41] text-white px-2.5 py-1 text-left font-bold text-xs border-r border-[#4e9d72]">
+                        <span className="tracking-wide">CONDUTOR</span>
+                      </th>
+                      <th className="sticky left-[294px] z-40 bg-[#107c41] text-white p-1 text-center font-bold text-xs border-r border-[#4e9d72]">
+                        <span className="tracking-wide">TURNO</span>
+                      </th>
+                      <th className="sticky left-[364px] z-40 bg-[#107c41] text-white p-1 text-center font-bold text-xs border-r border-[#4e9d72] shadow-[2px_0_4px_-1px_rgba(0,0,0,0.15)]">
+                        <span className="tracking-wide">HORÁRIO</span>
+                      </th>
+                      {days.map((day) => {
+                        const date = new Date(year, month - 1, day);
+                        const isWeekend = date.getDay() === 0 || date.getDay() === 6;
                         return (
-                          <td
+                          <th
                             key={day}
-                            className={`p-0 text-center border-r border-slate-800 ${codeClass(value)} ${
-                              dirty ? "bg-amber-950/40 font-bold" : ""
+                            className={`p-1 text-center border-r border-[#4e9d72] ${
+                              isWeekend ? "bg-[#0b5a30] text-[#ffe082]" : "bg-[#107c41] text-white"
                             }`}
                           >
-                            <input
-                              ref={(node) => {
-                                inputRefs.current[key] = node;
-                              }}
-                              aria-label={`${driver.name}, dia ${day}`}
-                              value={value}
-                              onChange={(e) => updateCell(driver.id, day, e.target.value)}
-                              onKeyDown={(e) => handleKeyDown(e, row, day)}
-                              onFocus={(e) => e.currentTarget.select()}
-                              className="h-7 w-full bg-transparent text-center font-bold uppercase focus:bg-emerald-950 focus:text-emerald-300 focus:outline-none focus:ring-1 focus:ring-emerald-500 text-xs"
-                            />
-                          </td>
+                            <div className="font-bold text-xs leading-tight">{day}</div>
+                            <div className="text-[9px] uppercase font-mono opacity-85 leading-tight">
+                              {WEEKDAYS[date.getDay()]}
+                            </div>
+                          </th>
                         );
                       })}
                     </tr>
-                  ))}
-                  {!filteredDrivers.length && (
-                    <tr>
-                      <td colSpan={daysInMonth + 3} className="py-12 text-center text-slate-500 font-sans">
-                        Nenhum condutor ativo nesta região.
-                      </td>
-                    </tr>
-                  )}
-                </tbody>
-              </table>
+                  </thead>
+
+                  <tbody className="divide-y divide-[#d9d9d9]">
+                    {filteredDrivers.map((driver, row) => (
+                      <tr key={driver.id} className="h-8 group hover:bg-[#e2f0d9]">
+                        <td className="excel-row-number sticky left-0 z-20 bg-[#ededed] p-1 text-center text-slate-700 font-semibold border-r border-b border-slate-300 text-xs">
+                          {row + 1}
+                        </td>
+                        <td
+                          className="excel-driver-cell sticky left-[44px] z-20 bg-white group-hover:bg-[#e2f0d9] px-2.5 py-1 text-left border-r border-b border-slate-300 overflow-hidden"
+                          title={driver.name}
+                        >
+                          <div className="excel-driver-name truncate leading-tight">
+                            {driver.name}
+                          </div>
+                          <div className="excel-driver-login leading-tight">
+                            {driver.login_matricula}
+                          </div>
+                        </td>
+                        <td className="sticky left-[294px] z-20 bg-white group-hover:bg-[#e2f0d9] p-1 text-center border-r border-b border-slate-300">
+                          <span className={getShiftBadge(driver.default_shift)}>
+                            {driver.default_shift || "—"}
+                          </span>
+                        </td>
+                        <td className="sticky left-[364px] z-20 bg-white group-hover:bg-[#e2f0d9] px-2 py-1 text-center border-r border-b border-slate-300 shadow-[2px_0_4px_-1px_rgba(0,0,0,0.08)] font-mono font-bold text-slate-800">
+                          {driver.default_start_time?.slice(0, 5) || "—"}
+                        </td>
+                        {days.map((day) => {
+                          const key = cellKey(driver.id, day);
+                          const value = values[key] || "";
+                          const dirty = changes[key] !== undefined;
+
+                          return (
+                            <td
+                              key={day}
+                              className={`p-0 text-center border-r border-b border-slate-300 font-mono ${getCodeCellClass(
+                                value,
+                                dirty
+                              )}`}
+                            >
+                              <input
+                                ref={(node) => {
+                                  inputRefs.current[key] = node;
+                                }}
+                                aria-label={`${driver.name}, dia ${day}`}
+                                value={value}
+                                onChange={(e) => updateCell(driver.id, day, e.target.value)}
+                                onKeyDown={(e) => handleKeyDown(e, row, day)}
+                                onFocus={(e) => e.currentTarget.select()}
+                                className="h-7 w-full border-0 bg-transparent text-center font-bold uppercase text-xs focus:bg-white focus:text-slate-900 focus:outline-none focus:ring-2 focus:ring-[#107c41]"
+                              />
+                            </td>
+                          );
+                        })}
+                      </tr>
+                    ))}
+                    {!filteredDrivers.length && (
+                      <tr>
+                        <td
+                          colSpan={daysInMonth + 4}
+                          className="py-12 text-center text-slate-600 font-medium bg-white"
+                        >
+                          Nenhum condutor encontrado com os filtros atuais nesta região.
+                        </td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
             )}
           </section>
         </main>

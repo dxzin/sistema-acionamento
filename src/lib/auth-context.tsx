@@ -3,6 +3,7 @@
 import React, { createContext, useContext, useEffect, useState } from "react";
 import { Profile, UserRole } from "@/types/database";
 import { createClient } from "./supabase/client";
+import { useRouter } from "next/navigation";
 
 interface AuthContextType {
   user: Profile | null;
@@ -15,6 +16,7 @@ interface AuthContextType {
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
+  const router = useRouter();
   const [user, setUser] = useState<Profile | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
@@ -142,9 +144,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     } catch {
       // Ignora erro
     }
-    if (typeof window !== "undefined") {
-      window.location.href = "/login";
-    }
+    router.replace("/login");
+    router.refresh();
   };
 
   return (

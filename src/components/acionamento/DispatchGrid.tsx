@@ -1,30 +1,411 @@
 "use client";
 
-import React, { useState, useMemo } from "react";
+import React, { useEffect, useState, useMemo, useRef } from "react";
 import { DispatchRowModel } from "@/types/domain";
 import { DispatchStatus, CargoStatus } from "@/types/database";
-import { ArrowUpDown, Check, Copy, Clock, Search, X } from "lucide-react";
+import { ArrowUpDown, Check, ChevronDown, Columns3, Copy, Clock, Eye, EyeOff, Search, X } from "lucide-react";
 
 interface DispatchGridProps {
   dispatches: DispatchRowModel[];
   onUpdateRow: (id: string, updates: Partial<DispatchRowModel>) => Promise<void>;
   locations: { id: string; name: string }[];
+  saveState: { status: "idle" | "saving" | "saved" | "error"; message?: string };
 }
 
-type SortField = keyof DispatchRowModel | "driver_name" | "login";
+interface GridHistoryChange {
+  id: string;
+  before: Partial<DispatchRowModel>;
+  after: Partial<DispatchRowModel>;
+}
+
+interface GridHistoryAction {
+  changes: GridHistoryChange[];
+}
+
+type SortField = keyof DispatchRowModel | "driver_name" | "login" | "schedule_time";
+type ColumnFilterKey =
+  | "driver" | "login" | "schedule" | "forecast" | "status" | "reason"
+  | "origin" | "entry" | "fleet" | "cargo" | "destination" | "finalDestination"
+  | "exit" | "observations" | "scale" | "nextForecast" | "workedTime";
+
+const FILTER_COLUMNS: ColumnFilterKey[] = [
+  "driver", "login", "schedule", "forecast", "status", "reason", "origin", "entry",
+  "fleet", "cargo", "destination", "finalDestination", "exit", "observations", "scale",
+  "nextForecast", "workedTime",
+];
+
+const COLUMN_LABELS = [
+  "Condutor", "Login", "Horário", "Previsão", "Status", "Motivo do abono", "Local",
+  "Entrada", "Frota", "C/V", "Destino", "Destino final", "Saída", "Observação",
+  "Dia de escala", "Prev. próximo dia", "Tempo de jornada",
+];
+const ROW_NUMBER_WIDTH = 44;
+const COLUMN_WIDTHS = [230, 86, 92, 90, 135, 230, 100, 90, 100, 55, 120, 120, 90, 180, 80, 95, 110];
+
+function getColumnValue(row: DispatchRowModel, key: ColumnFilterKey): string {
+  const values: Record<ColumnFilterKey, string | null | undefined> = {
+    driver: row.driver.name,
+    login: row.driver.login_matricula,
+    schedule: row.driver.default_start_time?.slice(0, 5),
+    forecast: row.forecast_start_time,
+    status: row.dispatch_status === "TROCA" ? "BALDEIO" : row.dispatch_status,
+    reason: row.abono_reason,
+    origin: row.origin_location?.name,
+    entry: row.entry_time,
+    fleet: row.fleet_code || row.vehicle?.plate_code,
+    cargo: row.cargo_status,
+    destination: row.destination_name || row.destination_location?.name,
+    finalDestination: row.final_destination_name || row.final_destination_location?.name,
+    exit: row.exit_time,
+    observations: row.observations,
+    scale: row.scale_day_status,
+    nextForecast: row.next_day_forecast_time,
+    workedTime: row.formatted_worked_time,
+  };
+  return String(values[key] || "").trim();
+}
+
+interface EditableLocationCellProps {
+  value: string;
+  options: string[];
+  label: string;
+  onCommit: (value: string) => void;
+}
+
+function EditableLocationCell({ value, options, label, onCommit }: EditableLocationCellProps) {
+  const [draft, setDraft] = useState(value);
+  const [showOptions, setShowOptions] = useState(false);
+
+  useEffect(() => setDraft(value), [value]);
+
+  const commit = () => {
+    const normalized = draft.trim().replace(/\s+/g, " ").toUpperCase();
+    setDraft(normalized);
+    if (normalized !== value) onCommit(normalized);
+  };
+
+  return (
+    <div className="excel-combobox-cell">
+      <input
+        type="text"
+        value={draft}
+        aria-label={label}
+        autoComplete="off"
+        placeholder="Digite ou escolha"
+        onChange={(event) => setDraft(event.target.value.toUpperCase())}
+        onBlur={() => {
+          commit();
+          setTimeout(() => setShowOptions(false), 120);
+        }}
+        onKeyDown={(event) => {
+          if (event.key === "Enter") event.currentTarget.blur();
+          if (event.key === "Escape") {
+            setDraft(value);
+            event.currentTarget.blur();
+          }
+        }}
+        className="excel-combobox-input"
+      />
+      <button
+        type="button"
+        tabIndex={-1}
+        aria-label={`Mostrar opções de ${label}`}
+        onMouseDown={(event) => event.preventDefault()}
+        onClick={(event) => {
+          event.stopPropagation();
+          setShowOptions((open) => !open);
+        }}
+        className="absolute right-0 top-0 z-10 flex h-full w-[18px] items-center justify-center border-l border-slate-300 bg-slate-50 text-slate-600 hover:bg-[#e2f0d9]"
+      >
+        <ChevronDown className="h-3 w-3" />
+      </button>
+      {showOptions && (
+        <div className="absolute left-0 top-full z-[70] max-h-48 min-w-full overflow-y-auto border border-[#7f7f7f] bg-white shadow-xl">
+          {options
+            .filter((option) => !draft || option.toUpperCase().includes(draft.toUpperCase()))
+            .map((option) => (
+              <button
+                type="button"
+                key={option}
+                onMouseDown={(event) => {
+                  event.preventDefault();
+                  setDraft(option);
+                  setShowOptions(false);
+                  if (option !== value) onCommit(option);
+                }}
+                className="block w-full whitespace-nowrap px-2 py-1 text-left text-[11px] font-semibold text-slate-800 hover:bg-[#e2f0d9]"
+              >
+                {option}
+              </button>
+            ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+interface EditableTextCellProps {
+  value: string;
+  placeholder: string;
+  className: string;
+  onCommit: (value: string) => void;
+}
+
+function EditableTextCell({ value, placeholder, className, onCommit }: EditableTextCellProps) {
+  const [draft, setDraft] = useState(value);
+
+  useEffect(() => setDraft(value), [value]);
+
+  const commit = () => {
+    const normalized = draft.trim();
+    setDraft(normalized);
+    if (normalized !== value) onCommit(normalized);
+  };
+
+  return (
+    <input
+      type="text"
+      value={draft}
+      placeholder={placeholder}
+      onChange={(event) => setDraft(event.target.value)}
+      onBlur={commit}
+      onKeyDown={(event) => {
+        if (event.key === "Enter") event.currentTarget.blur();
+        if (event.key === "Escape") {
+          setDraft(value);
+          event.currentTarget.blur();
+        }
+      }}
+      className={className}
+    />
+  );
+}
+
+interface EditableStatusCellProps {
+  value: DispatchStatus;
+  listId: string;
+  className: string;
+  onCommit: (value: DispatchStatus) => void;
+}
+
+interface ExcelColumnFilterProps {
+  label: string;
+  options: string[];
+  selected: string[];
+  onChange: (values: string[]) => void;
+}
+
+function ExcelColumnFilter({ label, options, selected, onChange }: ExcelColumnFilterProps) {
+  const [open, setOpen] = useState(false);
+  const [search, setSearch] = useState("");
+  const rootRef = useRef<HTMLDivElement>(null);
+  const active = selected.length > 0;
+  const visibleOptions = options.filter((option) =>
+    option.toLocaleLowerCase("pt-BR").includes(search.trim().toLocaleLowerCase("pt-BR"))
+  );
+
+  useEffect(() => {
+    if (!open) return;
+    const closeOnOutsideClick = (event: MouseEvent) => {
+      if (!rootRef.current?.contains(event.target as Node)) setOpen(false);
+    };
+    document.addEventListener("mousedown", closeOnOutsideClick);
+    return () => document.removeEventListener("mousedown", closeOnOutsideClick);
+  }, [open]);
+
+  const toggleValue = (value: string) => {
+    if (!active) {
+      onChange([value]);
+      return;
+    }
+    const next = selected.includes(value)
+      ? selected.filter((item) => item !== value)
+      : [...selected, value];
+    // Todas as opções marcadas equivalem a não aplicar filtro.
+    onChange(next.length === options.length ? [] : next);
+  };
+
+  return (
+    <div ref={rootRef} className="relative h-full w-full">
+      <button
+        type="button"
+        aria-label={`Filtrar coluna ${label}`}
+        aria-expanded={open}
+        onClick={(event) => {
+          event.stopPropagation();
+          setOpen((current) => !current);
+        }}
+        className={`flex h-5 w-full items-center justify-between gap-1 border px-1 text-[9px] font-semibold focus:outline-none focus:ring-1 focus:ring-[#217346] ${
+          active
+            ? "border-[#bf9000] bg-[#fff2cc] text-[#7f6000]"
+            : "border-[#a6a6a6] bg-white text-slate-600"
+        }`}
+        title={active ? `${selected.length} valor(es) selecionado(s)` : "Mostrar filtro da coluna"}
+      >
+        <span className="truncate">{active ? `${selected.length} selecionado(s)` : "(Todos)"}</span>
+        <ChevronDown className="h-3 w-3 shrink-0" />
+      </button>
+
+      {open && (
+        <div
+          className="absolute left-0 top-5 z-[90] w-56 border border-[#7f7f7f] bg-white p-2 text-left shadow-xl"
+          onMouseDown={(event) => event.stopPropagation()}
+        >
+          <div className="mb-1 text-[10px] font-bold uppercase text-slate-700">{label}</div>
+          <div className="mb-2 flex items-center border border-[#a6a6a6] bg-white px-1.5">
+            <Search className="mr-1 h-3 w-3 shrink-0 text-slate-500" />
+            <input
+              type="text"
+              autoFocus
+              value={search}
+              onChange={(event) => setSearch(event.target.value)}
+              placeholder="Pesquisar..."
+              className="h-6 min-w-0 flex-1 text-[10px] text-slate-800 outline-none"
+            />
+          </div>
+          <div className="mb-1 flex gap-1">
+            <button
+              type="button"
+              onClick={() => onChange([])}
+              className="flex-1 border border-[#a6a6a6] bg-[#f3f3f3] py-1 text-[9px] font-bold text-slate-700 hover:bg-[#e2f0d9]"
+            >
+              Selecionar todos
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                onChange([]);
+                setSearch("");
+                setOpen(false);
+              }}
+              className="flex-1 border border-[#a6a6a6] bg-[#f3f3f3] py-1 text-[9px] font-bold text-slate-700 hover:bg-[#e2f0d9]"
+            >
+              Limpar filtro
+            </button>
+          </div>
+          <div className="max-h-52 overflow-y-auto border border-[#d0d0d0]">
+            {visibleOptions.length ? visibleOptions.map((option) => (
+              <label
+                key={option}
+                className="flex cursor-pointer items-center gap-2 border-b border-slate-100 px-1.5 py-1 text-[10px] text-slate-800 hover:bg-[#e2f0d9]"
+              >
+                <input
+                  type="checkbox"
+                  checked={!active || selected.includes(option)}
+                  onChange={() => toggleValue(option)}
+                  className="accent-[#217346]"
+                />
+                <span className="truncate" title={option}>{option}</span>
+              </label>
+            )) : (
+              <div className="px-2 py-3 text-center text-[10px] text-slate-500">Nenhum valor encontrado</div>
+            )}
+          </div>
+          <button
+            type="button"
+            onClick={() => setOpen(false)}
+            className="mt-2 w-full bg-[#217346] py-1 text-[10px] font-bold text-white hover:bg-[#185c37]"
+          >
+            OK
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function EditableStatusCell({ value, listId, className, onCommit }: EditableStatusCellProps) {
+  const displayValue = value === "TROCA" ? "BALDEIO" : value;
+  const [draft, setDraft] = useState(displayValue);
+
+  useEffect(() => setDraft(displayValue), [displayValue]);
+
+  const commit = () => {
+    const typed = draft.trim().replace(/\s+/g, " ").toUpperCase();
+    const normalized = typed === "BALDEIO" ? "TROCA" : typed;
+    if (!normalized) {
+      setDraft("");
+      if (value) onCommit("");
+      return;
+    }
+    setDraft(normalized === "TROCA" ? "BALDEIO" : normalized);
+    if (normalized !== value) onCommit(normalized);
+  };
+
+  return (
+    <input
+      type="text"
+      list={listId}
+      value={draft}
+      aria-label="Status do acionamento"
+      autoComplete="off"
+      onChange={(event) => setDraft(event.target.value.toUpperCase())}
+      onBlur={commit}
+      onKeyDown={(event) => {
+        if (event.key === "Enter") event.currentTarget.blur();
+        if (event.key === "Escape") {
+          setDraft(displayValue);
+          event.currentTarget.blur();
+        }
+      }}
+      className={className}
+    />
+  );
+}
 
 export function DispatchGrid({
   dispatches,
   onUpdateRow,
   locations,
+  saveState,
 }: DispatchGridProps) {
   const [copiedCell, setCopiedCell] = useState<string | null>(null);
-  const [sortField, setSortField] = useState<SortField>("forecast_start_time");
+  const [sortField, setSortField] = useState<SortField>("schedule_time");
   const [sortAsc, setSortAsc] = useState<boolean>(true);
   const [selectedRow, setSelectedRow] = useState<string | null>(null);
   const [fleetDrafts, setFleetDrafts] = useState<Record<string, string>>({});
   const [columnSearch, setColumnSearch] = useState<string>("");
   const [isSearching, setIsSearching] = useState<boolean>(false);
+  const [columnFilters, setColumnFilters] = useState<Partial<Record<ColumnFilterKey, string[]>>>({});
+  const tableRef = useRef<HTMLTableElement>(null);
+  const [selection, setSelection] = useState<{
+    anchor: { row: number; column: number };
+    focus: { row: number; column: number };
+  } | null>(null);
+  const [isSelecting, setIsSelecting] = useState(false);
+  const [hiddenColumns, setHiddenColumns] = useState<number[]>([]);
+  const [columnWidths, setColumnWidths] = useState<number[]>([...COLUMN_WIDTHS]);
+  const [showColumnMenu, setShowColumnMenu] = useState(false);
+  const [showFindReplace, setShowFindReplace] = useState(false);
+  const [findText, setFindText] = useState("");
+  const [replaceText, setReplaceText] = useState("");
+  const [matchWholeCell, setMatchWholeCell] = useState(true);
+  const [replaceResult, setReplaceResult] = useState<string>("");
+  const [contextMenu, setContextMenu] = useState<{ x: number; y: number; column: number } | null>(null);
+  const undoStack = useRef<GridHistoryAction[]>([]);
+  const redoStack = useRef<GridHistoryAction[]>([]);
+  const visibleTableWidth = ROW_NUMBER_WIDTH + columnWidths.reduce(
+    (total, width, index) => total + (hiddenColumns.includes(index) ? 0 : width),
+    0
+  );
+
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem("dispatch-hidden-columns");
+      if (saved) setHiddenColumns(JSON.parse(saved));
+      const savedWidths = localStorage.getItem("dispatch-column-widths");
+      if (savedWidths) {
+        const parsed = JSON.parse(savedWidths) as number[];
+        if (parsed.length === COLUMN_WIDTHS.length && parsed.every((width) => Number.isFinite(width))) {
+          setColumnWidths(parsed.map((width, index) => Math.max(index < 2 ? COLUMN_WIDTHS[index] : 55, width)));
+        }
+      }
+    } catch { /* preferência local inválida: usa todas as colunas */ }
+  }, []);
+
+  useEffect(() => {
+    localStorage.setItem("dispatch-column-widths", JSON.stringify(columnWidths));
+  }, [columnWidths]);
 
   // Status de acionamento disponíveis
   const STATUS_OPTIONS: DispatchStatus[] = [
@@ -39,6 +420,9 @@ export function DispatchGrid({
     "SUSPENSÃO",
     "VIAGEM FECHADA",
   ];
+
+  const getStatusLabel = (status: DispatchStatus) =>
+    status === "TROCA" ? "BALDEIO" : status;
 
   // Aprovadores
   const APPROVER_OPTIONS = ["ANDERSON", "ROBERTO", "LEOVEGILDO", "PENDENTE"];
@@ -64,15 +448,20 @@ export function DispatchGrid({
     const t = (timeStr || "").trim();
     const s = (shift || "").toUpperCase();
 
-    if (t.startsWith("04:") || s === "A") {
+    // O horário visível é a fonte principal da cor. O turno cadastrado é
+    // usado apenas quando o condutor ainda não possui um horário reconhecido.
+    if (t.startsWith("04:")) {
       return "bg-[#FFF2CC] text-[#7F4B00] border border-[#FDE68A] font-bold px-2 py-0.5 rounded text-[11px] whitespace-nowrap shadow-xs";
     }
-    if (t.startsWith("12:") || s === "B") {
+    if (t.startsWith("12:")) {
       return "bg-[#DDEBF7] text-[#0369A1] border border-[#BAE6FD] font-bold px-2 py-0.5 rounded text-[11px] whitespace-nowrap shadow-xs";
     }
-    if (t.startsWith("20:") || s === "C") {
+    if (t.startsWith("20:")) {
       return "bg-[#EDE7F6] text-[#5B2C6F] border border-[#DDD6FE] font-bold px-2 py-0.5 rounded text-[11px] whitespace-nowrap shadow-xs";
     }
+    if (s === "A") return "bg-[#FFF2CC] text-[#7F4B00] border border-[#FDE68A] font-bold px-2 py-0.5 rounded text-[11px] whitespace-nowrap shadow-xs";
+    if (s === "B") return "bg-[#DDEBF7] text-[#0369A1] border border-[#BAE6FD] font-bold px-2 py-0.5 rounded text-[11px] whitespace-nowrap shadow-xs";
+    if (s === "C") return "bg-[#EDE7F6] text-[#5B2C6F] border border-[#DDD6FE] font-bold px-2 py-0.5 rounded text-[11px] whitespace-nowrap shadow-xs";
     return "bg-slate-100 text-slate-700 border border-slate-300 font-bold px-2 py-0.5 rounded text-[11px] whitespace-nowrap";
   };
 
@@ -86,7 +475,7 @@ export function DispatchGrid({
       case "APOIO":
         return "bg-[#FFEB9C] text-[#9C5700] border-[#FFD966]";
       case "TROCA":
-        return "bg-[#FFFFCC] text-[#7F6000] border-[#FFE699]";
+        return "bg-[#BF9000] text-[#1F1F1F] border-[#806000]";
       case "FALTA":
         return "bg-[#FF0000] text-[#FFFFFF] font-extrabold border-[#CC0000]";
       case "ATESTADO":
@@ -104,6 +493,14 @@ export function DispatchGrid({
     }
   };
 
+  const getStatusClass = (status: DispatchStatus) =>
+    `excel-status-${status.toLowerCase().replaceAll(" ", "-").replace("ã", "a")}`;
+
+  const filterOptions = useMemo(() => Object.fromEntries(
+    FILTER_COLUMNS.map((key) => [key, Array.from(new Set(dispatches.map((row) => getColumnValue(row, key)).filter(Boolean)))
+      .sort((a, b) => a.localeCompare(b, "pt-BR", { numeric: true }))])
+  ) as Record<ColumnFilterKey, string[]>, [dispatches]);
+
   // Filtragem e ordenação dos despachos
   const processedDispatches = useMemo(() => {
     let result = [...dispatches];
@@ -117,6 +514,11 @@ export function DispatchGrid({
       );
     }
 
+    result = result.filter((row) => FILTER_COLUMNS.every((key) => {
+      const selectedValues = columnFilters[key];
+      return !selectedValues?.length || selectedValues.includes(getColumnValue(row, key));
+    }));
+
     return result.sort((a, b) => {
       let aVal: string | number | boolean | null = "";
       let bVal: string | number | boolean | null = "";
@@ -127,6 +529,15 @@ export function DispatchGrid({
       } else if (sortField === "login") {
         aVal = a.driver.login_matricula;
         bVal = b.driver.login_matricula;
+      } else if (sortField === "schedule_time") {
+        const shiftOrder: Record<string, number> = { A: 4, B: 12, C: 20 };
+        const getScheduleHour = (row: DispatchRowModel) => {
+          const parsedHour = Number.parseInt((row.driver.default_start_time || "").slice(0, 2), 10);
+          if (Number.isFinite(parsedHour)) return parsedHour;
+          return shiftOrder[(row.driver.default_shift || "").toUpperCase()] ?? 99;
+        };
+        aVal = getScheduleHour(a);
+        bVal = getScheduleHour(b);
       } else {
         aVal = (a[sortField as keyof DispatchRowModel] as string | number | boolean | null) ?? "";
         bVal = (b[sortField as keyof DispatchRowModel] as string | number | boolean | null) ?? "";
@@ -139,43 +550,630 @@ export function DispatchGrid({
       if (aVal > bVal) return sortAsc ? 1 : -1;
       return 0;
     });
-  }, [dispatches, columnSearch, sortField, sortAsc]);
+  }, [dispatches, columnSearch, sortField, sortAsc, columnFilters]);
+
+  const locationNames = useMemo(
+    () => Array.from(new Set([
+      ...locations.map((location) => location.name.trim()),
+      ...dispatches.flatMap((row) => [row.destination_name || "", row.final_destination_name || ""]),
+    ].filter(Boolean))).sort((a, b) => a.localeCompare(b, "pt-BR")),
+    [locations, dispatches]
+  );
+
+  useEffect(() => {
+    localStorage.setItem("dispatch-hidden-columns", JSON.stringify(hiddenColumns));
+    const table = tableRef.current;
+    if (!table) return;
+    table.querySelectorAll("tr").forEach((row) => Array.from(row.children).forEach((cell, cellIndex) => {
+      if (cellIndex > 0) (cell as HTMLElement).style.display = hiddenColumns.includes(cellIndex - 1) ? "none" : "";
+    }));
+    table.querySelectorAll("colgroup col").forEach((column, columnIndex) => {
+      (column as HTMLElement).style.display = columnIndex > 0 && hiddenColumns.includes(columnIndex - 1) ? "none" : "";
+    });
+  }, [hiddenColumns, processedDispatches.length]);
+
+  const selectionBounds = selection ? {
+    top: Math.min(selection.anchor.row, selection.focus.row),
+    bottom: Math.max(selection.anchor.row, selection.focus.row),
+    left: Math.min(selection.anchor.column, selection.focus.column),
+    right: Math.max(selection.anchor.column, selection.focus.column),
+  } : null;
+
+  useEffect(() => {
+    const table = tableRef.current;
+    if (!table) return;
+    table.querySelectorAll("tbody td").forEach((cell) => cell.classList.remove("excel-range-selected"));
+    if (!selection) return;
+    const bounds = {
+      top: Math.min(selection.anchor.row, selection.focus.row),
+      bottom: Math.max(selection.anchor.row, selection.focus.row),
+      left: Math.min(selection.anchor.column, selection.focus.column),
+      right: Math.max(selection.anchor.column, selection.focus.column),
+    };
+    table.querySelectorAll<HTMLTableRowElement>("tbody tr").forEach((row, rowIndex) => {
+      Array.from(row.cells).forEach((cell, cellIndex) => {
+        const columnIndex = cellIndex - 1;
+        if (rowIndex >= bounds.top && rowIndex <= bounds.bottom &&
+            columnIndex >= bounds.left && columnIndex <= bounds.right) {
+          cell.classList.add("excel-range-selected");
+        }
+      });
+    });
+  }, [selection]);
+
+  useEffect(() => {
+    const stopSelecting = () => setIsSelecting(false);
+    const closeContextMenu = () => setContextMenu(null);
+    window.addEventListener("mouseup", stopSelecting);
+    window.addEventListener("blur", closeContextMenu);
+    window.addEventListener("scroll", closeContextMenu, true);
+    return () => {
+      window.removeEventListener("mouseup", stopSelecting);
+      window.removeEventListener("blur", closeContextMenu);
+      window.removeEventListener("scroll", closeContextMenu, true);
+    };
+  }, []);
+
+  const cellPosition = (target: EventTarget | null) => {
+    const cell = target instanceof Element ? target.closest<HTMLTableCellElement>("tbody td") : null;
+    const row = cell?.parentElement as HTMLTableRowElement | null;
+    if (!cell || !row) return null;
+    return { row: row.sectionRowIndex, column: cell.cellIndex - 1 };
+  };
+
+  const updateForPastedCell = (column: number, rawValue: string): Partial<DispatchRowModel> | null => {
+    const value = rawValue.trim();
+    switch (column) {
+      case 3: return { forecast_start_time: value || null };
+      case 4: return { dispatch_status: value.toUpperCase() === "BALDEIO" ? "TROCA" : value.toUpperCase() };
+      case 5: return { abono_reason: value || null };
+      case 6: {
+        const location = locations.find((item) => item.name.toUpperCase() === value.toUpperCase());
+        return { origin_location_id: location?.id || null };
+      }
+      case 7: return { entry_time: value || null };
+      case 8: return { fleet_code: value.toUpperCase() };
+      case 9: return { cargo_status: (["C", "V"].includes(value.toUpperCase()) ? value.toUpperCase() : null) as CargoStatus | null };
+      case 10: return { destination_name: value.toUpperCase() };
+      case 11: return { final_destination_name: value.toUpperCase() };
+      case 12: return { exit_time: value || null };
+      case 13: return { observations: value || null };
+      default: return null;
+    }
+  };
+
+  const valueBeforeUpdate = (row: DispatchRowModel, key: keyof DispatchRowModel) => {
+    if (key === "destination_name") {
+      return row.destination_name ?? row.destination_location?.name ?? "";
+    }
+    if (key === "final_destination_name") {
+      return row.final_destination_name ?? row.final_destination_location?.name ?? "";
+    }
+    if (key === "fleet_code") {
+      return row.fleet_code ?? row.vehicle?.plate_code ?? "";
+    }
+    return row[key] ?? null;
+  };
+
+  const historyChangeFor = (id: string, updates: Partial<DispatchRowModel>): GridHistoryChange | null => {
+    const current = dispatches.find((row) => row.id === id);
+    if (!current) return null;
+    const before = Object.fromEntries(
+      Object.keys(updates).map((key) => [key, valueBeforeUpdate(current, key as keyof DispatchRowModel)])
+    ) as Partial<DispatchRowModel>;
+    return { id, before, after: updates };
+  };
+
+  const rememberAction = (changes: GridHistoryChange[]) => {
+    if (!changes.length) return;
+    undoStack.current.push({ changes });
+    if (undoStack.current.length > 200) undoStack.current.shift();
+    redoStack.current = [];
+  };
+
+  const commitUpdate = async (id: string, updates: Partial<DispatchRowModel>, recordHistory = true) => {
+    const change = recordHistory ? historyChangeFor(id, updates) : null;
+    await onUpdateRow(id, updates);
+    if (change) rememberAction([change]);
+  };
+
+  const commitBatch = async (updatesByRow: Map<string, Partial<DispatchRowModel>>) => {
+    const changes = Array.from(updatesByRow, ([id, updates]) => historyChangeFor(id, updates))
+      .filter((change): change is GridHistoryChange => Boolean(change));
+    for (const [id, updates] of updatesByRow) {
+      await onUpdateRow(id, updates);
+    }
+    rememberAction(changes);
+  };
+
+  const undo = async () => {
+    const action = undoStack.current.pop();
+    if (!action) return;
+    for (const change of [...action.changes].reverse()) {
+      await commitUpdate(change.id, change.before, false);
+    }
+    redoStack.current.push(action);
+  };
+
+  const redo = async () => {
+    const action = redoStack.current.pop();
+    if (!action) return;
+    for (const change of action.changes) {
+      await commitUpdate(change.id, change.after, false);
+    }
+    undoStack.current.push(action);
+  };
+
+  const copySelection = async () => {
+    if (!selectionBounds) return;
+    const text = Array.from({ length: selectionBounds.bottom - selectionBounds.top + 1 }, (_, rowOffset) => {
+      const row = processedDispatches[selectionBounds.top + rowOffset];
+      return Array.from({ length: selectionBounds.right - selectionBounds.left + 1 }, (_, columnOffset) => {
+        const column = selectionBounds.left + columnOffset;
+        return row && FILTER_COLUMNS[column] ? getColumnValue(row, FILTER_COLUMNS[column]) : "";
+      }).join("\t");
+    }).join("\n");
+    await navigator.clipboard.writeText(text);
+  };
+
+  const clearSelection = async () => {
+    if (!selectionBounds) return;
+    const updatesByRow = new Map<string, Partial<DispatchRowModel>>();
+    for (let rowIndex = selectionBounds.top; rowIndex <= selectionBounds.bottom; rowIndex++) {
+      const row = processedDispatches[rowIndex];
+      if (!row) continue;
+      for (let column = selectionBounds.left; column <= selectionBounds.right; column++) {
+        const updates = updateForPastedCell(column, "");
+        if (updates) updatesByRow.set(row.id, { ...(updatesByRow.get(row.id) || {}), ...updates });
+      }
+    }
+    await commitBatch(updatesByRow);
+  };
+
+  const fillSelection = async (direction: "down" | "right") => {
+    if (!selectionBounds) return;
+    const updatesByRow = new Map<string, Partial<DispatchRowModel>>();
+
+    if (direction === "down") {
+      const sourceRow = processedDispatches[selectionBounds.top];
+      if (!sourceRow || selectionBounds.bottom <= selectionBounds.top) return;
+      for (let rowIndex = selectionBounds.top + 1; rowIndex <= selectionBounds.bottom; rowIndex++) {
+        const targetRow = processedDispatches[rowIndex];
+        if (!targetRow) continue;
+        for (let column = selectionBounds.left; column <= selectionBounds.right; column++) {
+          const key = FILTER_COLUMNS[column];
+          const updates = key ? updateForPastedCell(column, getColumnValue(sourceRow, key)) : null;
+          if (updates) updatesByRow.set(targetRow.id, { ...(updatesByRow.get(targetRow.id) || {}), ...updates });
+        }
+      }
+    } else {
+      if (selectionBounds.right <= selectionBounds.left) return;
+      for (let rowIndex = selectionBounds.top; rowIndex <= selectionBounds.bottom; rowIndex++) {
+        const row = processedDispatches[rowIndex];
+        const sourceKey = FILTER_COLUMNS[selectionBounds.left];
+        if (!row || !sourceKey) continue;
+        const sourceValue = getColumnValue(row, sourceKey);
+        for (let column = selectionBounds.left + 1; column <= selectionBounds.right; column++) {
+          const updates = updateForPastedCell(column, sourceValue);
+          if (updates) updatesByRow.set(row.id, { ...(updatesByRow.get(row.id) || {}), ...updates });
+        }
+      }
+    }
+
+    await commitBatch(updatesByRow);
+  };
+
+  const selectAllCells = () => {
+    if (!processedDispatches.length) return;
+    setSelection({
+      anchor: { row: 0, column: 0 },
+      focus: { row: processedDispatches.length - 1, column: COLUMN_LABELS.length - 1 },
+    });
+  };
+
+  const selectColumn = (column: number) => {
+    if (!processedDispatches.length || column < 0) return;
+    setSelection({
+      anchor: { row: 0, column },
+      focus: { row: processedDispatches.length - 1, column },
+    });
+  };
+
+  const selectRow = (row: number) => {
+    setSelection({
+      anchor: { row, column: 0 },
+      focus: { row, column: COLUMN_LABELS.length - 1 },
+    });
+  };
+
+  const startColumnResize = (event: React.MouseEvent, column: number) => {
+    if (column < 2) return;
+    event.preventDefault();
+    event.stopPropagation();
+    const startX = event.clientX;
+    const startWidth = columnWidths[column];
+
+    const resize = (moveEvent: MouseEvent) => {
+      const nextWidth = Math.max(55, Math.min(480, startWidth + moveEvent.clientX - startX));
+      setColumnWidths((current) => current.map((width, index) => index === column ? nextWidth : width));
+    };
+    const finish = () => {
+      window.removeEventListener("mousemove", resize);
+      window.removeEventListener("mouseup", finish);
+    };
+    window.addEventListener("mousemove", resize);
+    window.addEventListener("mouseup", finish);
+  };
+
+  const replaceValues = async () => {
+    const needle = findText.trim();
+    if (!needle) {
+      setReplaceResult("Digite o valor que deseja localizar.");
+      return;
+    }
+
+    const bounds = selectionBounds || {
+      top: 0,
+      bottom: processedDispatches.length - 1,
+      left: 0,
+      right: COLUMN_LABELS.length - 1,
+    };
+    const updatesByRow = new Map<string, Partial<DispatchRowModel>>();
+    let changedCells = 0;
+    const normalizedNeedle = needle.toLocaleUpperCase("pt-BR");
+    const escapedNeedle = needle.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
+    for (let rowIndex = bounds.top; rowIndex <= bounds.bottom; rowIndex++) {
+      const row = processedDispatches[rowIndex];
+      if (!row) continue;
+      for (let column = bounds.left; column <= bounds.right; column++) {
+        const key = FILTER_COLUMNS[column];
+        if (!key) continue;
+        const currentValue = getColumnValue(row, key);
+        const matches = matchWholeCell
+          ? currentValue.toLocaleUpperCase("pt-BR") === normalizedNeedle
+          : currentValue.toLocaleUpperCase("pt-BR").includes(normalizedNeedle);
+        if (!matches) continue;
+        const nextValue = matchWholeCell
+          ? replaceText
+          : currentValue.replace(new RegExp(escapedNeedle, "gi"), replaceText);
+        const updates = updateForPastedCell(column, nextValue);
+        if (!updates) continue;
+        updatesByRow.set(row.id, { ...(updatesByRow.get(row.id) || {}), ...updates });
+        changedCells++;
+      }
+    }
+
+    if (!changedCells) {
+      setReplaceResult("Nenhuma célula editável encontrada.");
+      return;
+    }
+    await commitBatch(updatesByRow);
+    setReplaceResult(`${changedCells} célula(s) substituída(s) e salva(s).`);
+  };
+
+  const moveSelection = (rowDelta: number, columnDelta: number, extend: boolean) => {
+    if (!selection) return;
+    let nextRow = Math.max(0, Math.min(processedDispatches.length - 1, selection.focus.row + rowDelta));
+    let nextColumn = selection.focus.column + columnDelta;
+    while (nextColumn >= 0 && nextColumn < COLUMN_LABELS.length && hiddenColumns.includes(nextColumn)) {
+      nextColumn += columnDelta >= 0 ? 1 : -1;
+    }
+    nextColumn = Math.max(0, Math.min(COLUMN_LABELS.length - 1, nextColumn));
+    const focus = { row: nextRow, column: nextColumn };
+    setSelection((current) => current ? (extend ? { ...current, focus } : { anchor: focus, focus }) : null);
+    requestAnimationFrame(() => {
+      const cell = tableRef.current?.querySelectorAll<HTMLTableRowElement>("tbody tr")[nextRow]?.cells[nextColumn + 1];
+      const control = cell?.querySelector<HTMLElement>("input,select");
+      (control || cell)?.focus();
+    });
+  };
+
+  const handleGridPaste = async (event: React.ClipboardEvent<HTMLDivElement>) => {
+    if (!selectionBounds) return;
+    const matrix = event.clipboardData.getData("text/plain").replace(/\r/g, "").split("\n")
+      .filter((line, index, rows) => line.length > 0 || index < rows.length - 1)
+      .map((line) => line.split("\t"));
+    if (!matrix.length) return;
+
+    const singleValue = matrix.length === 1 && matrix[0].length === 1;
+    const selectedCount = (selectionBounds.bottom - selectionBounds.top + 1) *
+      (selectionBounds.right - selectionBounds.left + 1);
+    // Uma célula simples continua usando a edição normal. Um bloco copiado,
+    // mesmo colado a partir de uma única célula inicial, deve ser distribuído.
+    if (selectedCount === 1 && singleValue) return;
+
+    event.preventDefault();
+    if (event.target instanceof HTMLElement) event.target.blur();
+    const updatesByRow = new Map<string, Partial<DispatchRowModel>>();
+    const sourceColumnCount = Math.max(...matrix.map((row) => row.length));
+    const targetIsRange = selectedCount > 1;
+    const lastRow = targetIsRange
+      ? selectionBounds.bottom
+      : Math.min(processedDispatches.length - 1, selectionBounds.top + matrix.length - 1);
+    const lastColumn = targetIsRange
+      ? selectionBounds.right
+      : selectionBounds.left + sourceColumnCount - 1;
+
+    for (let rowIndex = selectionBounds.top; rowIndex <= lastRow; rowIndex++) {
+      const row = processedDispatches[rowIndex];
+      if (!row) continue;
+      for (let column = selectionBounds.left; column <= lastColumn; column++) {
+        const sourceRow = (rowIndex - selectionBounds.top) % matrix.length;
+        const sourceColumn = (column - selectionBounds.left) % sourceColumnCount;
+        const value = matrix[sourceRow]?.[sourceColumn];
+        if (value === undefined) continue;
+        const updates = updateForPastedCell(column, value);
+        if (updates) updatesByRow.set(row.id, { ...(updatesByRow.get(row.id) || {}), ...updates });
+      }
+    }
+    // Uma única gravação por condutor evita que atualizações simultâneas da
+    // mesma linha se sobrescrevam quando o bloco contém várias colunas.
+    await commitBatch(updatesByRow);
+  };
 
   return (
-    <div className="excel-grid overflow-hidden flex flex-col flex-1">
+    <div
+      className="excel-grid overflow-hidden flex flex-col flex-1"
+      tabIndex={0}
+      onPaste={handleGridPaste}
+      onKeyDown={(event) => {
+        const key = event.key.toLowerCase();
+        if ((event.ctrlKey || event.metaKey) && key === "c") {
+          event.preventDefault();
+          copySelection();
+          return;
+        }
+        if ((event.ctrlKey || event.metaKey) && key === "a") {
+          event.preventDefault();
+          selectAllCells();
+          return;
+        }
+        if ((event.ctrlKey || event.metaKey) && key === "d") {
+          event.preventDefault();
+          fillSelection("down");
+          return;
+        }
+        if ((event.ctrlKey || event.metaKey) && key === "r") {
+          event.preventDefault();
+          fillSelection("right");
+          return;
+        }
+        if ((event.ctrlKey || event.metaKey) && key === "z") {
+          event.preventDefault();
+          event.shiftKey ? redo() : undo();
+          return;
+        }
+        if ((event.ctrlKey || event.metaKey) && key === "y") {
+          event.preventDefault();
+          redo();
+          return;
+        }
+        if (event.key === "Delete") {
+          event.preventDefault();
+          clearSelection();
+          return;
+        }
+        if (event.key === "Tab") {
+          event.preventDefault();
+          moveSelection(0, event.shiftKey ? -1 : 1, false);
+          return;
+        }
+        if (event.key === "Enter") {
+          event.preventDefault();
+          moveSelection(event.shiftKey ? -1 : 1, 0, false);
+          return;
+        }
+        const editing = event.target instanceof HTMLInputElement || event.target instanceof HTMLSelectElement;
+        if (editing) return;
+        const directions: Record<string, [number, number]> = {
+          ArrowUp: [-1, 0], ArrowDown: [1, 0], ArrowLeft: [0, -1], ArrowRight: [0, 1],
+        };
+        const direction = directions[event.key];
+        if (direction) {
+          event.preventDefault();
+          moveSelection(direction[0], direction[1], event.shiftKey);
+        }
+      }}
+    >
+      <datalist id="dispatch-status-options">
+        {STATUS_OPTIONS.map((status) => (
+          <option key={status} value={getStatusLabel(status)} />
+        ))}
+      </datalist>
+      <div className="relative flex items-center justify-end gap-2 border-b border-[#a6a6a6] bg-[#f3f3f3] px-2 py-1">
+        {hiddenColumns.length > 0 && (
+          <span className="text-[10px] font-semibold text-slate-600">{hiddenColumns.length} oculta(s)</span>
+        )}
+        <button
+          type="button"
+          onClick={() => {
+            setReplaceResult("");
+            setShowFindReplace((open) => !open);
+          }}
+          className="flex items-center gap-1 border border-[#a6a6a6] bg-white px-2 py-1 text-[10px] font-bold text-slate-700 hover:bg-[#e2f0d9]"
+          title="Localizar e substituir nas células selecionadas ou linhas visíveis"
+        >
+          <Search className="h-3.5 w-3.5" /> Localizar/substituir
+        </button>
+        <button
+          type="button"
+          onClick={() => setShowColumnMenu((open) => !open)}
+          className="flex items-center gap-1 border border-[#a6a6a6] bg-white px-2 py-1 text-[10px] font-bold text-slate-700 hover:bg-[#e2f0d9]"
+        >
+          <Columns3 className="h-3.5 w-3.5" /> Colunas
+        </button>
+        {showFindReplace && (
+          <div className="absolute right-24 top-8 z-[100] w-80 border border-[#7f7f7f] bg-white p-3 shadow-xl">
+            <div className="mb-2 flex items-center justify-between border-b pb-1">
+              <span className="text-xs font-bold text-slate-800">Localizar e substituir</span>
+              <button type="button" onClick={() => setShowFindReplace(false)} aria-label="Fechar">
+                <X className="h-3.5 w-3.5" />
+              </button>
+            </div>
+            <label className="mb-2 block text-[10px] font-bold text-slate-700">
+              Localizar
+              <input
+                type="text"
+                value={findText}
+                onChange={(event) => setFindText(event.target.value)}
+                className="mt-0.5 h-7 w-full border border-[#a6a6a6] px-2 text-[11px] font-normal text-slate-900 outline-none focus:border-[#217346]"
+              />
+            </label>
+            <label className="mb-2 block text-[10px] font-bold text-slate-700">
+              Substituir por
+              <input
+                type="text"
+                value={replaceText}
+                onChange={(event) => setReplaceText(event.target.value)}
+                className="mt-0.5 h-7 w-full border border-[#a6a6a6] px-2 text-[11px] font-normal text-slate-900 outline-none focus:border-[#217346]"
+              />
+            </label>
+            <label className="mb-2 flex items-center gap-2 text-[10px] text-slate-700">
+              <input
+                type="checkbox"
+                checked={matchWholeCell}
+                onChange={(event) => setMatchWholeCell(event.target.checked)}
+                className="accent-[#217346]"
+              />
+              Corresponder ao conteúdo inteiro da célula
+            </label>
+            <div className="mb-2 bg-[#f3f3f3] px-2 py-1 text-[9px] text-slate-600">
+              {selectionBounds ? "Aplicação: intervalo selecionado" : "Aplicação: todas as linhas visíveis"}
+            </div>
+            {replaceResult && <div className="mb-2 text-[10px] font-semibold text-[#217346]">{replaceResult}</div>}
+            <button
+              type="button"
+              onClick={replaceValues}
+              disabled={!findText.trim()}
+              className="w-full bg-[#217346] py-1.5 text-[10px] font-bold text-white hover:bg-[#185c37] disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              Substituir tudo e salvar
+            </button>
+          </div>
+        )}
+        {showColumnMenu && (
+          <div className="absolute right-2 top-8 z-50 w-56 border border-[#7f7f7f] bg-white p-2 shadow-xl">
+            <div className="mb-1 flex items-center justify-between border-b pb-1">
+              <span className="text-xs font-bold text-slate-800">Exibir colunas</span>
+              <button type="button" onClick={() => setShowColumnMenu(false)} aria-label="Fechar"><X className="h-3.5 w-3.5" /></button>
+            </div>
+            <div className="max-h-64 overflow-y-auto">
+              {COLUMN_LABELS.map((label, index) => {
+                const visible = !hiddenColumns.includes(index);
+                const protectedColumn = index < 2;
+                return (
+                  <button
+                    type="button"
+                    key={label}
+                    disabled={protectedColumn}
+                    onClick={() => setHiddenColumns((current) => visible
+                      ? [...current, index]
+                      : current.filter((column) => column !== index))}
+                    className="flex w-full items-center gap-2 px-1.5 py-1 text-left text-[11px] text-slate-700 hover:bg-[#e2f0d9] disabled:cursor-not-allowed disabled:opacity-50"
+                    title={protectedColumn ? "Coluna fixa protegida" : visible ? "Ocultar coluna" : "Reexibir coluna"}
+                  >
+                    {visible ? <Eye className="h-3.5 w-3.5 text-[#217346]" /> : <EyeOff className="h-3.5 w-3.5" />}
+                    <span>{label}</span>
+                  </button>
+                );
+              })}
+            </div>
+            <button
+              type="button"
+              onClick={() => setHiddenColumns([])}
+              className="mt-2 w-full border border-[#a6a6a6] bg-[#f3f3f3] py-1 text-[10px] font-bold text-slate-700 hover:bg-[#e2f0d9]"
+            >
+              Mostrar todas
+            </button>
+            <button
+              type="button"
+              onClick={() => setColumnWidths([...COLUMN_WIDTHS])}
+              className="mt-1 w-full border border-[#a6a6a6] bg-[#f3f3f3] py-1 text-[10px] font-bold text-slate-700 hover:bg-[#e2f0d9]"
+            >
+              Restaurar larguras
+            </button>
+          </div>
+        )}
+      </div>
       {/* Contêiner com rolagem horizontal e vertical */}
       <div className="overflow-x-auto overflow-y-auto max-h-[calc(100vh-210px)] relative select-none">
-        <table className="text-left border-collapse table-fixed text-[11px] min-w-full">
+        <table
+          ref={tableRef}
+          style={{
+            width: visibleTableWidth,
+            minWidth: visibleTableWidth,
+            maxWidth: visibleTableWidth,
+          }}
+          onMouseDown={(event) => {
+            setContextMenu(null);
+            const position = cellPosition(event.target);
+            if (!position) return;
+            setIsSelecting(true);
+            setSelection((current) => event.shiftKey && current
+              ? { ...current, focus: position }
+              : { anchor: position, focus: position });
+          }}
+          onContextMenu={(event) => {
+            const position = cellPosition(event.target);
+            if (!position) return;
+            event.preventDefault();
+            const insideSelection = selectionBounds &&
+              position.row >= selectionBounds.top && position.row <= selectionBounds.bottom &&
+              position.column >= selectionBounds.left && position.column <= selectionBounds.right;
+            if (!insideSelection) setSelection({ anchor: position, focus: position });
+            setContextMenu({ x: event.clientX, y: event.clientY, column: position.column });
+          }}
+          onMouseOver={(event) => {
+            if (!isSelecting) return;
+            const position = cellPosition(event.target);
+            if (position) setSelection((current) => current ? { ...current, focus: position } : null);
+          }}
+          className="text-left border-collapse table-fixed text-[11px]"
+        >
           {/* Definição estrita das larguras de colunas */}
           <colgroup>
-            <col style={{ width: "44px" }} />
-            <col style={{ width: "230px" }} />
-            <col style={{ width: "86px" }} />
-            <col style={{ width: "92px" }} />
-            <col style={{ width: "90px" }} />
-            <col style={{ width: "135px" }} />
-            <col style={{ width: "230px" }} />
-            <col style={{ width: "100px" }} />
-            <col style={{ width: "90px" }} />
-            <col style={{ width: "100px" }} />
-            <col style={{ width: "55px" }} />
-            <col style={{ width: "120px" }} />
-            <col style={{ width: "120px" }} />
-            <col style={{ width: "90px" }} />
-            <col style={{ width: "180px" }} />
-            <col style={{ width: "80px" }} />
-            <col style={{ width: "95px" }} />
-            <col style={{ width: "110px" }} />
+            <col style={{ width: ROW_NUMBER_WIDTH }} />
+            {columnWidths.map((width, index) => (
+              <col key={COLUMN_LABELS[index]} style={{ width }} />
+            ))}
           </colgroup>
 
           {/* Cabeçalho Fixo */}
           <thead className="sticky top-0 z-30">
-            <tr className="excel-column-letters h-5" aria-hidden="true">
-              <th className="sticky left-0 z-40 text-center">#</th>
-              <th className="sticky left-[44px] z-30 text-center">A</th>
-              <th className="sticky left-[274px] z-30 text-center">B</th>
-              {"CDEFGHIJKLMNOPQ".split("").map((letter) => (
-                <th key={letter} className="text-center">{letter}</th>
+            <tr className="excel-column-letters h-5">
+              <th
+                className="sticky left-0 z-40 cursor-pointer text-center hover:!bg-[#d9ead3]"
+                title="Selecionar toda a grade"
+                onMouseDown={(event) => {
+                  event.preventDefault();
+                  event.stopPropagation();
+                  selectAllCells();
+                }}
+              >#</th>
+              {"ABCDEFGHIJKLMNOPQ".split("").map((letter, column) => (
+                <th
+                  key={letter}
+                  className={`${column === 0 ? "sticky left-[44px] z-30" : column === 1 ? "sticky left-[274px] z-30" : "relative"} cursor-pointer text-center hover:!bg-[#d9ead3]`}
+                  title={`Selecionar coluna ${letter}`}
+                  onMouseDown={(event) => {
+                    event.preventDefault();
+                    event.stopPropagation();
+                    selectColumn(column);
+                  }}
+                >
+                  {letter}
+                  {column >= 2 && (
+                    <span
+                      role="separator"
+                      aria-orientation="vertical"
+                      aria-label={`Redimensionar coluna ${letter}`}
+                      title="Arraste para ajustar a largura"
+                      onMouseDown={(event) => startColumnResize(event, column)}
+                      className="absolute right-[-3px] top-0 z-50 h-full w-[7px] cursor-col-resize hover:bg-[#217346]"
+                    />
+                  )}
+                </th>
               ))}
             </tr>
             <tr className="h-9">
@@ -240,8 +1238,15 @@ export function DispatchGrid({
               </th>
 
               {/* Coluna 3: HORÁRIO (Com destaque de turno) */}
-              <th className="px-2 py-1.5 border-r border-emerald-700 text-center font-bold">
-                HORÁRIO
+              <th
+                onClick={() => handleSort("schedule_time")}
+                title="Agrupar por turno: 04h, 12h e 20h"
+                className="px-2 py-1.5 border-r border-emerald-700 cursor-pointer hover:bg-emerald-800 transition-colors text-center"
+              >
+                <div className="flex items-center justify-center space-x-1">
+                  <span className="font-bold">HORÁRIO</span>
+                  <ArrowUpDown className="w-3 h-3 opacity-80 shrink-0" />
+                </div>
               </th>
 
               {/* Coluna 4: PREVISÃO */}
@@ -326,6 +1331,26 @@ export function DispatchGrid({
                 TEMPO JORNADA
               </th>
             </tr>
+            <tr className="h-7 bg-[#e7e6e6]">
+              <th className="excel-row-number sticky left-0 z-40 border-r border-slate-400" />
+              {FILTER_COLUMNS.map((key, index) => {
+                const stickyClass = index === 0
+                  ? "sticky left-[44px] z-30"
+                  : index === 1
+                    ? "sticky left-[274px] z-30"
+                    : "";
+                return (
+                  <th key={key} className={`${stickyClass} bg-[#e7e6e6] border-r border-b border-[#b7b7b7] p-0.5`}>
+                    <ExcelColumnFilter
+                      label={COLUMN_LABELS[index]}
+                      options={filterOptions[key]}
+                      selected={columnFilters[key] || []}
+                      onChange={(values) => setColumnFilters((current) => ({ ...current, [key]: values }))}
+                    />
+                  </th>
+                );
+              })}
+            </tr>
           </thead>
 
           {/* Corpo da Tabela */}
@@ -342,7 +1367,15 @@ export function DispatchGrid({
                     hasAbonoPending ? "bg-amber-50" : ""
                   }`}
                 >
-                  <td className="excel-row-number sticky left-0 z-20 text-center">
+                  <td
+                    className="excel-row-number sticky left-0 z-20 cursor-pointer text-center hover:bg-[#d9ead3]"
+                    title={`Selecionar linha ${index + 1}`}
+                    onMouseDown={(event) => {
+                      event.preventDefault();
+                      event.stopPropagation();
+                      selectRow(index);
+                    }}
+                  >
                     {index + 1}
                   </td>
 
@@ -399,46 +1432,39 @@ export function DispatchGrid({
 
                   {/* 4. PREVISÃO */}
                   <td className="px-1 py-1 text-center">
-                    <input
-                      type="text"
+                    <EditableTextCell
                       value={row.forecast_start_time || ""}
                       placeholder="INSERIR"
-                      onChange={(e) => onUpdateRow(row.id, { forecast_start_time: e.target.value })}
+                      onCommit={(value) => commitUpdate(row.id, { forecast_start_time: value || null })}
                       className="w-full text-center text-slate-900 font-mono font-medium placeholder-slate-400 focus:bg-white focus:outline-none rounded px-1"
                     />
                   </td>
 
                   {/* 5. ACIONADO / STATUS */}
-                  <td className="px-1 py-1 text-center">
-                    <select
+                  <td className={`px-1 py-1 text-center excel-status-cell ${getStatusClass(row.dispatch_status)}`}>
+                    <EditableStatusCell
                       value={row.dispatch_status}
-                      onChange={(e) => onUpdateRow(row.id, { dispatch_status: e.target.value as DispatchStatus })}
-                      className={`w-full py-0.5 px-1 rounded text-[10px] font-extrabold border cursor-pointer focus:outline-none shadow-xs ${getStatusBadge(
+                      listId="dispatch-status-options"
+                      onCommit={(value) => commitUpdate(row.id, { dispatch_status: value })}
+                      className={`excel-status-select w-full py-0.5 px-1 rounded text-[10px] font-extrabold border cursor-pointer focus:outline-none shadow-xs ${getStatusClass(
                         row.dispatch_status
                       )}`}
-                    >
-                      {STATUS_OPTIONS.map((st) => (
-                        <option key={st} value={st} className="bg-white text-slate-900 font-medium">
-                          {st}
-                        </option>
-                      ))}
-                    </select>
+                    />
                   </td>
 
                   {/* 6. MOTIVO DO ABONO / APROVAÇÃO */}
                   <td className="px-1.5 py-1">
                     <div className="flex items-center space-x-1">
-                      <input
-                        type="text"
+                      <EditableTextCell
                         value={row.abono_reason || ""}
                         placeholder="Motivo da ocorrência..."
-                        onChange={(e) => onUpdateRow(row.id, { abono_reason: e.target.value })}
+                        onCommit={(value) => commitUpdate(row.id, { abono_reason: value || null })}
                         className="flex-1 text-slate-900 placeholder-slate-400 focus:bg-white focus:outline-none rounded px-1 text-[11px] truncate font-sans"
                       />
                       {row.dispatch_status === "ABONADO" || row.abono_reason ? (
                         <select
                           value={row.abono_authorized_by || "PENDENTE"}
-                          onChange={(e) => onUpdateRow(row.id, { abono_authorized_by: e.target.value })}
+                          onChange={(e) => commitUpdate(row.id, { abono_authorized_by: e.target.value })}
                           className={`text-[9px] px-1 py-0.5 rounded border font-bold ${
                             row.abono_authorized_by === "PENDENTE"
                               ? "bg-amber-100 text-amber-900 border-amber-400"
@@ -460,7 +1486,7 @@ export function DispatchGrid({
                   <td className="px-1 py-1 text-center">
                     <select
                       value={row.origin_location_id || ""}
-                      onChange={(e) => onUpdateRow(row.id, { origin_location_id: e.target.value || null })}
+                      onChange={(e) => commitUpdate(row.id, { origin_location_id: e.target.value || null })}
                       className="w-full text-center text-slate-900 font-semibold focus:bg-white focus:outline-none rounded cursor-pointer"
                     >
                       <option value="" className="text-slate-400">
@@ -476,11 +1502,10 @@ export function DispatchGrid({
 
                   {/* 8. ENTRADA */}
                   <td className="px-1 py-1 text-center">
-                    <input
-                      type="text"
+                    <EditableTextCell
                       value={row.entry_time || ""}
                       placeholder="--:--:--"
-                      onChange={(e) => onUpdateRow(row.id, { entry_time: e.target.value || null })}
+                      onCommit={(value) => commitUpdate(row.id, { entry_time: value || null })}
                       className="w-full text-center text-slate-900 font-mono font-medium placeholder-slate-400 focus:bg-white focus:outline-none rounded px-1"
                     />
                   </td>
@@ -504,7 +1529,7 @@ export function DispatchGrid({
                           delete copy[row.id];
                           return copy;
                         });
-                        onUpdateRow(row.id, { fleet_code: value });
+                        commitUpdate(row.id, { fleet_code: value });
                       }}
                       className="w-full text-center text-slate-900 font-mono font-bold uppercase placeholder-slate-400 focus:bg-white focus:outline-none rounded px-1"
                     />
@@ -515,7 +1540,7 @@ export function DispatchGrid({
                     <select
                       value={row.cargo_status || ""}
                       onChange={(e) =>
-                        onUpdateRow(row.id, { cargo_status: (e.target.value || null) as CargoStatus | null })
+                        commitUpdate(row.id, { cargo_status: (e.target.value || null) as CargoStatus | null })
                       }
                       className="w-full text-center font-extrabold text-slate-900 focus:bg-white focus:outline-none rounded cursor-pointer"
                     >
@@ -532,61 +1557,41 @@ export function DispatchGrid({
                   </td>
 
                   {/* 11. DESTINO */}
-                  <td className="px-1 py-1">
-                    <select
-                      value={row.destination_location_id || ""}
-                      onChange={(e) => onUpdateRow(row.id, { destination_location_id: e.target.value || null })}
-                      className="w-full text-slate-900 font-medium focus:bg-white focus:outline-none rounded cursor-pointer truncate"
-                    >
-                      <option value="" className="text-slate-400">
-                        - Destino -
-                      </option>
-                      {locations.map((loc) => (
-                        <option key={loc.id} value={loc.id} className="text-slate-900">
-                          {loc.name}
-                        </option>
-                      ))}
-                    </select>
+                  <td className="px-0 py-0">
+                    <EditableLocationCell
+                      value={row.destination_name ?? row.destination_location?.name ?? ""}
+                      options={locationNames}
+                      label={`Destino de ${row.driver.name}`}
+                      onCommit={(value) => commitUpdate(row.id, { destination_name: value })}
+                    />
                   </td>
 
                   {/* 12. DESTINO FINAL */}
-                  <td className="px-1 py-1">
-                    <select
-                      value={row.final_destination_location_id || ""}
-                      onChange={(e) =>
-                        onUpdateRow(row.id, { final_destination_location_id: e.target.value || null })
-                      }
-                      className="w-full text-slate-900 font-medium focus:bg-white focus:outline-none rounded cursor-pointer truncate"
-                    >
-                      <option value="" className="text-slate-400">
-                        - Destino Final -
-                      </option>
-                      {locations.map((loc) => (
-                        <option key={loc.id} value={loc.id} className="text-slate-900">
-                          {loc.name}
-                        </option>
-                      ))}
-                    </select>
+                  <td className="px-0 py-0">
+                    <EditableLocationCell
+                      value={row.final_destination_name ?? row.final_destination_location?.name ?? ""}
+                      options={locationNames}
+                      label={`Destino final de ${row.driver.name}`}
+                      onCommit={(value) => commitUpdate(row.id, { final_destination_name: value })}
+                    />
                   </td>
 
                   {/* 13. SAÍDA */}
                   <td className="px-1 py-1 text-center">
-                    <input
-                      type="text"
+                    <EditableTextCell
                       value={row.exit_time || ""}
                       placeholder="--:--:--"
-                      onChange={(e) => onUpdateRow(row.id, { exit_time: e.target.value || null })}
+                      onCommit={(value) => commitUpdate(row.id, { exit_time: value || null })}
                       className="w-full text-center text-slate-900 font-mono font-medium placeholder-slate-400 focus:bg-white focus:outline-none rounded px-1"
                     />
                   </td>
 
                   {/* 14. OBSERVAÇÃO */}
                   <td className="px-1.5 py-1">
-                    <input
-                      type="text"
+                    <EditableTextCell
                       value={row.observations || ""}
                       placeholder="Notas..."
-                      onChange={(e) => onUpdateRow(row.id, { observations: e.target.value })}
+                      onCommit={(value) => commitUpdate(row.id, { observations: value || null })}
                       className="w-full text-slate-900 placeholder-slate-400 focus:bg-white focus:outline-none rounded px-1 text-[11px] truncate font-sans"
                     />
                   </td>
@@ -634,6 +1639,62 @@ export function DispatchGrid({
             )}
           </tbody>
         </table>
+      </div>
+      {contextMenu && (
+        <div
+          role="menu"
+          style={{ left: contextMenu.x, top: contextMenu.y }}
+          className="fixed z-[120] w-44 border border-[#7f7f7f] bg-white py-1 text-[11px] text-slate-800 shadow-xl"
+          onMouseDown={(event) => event.stopPropagation()}
+        >
+          <button
+            type="button"
+            role="menuitem"
+            onClick={async () => {
+              await copySelection();
+              setContextMenu(null);
+            }}
+            className="flex w-full items-center gap-2 px-3 py-1.5 text-left hover:bg-[#e2f0d9]"
+          >
+            <Copy className="h-3.5 w-3.5" /> Copiar seleção
+          </button>
+          <button
+            type="button"
+            role="menuitem"
+            onClick={async () => {
+              await clearSelection();
+              setContextMenu(null);
+            }}
+            className="flex w-full items-center gap-2 px-3 py-1.5 text-left hover:bg-[#e2f0d9]"
+          >
+            <X className="h-3.5 w-3.5" /> Limpar conteúdo
+          </button>
+          <button
+            type="button"
+            role="menuitem"
+            disabled={contextMenu.column < 2}
+            onClick={() => {
+              setHiddenColumns((current) => current.includes(contextMenu.column)
+                ? current
+                : [...current, contextMenu.column]);
+              setContextMenu(null);
+            }}
+            className="flex w-full items-center gap-2 px-3 py-1.5 text-left hover:bg-[#e2f0d9] disabled:cursor-not-allowed disabled:opacity-40"
+          >
+            <EyeOff className="h-3.5 w-3.5" /> Ocultar coluna
+          </button>
+        </div>
+      )}
+      <div className="excel-statusbar" role="status" aria-live="polite">
+        <span className={`excel-save-dot is-${saveState.status}`} />
+        <span>
+          {saveState.status === "saving" && "Salvando alteração..."}
+          {saveState.status === "saved" && "Alteração salva"}
+          {saveState.status === "error" && (saveState.message || "Erro ao salvar alteração")}
+          {saveState.status === "idle" && "Pronto"}
+        </span>
+        <span className="ml-auto">{processedDispatches.length} linhas</span>
+        <span className="border-l border-slate-300 pl-2">Ctrl+C · Ctrl+V · Delete · Ctrl+Z · Ctrl+D · Ctrl+R</span>
       </div>
     </div>
   );

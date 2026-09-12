@@ -1,7 +1,7 @@
 import { INITIAL_BASES, INITIAL_DRIVERS } from "@/lib/mock-data";
 import { createClient } from "@/lib/supabase/client";
 import { Driver, MonthlyScheduleEntry } from "@/types/database";
-import * as XLSX from "xlsx";
+import ExcelJS from "exceljs";
 
 export const SCALE_CODES = ["1", "2", "3", "4", "5", "6", "F", "FE", "AT", "AF", "DESL"] as const;
 
@@ -113,9 +113,20 @@ export async function loadMonthlySchedule(month: number, year: number, region: s
 
   let entries: MonthlyScheduleEntry[] = [];
   if (scheduleResult.data?.id) {
-    const result = await supabase.from("monthly_schedule_entries").select("*").eq("schedule_id", scheduleResult.data.id);
-    if (result.error) throw new Error(result.error.message);
-    entries = (result.data || []) as MonthlyScheduleEntry[];
+    const pageSize = 1000;
+    for (let start = 0; ; start += pageSize) {
+      const result = await supabase
+        .from("monthly_schedule_entries")
+        .select("*")
+        .eq("schedule_id", scheduleResult.data.id)
+        .order("driver_id")
+        .order("day_of_month")
+        .range(start, start + pageSize - 1);
+      if (result.error) throw new Error(result.error.message);
+      const page = (result.data || []) as MonthlyScheduleEntry[];
+      entries.push(...page);
+      if (page.length < pageSize) break;
+    }
   }
   return { drivers: (driversResult.data || []) as Driver[], entries, source: "supabase" };
 }
@@ -150,15 +161,37 @@ export async function saveMonthlySchedule(month: number, year: number, region: s
   }
 }
 
-export function parseScheduleFile(
+function plainExcelValue(value: unknown): string | number | Date | null {
+  if (value === null || value === undefined) return null;
+  if (typeof value === "string" || typeof value === "number" || value instanceof Date) return value;
+  if (typeof value === "object") {
+    const cell = value as { result?: unknown; text?: string; richText?: Array<{ text?: string }> };
+    if (cell.result !== undefined) return plainExcelValue(cell.result);
+    if (cell.text !== undefined) return cell.text;
+    if (cell.richText) return cell.richText.map((part) => part.text || "").join("");
+  }
+  return String(value);
+}
+
+export async function parseScheduleFile(
   buffer: ArrayBuffer,
   drivers: Driver[],
   daysInMonth: number
-): ImportResult {
-  const wb = XLSX.read(buffer, { type: "array" });
-  const sheetName = wb.SheetNames[0];
-  const sheet = wb.Sheets[sheetName];
-  const rows = XLSX.utils.sheet_to_json<any[]>(sheet, { header: 1 });
+): Promise<ImportResult> {
+  const workbook = new ExcelJS.Workbook();
+  await workbook.xlsx.load(buffer as never);
+  const worksheet = workbook.worksheets[0];
+  if (!worksheet) throw new Error("O arquivo não possui uma planilha legível.");
+  if (worksheet.rowCount > 2000 || worksheet.columnCount > 100) {
+    throw new Error("A planilha excede o limite seguro de 2.000 linhas ou 100 colunas.");
+  }
+
+  const rows: Array<Array<string | number | Date | null>> = [];
+  worksheet.eachRow({ includeEmpty: true }, (row, rowNumber) => {
+    if (rowNumber > 2000) return;
+    const values = Array.isArray(row.values) ? row.values.slice(1, 101) : [];
+    rows[rowNumber - 1] = values.map(plainExcelValue);
+  });
 
   const driverByKey = new Map<string, Driver>();
   const driverByLogin = new Map<string, Driver>();
@@ -240,7 +273,7 @@ export function parseScheduleFile(
   };
 }
 
-export function exportScheduleToExcel(
+export async function exportScheduleToExcel(
   month: number,
   year: number,
   region: string,
@@ -262,8 +295,42 @@ export function exportScheduleToExcel(
     return row;
   });
 
-  const ws = XLSX.utils.aoa_to_sheet([headers, ...dataRows]);
-  const wb = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(wb, ws, `Escala ${month}-${year}`);
-  XLSX.writeFile(wb, `escala_${region}_${year}_${String(month).padStart(2, "0")}.xlsx`);
+  const workbook = new ExcelJS.Workbook();
+  const worksheet = workbook.addWorksheet(`Escala ${month}-${year}`, {
+    views: [{ state: "frozen", xSplit: 4, ySplit: 1 }],
+  });
+  worksheet.addRows([headers, ...dataRows]);
+  worksheet.autoFilter = { from: "A1", to: worksheet.getRow(1).getCell(headers.length).address };
+  worksheet.columns = headers.map((header, index) => ({
+    width: index === 1 ? 34 : index === 2 ? 14 : index < 4 ? 10 : Math.max(5, String(header).length + 2),
+  }));
+  worksheet.getRow(1).eachCell((cell) => {
+    cell.font = { bold: true, color: { argb: "FFFFFFFF" } };
+    cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FF107C41" } };
+    cell.alignment = { horizontal: "center", vertical: "middle" };
+  });
+  worksheet.eachRow((row, rowNumber) => {
+    if (rowNumber > 1) row.height = 18;
+    row.eachCell((cell) => {
+      cell.border = {
+        top: { style: "thin", color: { argb: "FFD0D0D0" } },
+        left: { style: "thin", color: { argb: "FFD0D0D0" } },
+        bottom: { style: "thin", color: { argb: "FFD0D0D0" } },
+        right: { style: "thin", color: { argb: "FFD0D0D0" } },
+      };
+    });
+  });
+
+  const output = await workbook.xlsx.writeBuffer();
+  const blob = new Blob([output as BlobPart], {
+    type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+  });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = `escala_${region}_${year}_${String(month).padStart(2, "0")}.xlsx`;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  URL.revokeObjectURL(url);
 }

@@ -104,6 +104,10 @@ body {
 .excel-driver-cell { background: #fff; padding-left: 8px !important; padding-right: 8px !important; font-family: "Segoe UI", Calibri, sans-serif; }
 .excel-driver-cell strong { display: block; font-size: 11px; color: #111; font-weight: 600; }
 .excel-driver-cell small { display: block; font-size: 10px; color: #666; font-family: Consolas, monospace; }
+.excel-schedule-grid .excel-driver-name { color: #111827 !important; font-size: 12px; font-weight: 700; }
+.excel-schedule-grid .excel-driver-login { color: #475569 !important; font-family: Consolas, "Courier New", monospace; font-size: 10px; font-weight: 600; }
+.excel-schedule-grid tbody tr:hover .excel-driver-name { color: #0f3d24 !important; }
+.excel-schedule-grid tbody tr:hover .excel-driver-login { color: #365f48 !important; }
 .excel-shift-cell { background: #f7f7f7; font-weight: 700; color: #333; text-align: center; font-family: Consolas, monospace; }
 
 .excel-grid { color: var(--excel-text); background: #fff; border: 1px solid #a6a6a6; box-shadow: none; }
@@ -147,9 +151,117 @@ body {
 .excel-grid input, .excel-grid select { min-height: 24px; color: #111 !important; background: transparent !important; border: 1px solid transparent !important; border-radius: 0 !important; font-size: 11px; }
 .excel-grid input::placeholder { color: #8a8a8a !important; }
 .excel-grid input:focus, .excel-grid select:focus { background: #fff !important; border-color: var(--excel-selection) !important; outline: 1px solid var(--excel-selection) !important; outline-offset: -1px; }
+.excel-combobox-cell { position: relative; width: 100%; height: 100%; min-height: 31px; }
+.excel-combobox-input { width: 100%; height: 31px; padding: 0 18px 0 6px; border: 0; border-radius: 0; background: transparent; color: #111827; font: 600 11px Calibri, "Segoe UI", sans-serif; text-transform: uppercase; text-overflow: ellipsis; }
+.excel-combobox-input::placeholder { color: #94a3b8 !important; font-weight: 400; text-transform: none; }
+.excel-combobox-input:focus { background: #fff !important; color: #111 !important; outline: 2px solid var(--excel-selection) !important; outline-offset: -2px !important; }
+.excel-statusbar { display: flex; align-items: center; gap: 6px; min-height: 24px; padding: 2px 8px; border-top: 1px solid #a6a6a6; background: #f3f3f3; color: #475569; font: 600 10px Calibri, "Segoe UI", sans-serif; }
+.excel-save-dot { width: 7px; height: 7px; border-radius: 999px; background: #64748b; }
+.excel-save-dot.is-saving { background: #d97706; animation: pulse 1s ease-in-out infinite; }
+.excel-save-dot.is-saved { background: #107c41; }
+.excel-save-dot.is-error { background: #dc2626; }
 .excel-grid option { color: #111 !important; background: #fff !important; }
 
+/* Status operacional: mantém as cores de referência da planilha no campo e na célula. */
+.excel-grid tbody td.excel-status-cell,
+.excel-grid select.excel-status-select,
+.excel-grid select.excel-status-select:focus,
+.excel-grid select.excel-status-select option { font-weight: 800; }
+.excel-grid tbody td.excel-range-selected {
+  position: relative;
+  box-shadow: inset 0 0 0 2px #217346 !important;
+}
+.excel-grid tbody td.excel-range-selected::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: rgba(33, 115, 70, 0.08);
+}
+.excel-grid .excel-status-acionado { color: #006100 !important; background: #c6efce !important; border-color: #a9d08e !important; }
+.excel-grid .excel-status-abonado { color: #9c0006 !important; background: #ffc7ce !important; border-color: #f4b084 !important; }
+.excel-grid .excel-status-apoio { color: #9c5700 !important; background: #ffeb9c !important; border-color: #ffd966 !important; }
+.excel-grid .excel-status-troca { color: #1f1f1f !important; background: #bf9000 !important; border-color: #806000 !important; }
+.excel-grid .excel-status-falta { color: #fff !important; background: #f00 !important; border-color: #c00 !important; }
+.excel-grid .excel-status-atestado { color: #1f497d !important; background: #b8cce4 !important; border-color: #8db4e2 !important; }
+.excel-grid .excel-status-afastado { color: #604a7b !important; background: #e1d5e7 !important; border-color: #d5c2e0 !important; }
+.excel-grid .excel-status-bate-e-volta { color: #d76b00 !important; background: #ffe6cc !important; border-color: #f8cbad !important; }
+.excel-grid .excel-status-suspensao { color: #953734 !important; background: #f2dcdb !important; border-color: #e6b8b7 !important; }
+.excel-grid .excel-status-viagem-fechada { color: #1f497d !important; background: #dce6f1 !important; border-color: #b8cce4 !important; }
+
 input:focus-visible, select:focus-visible, button:focus-visible, a:focus-visible { outline: 2px solid #5aa9e6; outline-offset: 1px; }
+
+/* Relatório gerencial: uma folha de fechamento, com a linguagem visual do Excel. */
+.excel-report-sheet { min-width: 760px; border: 1px solid #a6a6a6; background: #fff; color: #172033; box-shadow: 0 1px 2px rgba(15, 23, 42, .08); font-family: Calibri, "Segoe UI", sans-serif; }
+.excel-report-heading { min-height: 58px; display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 10px 14px; border-bottom: 1px solid #a6a6a6; background: #f3f3f3; }
+.excel-report-heading h2 { display: flex; align-items: center; gap: 8px; font-size: 15px; line-height: 1.2; font-weight: 700; color: #123d27; }
+.excel-report-heading h2 svg { width: 19px; height: 19px; color: #107c41; }
+.excel-report-heading p { margin-top: 3px; color: #526072; font-size: 11px; }
+.excel-report-refresh { display: inline-flex; align-items: center; gap: 6px; min-height: 30px; padding: 4px 10px; border: 1px solid #7f8c83; background: #fff; color: #174d2d; font-size: 11px; font-weight: 700; }
+.excel-report-refresh:hover { background: #e2f0d9; }
+.excel-report-refresh:disabled { cursor: wait; opacity: .65; }
+.excel-report-refresh svg { width: 14px; height: 14px; }
+.excel-report-actions { display: flex; align-items: center; gap: 6px; }
+.excel-report-filters { display: flex; align-items: end; gap: 8px; min-height: 55px; padding: 8px 14px; border-bottom: 1px solid #a6a6a6; background: #fafafa; }
+.excel-report-filters label { display: grid; gap: 3px; color: #455468; font-size: 10px; font-weight: 700; }
+.excel-report-filters input, .excel-report-filters select { height: 28px; padding: 3px 7px; border: 1px solid #9ca3af; background: #fff; color: #111827; font-size: 11px; }
+.excel-report-period { display: inline-flex; align-items: center; gap: 5px; margin-left: auto; min-height: 28px; color: #315842; font-size: 11px; font-weight: 700; }
+.excel-report-period svg { width: 15px; height: 15px; }
+.excel-report-error { margin: 10px 14px 0; border: 1px solid #e6b8b7; background: #fce8e6; padding: 8px 10px; color: #9c0006; font-size: 11px; font-weight: 700; }
+.excel-report-loading { display: flex; min-height: 360px; align-items: center; justify-content: center; gap: 8px; color: #526072; font-size: 12px; font-weight: 600; }
+.excel-report-loading svg { width: 17px; height: 17px; color: #107c41; }
+.excel-report-kpis { display: grid; grid-template-columns: repeat(4, minmax(145px, 1fr)); border-bottom: 1px solid #a6a6a6; }
+.excel-report-kpis > div { position: relative; min-height: 104px; padding: 12px 12px 10px 43px; border-right: 1px solid #c8c8c8; background: #fff; }
+.excel-report-kpis > div:last-child { border-right: 0; }
+.excel-report-kpis svg { position: absolute; left: 13px; top: 15px; width: 20px; height: 20px; color: #107c41; }
+.excel-report-kpis span { display: block; color: #475569; font-size: 11px; font-weight: 700; }
+.excel-report-kpis strong { display: block; margin-top: 2px; color: #10261b; font-size: 27px; line-height: 1.05; font-weight: 700; font-variant-numeric: tabular-nums; }
+.excel-report-kpis small { display: block; margin-top: 6px; color: #64748b; font-size: 10px; }
+.excel-report-grid { display: grid; grid-template-columns: minmax(390px, 1.15fr) minmax(310px, .85fr); border-bottom: 1px solid #a6a6a6; }
+.excel-report-block { padding: 12px 14px 14px; background: #fff; }
+.excel-report-grid .excel-report-block:first-child { border-right: 1px solid #a6a6a6; }
+.excel-report-block h3 { margin: -12px -14px 10px; padding: 7px 10px; border-bottom: 1px solid #b7b7b7; background: #e2f0d9; color: #174d2d; font-size: 11px; font-weight: 700; }
+.excel-report-bar-row { display: grid; grid-template-columns: 112px minmax(90px, 1fr) 34px 46px; align-items: center; gap: 7px; min-height: 27px; border-bottom: 1px solid #ececec; font-size: 10px; }
+.excel-report-bar-track { height: 9px; overflow: hidden; border: 1px solid #cbd5e1; background: #f4f4f4; }
+.excel-report-bar-track i { display: block; height: 100%; min-width: 2px; background: #107c41; }
+.excel-report-bar-row strong, .excel-report-bar-row small { text-align: right; font-variant-numeric: tabular-nums; }
+.excel-report-status { overflow: hidden; padding: 2px 5px; border: 1px solid transparent; text-overflow: ellipsis; white-space: nowrap; font-weight: 800; }
+.excel-report-status-acionado { border-color: #a9d08e; background: #c6efce; color: #006100; }
+.excel-report-status-abonado { border-color: #f4b084; background: #ffc7ce; color: #9c0006; }
+.excel-report-status-apoio { border-color: #ffd966; background: #ffeb9c; color: #9c5700; }
+.excel-report-status-baldeio { border-color: #806000; background: #bf9000; color: #1f1f1f; }
+.excel-report-status-empty { border-color: #cbd5e1; background: #f1f5f9; color: #64748b; }
+.excel-report-status-other { border-color: #b8cce4; background: #dce6f1; color: #1f497d; }
+.excel-report-empty { padding: 35px 8px; text-align: center; color: #64748b; font-size: 11px; }
+.excel-report-compact-table, .excel-report-table { width: 100%; border-collapse: collapse; font-size: 10px; }
+.excel-report-compact-table th, .excel-report-compact-table td, .excel-report-table th, .excel-report-table td { height: 25px; padding: 3px 7px; border: 1px solid #d2d2d2; text-align: left; }
+.excel-report-compact-table th, .excel-report-table th { position: sticky; top: 0; background: #107c41; color: #fff; font-weight: 700; }
+.excel-report-compact-table td:first-child { width: 28px; background: #ededed; text-align: center; color: #555; }
+.excel-report-compact-table td:last-child, .excel-report-table td:nth-child(n+4) { text-align: right; font-variant-numeric: tabular-nums; }
+.excel-report-drivers { padding-top: 12px; }
+.excel-report-drivers > div { max-height: 320px; }
+.excel-report-table { min-width: 760px; }
+.excel-report-table tbody tr:nth-child(even) { background: #fbfbfb; }
+.excel-report-table tbody tr:hover { background: #e2f0d9; }
+.excel-report-table td:first-child { width: 35px; background: #ededed; text-align: center; color: #555; }
+.excel-report-table td:nth-child(2) { font-weight: 700; }
+.excel-report-table td.is-alert { background: #ffc7ce; color: #9c0006; font-weight: 800; }
+
+@media (max-width: 1050px) {
+  .excel-report-kpis { grid-template-columns: repeat(2, minmax(145px, 1fr)); }
+  .excel-report-kpis > div:nth-child(2) { border-right: 0; }
+  .excel-report-kpis > div:nth-child(-n+2) { border-bottom: 1px solid #c8c8c8; }
+  .excel-report-grid { grid-template-columns: 1fr; }
+  .excel-report-grid .excel-report-block:first-child { border-right: 0; border-bottom: 1px solid #a6a6a6; }
+}
+
+@media print {
+  .excel-titlebar, .excel-sidebar, .excel-report-actions { display: none !important; }
+  .excel-workspace { overflow: visible !important; padding: 0 !important; background: #fff !important; }
+  .excel-report-sheet { min-width: 0; border: 0; box-shadow: none; }
+  .excel-report-drivers > div { max-height: none; overflow: visible; }
+  .excel-report-table th { position: static; }
+}
 
 @media (max-width: 900px) {
   .excel-sidebar { width: 52px; }
@@ -158,3 +270,14 @@ input:focus-visible, select:focus-visible, button:focus-visible, a:focus-visible
   .excel-sheet-link svg { margin-right: 0; }
   .excel-workspace { padding-left: 4px; padding-right: 4px; }
 }
+
+
+/* Sticky columns for schedule grid */
+.excel-schedule-grid table { min-width: 100%; background: #fff; }
+.excel-schedule-grid tbody tr { background: #fff; }
+.excel-schedule-grid tbody tr:nth-child(even) { background: #fbfbfb; }
+.excel-schedule-grid tbody tr:hover { background: var(--excel-green-soft) !important; }
+.excel-schedule-grid tbody tr td.sticky { background-color: #fff; }
+.excel-schedule-grid tbody tr:nth-child(even) td.sticky { background-color: #fbfbfb; }
+.excel-schedule-grid tbody tr:hover td.sticky { background-color: var(--excel-green-soft) !important; }
+.excel-schedule-grid .excel-row-number { background-color: #ededed !important; color: #555 !important; }

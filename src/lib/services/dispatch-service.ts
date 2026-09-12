@@ -32,14 +32,38 @@ class DispatchService {
     return Boolean(url && key && !url.includes("placeholder") && !key.includes("placeholder"));
   }
 
+  async recordDispatchAudit(
+    id: string,
+    oldValues: Record<string, unknown>,
+    newValues: Record<string, unknown>
+  ): Promise<void> {
+    if (!this.isSupabaseConfigured()) return;
+
+    const supabase = createClient();
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) throw new Error("Sessão ausente para registrar a auditoria.");
+
+    const { error } = await supabase.from("audit_logs").insert({
+      user_id: user.id,
+      entity_name: "dispatches",
+      entity_id: id,
+      action: "UPDATE",
+      old_values: oldValues,
+      new_values: newValues,
+    });
+    if (error) throw new Error(error.message);
+  }
+
   async getBases(): Promise<Base[]> {
     if (this.isSupabaseConfigured()) {
       try {
         const supabase = createClient();
         const { data, error } = await supabase.from("bases").select("*").order("name");
-        if (!error && data) return data;
+        if (error) throw new Error(error.message);
+        return data || [];
       } catch (e) {
-        console.warn("Falha ao buscar bases do Supabase, usando dados locais:", e);
+        console.error("Falha ao buscar bases do Supabase:", e);
+        throw e;
       }
     }
     return this.localBases;
@@ -50,9 +74,11 @@ class DispatchService {
       try {
         const supabase = createClient();
         const { data, error } = await supabase.from("locations").select("*").order("name");
-        if (!error && data) return data;
+        if (error) throw new Error(error.message);
+        return data || [];
       } catch (e) {
-        console.warn("Falha ao buscar locais do Supabase, usando dados locais:", e);
+        console.error("Falha ao buscar locais do Supabase:", e);
+        throw e;
       }
     }
     return this.localLocations;
@@ -63,9 +89,11 @@ class DispatchService {
       try {
         const supabase = createClient();
         const { data, error } = await supabase.from("vehicles").select("*").order("plate_code");
-        if (!error && data) return data;
+        if (error) throw new Error(error.message);
+        return data || [];
       } catch (e) {
-        console.warn("Falha ao buscar frotas do Supabase, usando dados locais:", e);
+        console.error("Falha ao buscar frotas do Supabase:", e);
+        throw e;
       }
     }
     return this.localVehicles;
@@ -76,9 +104,11 @@ class DispatchService {
       try {
         const supabase = createClient();
         const { data, error } = await supabase.from("drivers").select("*").order("name");
-        if (!error && data) return data;
+        if (error) throw new Error(error.message);
+        return data || [];
       } catch (e) {
-        console.warn("Falha ao buscar condutores do Supabase, usando dados locais:", e);
+        console.error("Falha ao buscar condutores do Supabase:", e);
+        throw e;
       }
     }
     return this.localDrivers;
@@ -92,6 +122,7 @@ class DispatchService {
 
   async getDispatchesForSheet(date: string, region: string = "SP"): Promise<DispatchRowModel[]> {
     let rawDispatches: Dispatch[] = [];
+    const restDriverIds = new Set<string>();
     const normalizedRegion = region === "ALL" ? "SP" : region;
 
     if (this.isSupabaseConfigured()) {
@@ -115,7 +146,65 @@ class DispatchService {
 
           if (!error && data && data.length > 0) {
             rawDispatches = data;
+
+            // Folhas já criadas também recebem a continuidade de D-1. Campos
+            // preenchidos manualmente são preservados.
+            const previousDate = this.getPreviousDate(date);
+            const { data: previousSheet } = await supabase
+              .from("daily_sheets")
+              .select("id")
+              .eq("date", previousDate)
+              .eq("region", normalizedRegion)
+              .maybeSingle();
+
+            if (previousSheet) {
+              const { data: previousRows } = await supabase
+                .from("dispatches")
+                .select("driver_id,destination_location_id,final_destination_location_id")
+                .eq("daily_sheet_id", previousSheet.id);
+              const previousByDriver = new Map((previousRows || []).map((row) => [row.driver_id, row]));
+
+              const missingOrigins = rawDispatches.flatMap((row) => {
+                if (row.origin_location_id) return [];
+                const previous = previousByDriver.get(row.driver_id);
+                const originId = previous?.final_destination_location_id;
+                return originId ? [{ id: row.id, originId }] : [];
+              });
+
+              if (missingOrigins.length) {
+                await Promise.all(missingOrigins.map(({ id, originId }) =>
+                  supabase.from("dispatches").update({ origin_location_id: originId }).eq("id", id)
+                ));
+                const originsById = new Map(missingOrigins.map((item) => [item.id, item.originId]));
+                rawDispatches = rawDispatches.map((row) => ({
+                  ...row,
+                  origin_location_id: row.origin_location_id || originsById.get(row.id) || null,
+                }));
+              }
+            }
           }
+        }
+
+        // Confere a escala mensal mesmo quando a folha diária já existia.
+        // Assim uma correção posterior de F/FE também remove o condutor da tela.
+        const [yearText, monthText, dayText] = date.split("-");
+        const scheduleRegion = normalizedRegion === "UBJP" ? "MG" : normalizedRegion;
+        const { data: currentSchedule } = await supabase
+          .from("monthly_schedules")
+          .select("id")
+          .eq("month", Number(monthText))
+          .eq("year", Number(yearText))
+          .eq("region", scheduleRegion)
+          .maybeSingle();
+
+        if (currentSchedule) {
+          const { data: restEntries } = await supabase
+            .from("monthly_schedule_entries")
+            .select("driver_id,scale_code")
+            .eq("schedule_id", currentSchedule.id)
+            .eq("day_of_month", Number(dayText))
+            .in("scale_code", ["F", "FE"]);
+          for (const entry of restEntries || []) restDriverIds.add(entry.driver_id);
         }
 
         // 2. Se a folha diária ainda não existir ou não tiver despachos, gera automaticamente
@@ -196,25 +285,23 @@ class DispatchService {
                 }
 
                 // Montar novos despachos para cada condutor ativo
-                const newDispatchesPayload = activeDrivers.map((d) => {
+                const newDispatchesPayload = activeDrivers.flatMap((d) => {
                   const schedEntry = scheduleEntriesByDriver.get(d.id);
                   const prevDisp = prevDispatchesByDriver.get(d.id);
                   const continuity = resolveDayContinuity(d.id, prevDisp);
 
-                  const scaleCode = schedEntry?.scale_code || "";
-                  const isRestOrException = ["F", "FE", "AT", "AF", "DESL"].includes(scaleCode);
-                  const initialStatus = isRestOrException ? "ABONADO" : "ACIONADO";
-                  const initialReason = isRestOrException ? `ESCALA: ${scaleCode}` : null;
-
-                  return {
+                  const scaleCode = (schedEntry?.scale_code || "").trim().toUpperCase();
+                  if (["F", "FE"].includes(scaleCode)) return [];
+                  return [{
                     daily_sheet_id: newSheet.id,
                     driver_id: d.id,
                     scale_day_status: scaleCode || null,
                     forecast_start_time: continuity.forecastStartTime || schedEntry?.shift_time || d.default_start_time || null,
-                    dispatch_status: initialStatus,
-                    abono_reason: initialReason,
+                    // O status é uma decisão do operador e começa vazio.
+                    dispatch_status: "",
+                    abono_reason: null,
                     origin_location_id: continuity.originLocationId || null,
-                  };
+                  }];
                 });
 
                 const { data: inserted, error: insertErr } = await supabase
@@ -230,12 +317,22 @@ class DispatchService {
           }
         }
       } catch (e) {
-        console.warn("Falha ao carregar despachos do Supabase:", e);
+        console.error("Falha ao carregar despachos do Supabase:", e);
+        throw e;
       }
     }
 
-    if (rawDispatches.length === 0) {
+    // Dados de demonstração só existem no desenvolvimento sem Supabase.
+    // Uma folha remota vazia deve permanecer vazia, nunca mostrar registros fictícios.
+    if (rawDispatches.length === 0 && !this.isSupabaseConfigured()) {
       rawDispatches = this.localDispatches;
+    }
+
+    // Mantém a mesma fotografia carregada pela grade como base das edições.
+    // Assim, alterar somente ENTRADA ou somente SAÍDA ainda usa o outro horário
+    // já salvo para recalcular jornada e próxima previsão corretamente.
+    if (this.isSupabaseConfigured()) {
+      this.localDispatches = [...rawDispatches];
     }
 
     const drivers = await this.getDrivers();
@@ -248,7 +345,10 @@ class DispatchService {
     const vehiclesMap = new Map(vehicles.map((v) => [v.id, v]));
     const locationsMap = new Map(locations.map((l) => [l.id, l]));
 
-    return rawDispatches.map((disp) => {
+    return rawDispatches.filter((disp) => {
+      const scaleCode = (disp.scale_day_status || "").trim().toUpperCase();
+      return !restDriverIds.has(disp.driver_id) && !["F", "FE"].includes(scaleCode);
+    }).map((disp) => {
       const driver = driversMap.get(disp.driver_id) || {
         id: disp.driver_id,
         name: "Condutor Não Identificado",
@@ -276,6 +376,8 @@ class DispatchService {
         origin_location: originLoc,
         destination_location: destLoc,
         final_destination_location: finalDestLoc,
+        destination_name: destLoc?.name || "",
+        final_destination_name: finalDestLoc?.name || "",
         formatted_worked_time: jornada.formatted,
         is_overnight: jornada.isOvernight,
         is_ongoing: jornada.isOngoing,
@@ -292,12 +394,55 @@ class DispatchService {
       origin_location: _origin,
       destination_location: _destination,
       final_destination_location: _finalDestination,
+      destination_name,
+      final_destination_name,
       formatted_worked_time: _formatted,
       is_overnight: _overnight,
       is_ongoing: _ongoing,
       ...dispatchUpdates
     } = updates;
     const processedUpdates: Partial<Dispatch> = { ...dispatchUpdates };
+
+    const resolveLocationId = async (rawName: string): Promise<string | null> => {
+      const name = rawName.trim().replace(/\s+/g, " ").toUpperCase().slice(0, 100);
+      if (!name) return null;
+
+      const localMatch = this.localLocations.find((location) => location.name.toUpperCase() === name);
+      if (!this.isSupabaseConfigured()) {
+        if (localMatch) return localMatch.id;
+        const location: Location = {
+          id: crypto.randomUUID(),
+          name,
+          is_active: true,
+          created_at: new Date().toISOString(),
+        };
+        this.localLocations.push(location);
+        return location.id;
+      }
+
+      const supabase = createClient();
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session?.access_token) {
+        if (localMatch) return localMatch.id;
+        throw new Error("Sessão ausente para registrar o destino.");
+      }
+
+      const response = await fetch("/api/locations/resolve", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${session.access_token}` },
+        body: JSON.stringify({ name }),
+      });
+      const result = await response.json() as { id?: string | null; error?: string };
+      if (!response.ok || !result.id) throw new Error(result.error || "Falha ao registrar o destino digitado.");
+      return result.id;
+    };
+
+    if (destination_name !== undefined) {
+      processedUpdates.destination_location_id = await resolveLocationId(destination_name);
+    }
+    if (final_destination_name !== undefined) {
+      processedUpdates.final_destination_location_id = await resolveLocationId(final_destination_name);
+    }
 
     if (fleet_code !== undefined) {
       const normalizedFleet = fleet_code.trim().toUpperCase();
@@ -353,12 +498,14 @@ class DispatchService {
           .select()
           .single();
 
-        if (!error && data) {
+        if (error) throw new Error(error.message);
+        if (data) {
           this.localDispatches = this.localDispatches.map((d) => (d.id === id ? { ...d, ...data } : d));
           return data;
         }
       } catch (e) {
-        console.warn("Falha ao salvar despacho no Supabase:", e);
+        console.error("Falha ao salvar despacho no Supabase:", e);
+        throw e;
       }
     }
 

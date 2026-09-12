@@ -3,7 +3,8 @@ import { Dispatch } from "@/types/database";
 /**
  * Motor de Continuidade Diária (Herança D-1 -> D):
  * - PREVISÃO de hoje = PREV PRÓX. DIA de ontem
- * - LOCAL de hoje = DESTINO FINAL (ou DESTINO) de ontem
+ * - LOCAL de hoje = DESTINO FINAL de ontem
+ * O destino intermediário nunca deve ser usado como origem do dia seguinte.
  */
 export function resolveDayContinuity(
   driverId: string,
@@ -21,9 +22,6 @@ export function resolveDayContinuity(
 
   return {
     forecastStartTime: previousDayDispatch.next_day_forecast_time || null,
-    originLocationId:
-      previousDayDispatch.final_destination_location_id ||
-      previousDayDispatch.destination_location_id ||
-      null,
+    originLocationId: previousDayDispatch.final_destination_location_id || null,
   };
 }

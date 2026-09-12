@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useState, useMemo, useCallback } from "react";
+import React, { useEffect, useState, useMemo, useCallback, useRef } from "react";
 import { Header } from "@/components/layout/Header";
 import { Sidebar } from "@/components/layout/Sidebar";
 import { DispatchStatsBar } from "@/components/acionamento/DispatchStatsBar";
@@ -11,10 +11,22 @@ import { createClient } from "@/lib/supabase/client";
 import { DispatchRowModel, DispatchFilterOptions, DispatchSummaryKPIs } from "@/types/domain";
 import { Location } from "@/types/database";
 
+function currentDateInBrasilia() {
+  return new Intl.DateTimeFormat("en-CA", {
+    timeZone: "America/Sao_Paulo",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(new Date());
+}
+
 export default function AcionamentoPage() {
   const [dispatches, setDispatches] = useState<DispatchRowModel[]>([]);
   const [locations, setLocations] = useState<Location[]>([]);
   const [isLoading, setIsLoading] = useState<boolean>(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [saveState, setSaveState] = useState<{ status: "idle" | "saving" | "saved" | "error"; message?: string }>({ status: "idle" });
+  const loadRequestRef = useRef(0);
 
   // Filtros
   const [filters, setFilters] = useState<DispatchFilterOptions>({
@@ -22,24 +34,34 @@ export default function AcionamentoPage() {
     statusFilter: "",
     baseFilter: "",
     shiftFilter: "",
-    date: "2026-09-01",
+    date: currentDateInBrasilia(),
     region: "SP",
   });
 
   const loadData = useCallback(async () => {
+    const requestId = ++loadRequestRef.current;
     setIsLoading(true);
+    setLoadError(null);
     try {
       const [dispatchesData, locs] = await Promise.all([
         dispatchService.getDispatchesForSheet(filters.date, filters.region),
         dispatchService.getLocations(),
       ]);
 
-      setDispatches(dispatchesData);
-      setLocations(locs);
+      // Uma resposta de uma data/região antiga nunca pode sobrescrever a
+      // consulta mais recente quando o operador navega rapidamente.
+      if (requestId === loadRequestRef.current) {
+        setDispatches(dispatchesData);
+        setLocations(locs);
+      }
     } catch (error) {
       console.error("Erro ao carregar dados da folha diária:", error);
+      if (requestId === loadRequestRef.current) {
+        setDispatches([]);
+        setLoadError(error instanceof Error ? error.message : "Não foi possível carregar a folha diária.");
+      }
     } finally {
-      setIsLoading(false);
+      if (requestId === loadRequestRef.current) setIsLoading(false);
     }
   }, [filters.date, filters.region]);
 
@@ -54,19 +76,23 @@ export default function AcionamentoPage() {
     if (!url || !key || url.includes("placeholder")) return;
 
     const supabase = createClient();
+    let refreshTimer: ReturnType<typeof setTimeout> | null = null;
     const channel = supabase
       .channel("dispatches_changes")
       .on(
         "postgres_changes",
         { event: "*", schema: "public", table: "dispatches" },
         () => {
-          // Recarregar dados com debounce leve
-          loadData();
+          // Uma colagem pode atualizar dezenas de linhas. Agrupar os eventos
+          // evita recargas concorrentes e preserva a atualização otimista.
+          if (refreshTimer) clearTimeout(refreshTimer);
+          refreshTimer = setTimeout(() => loadData(), 700);
         }
       )
       .subscribe();
 
     return () => {
+      if (refreshTimer) clearTimeout(refreshTimer);
       supabase.removeChannel(channel);
     };
   }, [loadData]);
@@ -93,13 +119,72 @@ export default function AcionamentoPage() {
   };
 
   const handleUpdateRow = async (id: string, updates: Partial<DispatchRowModel>) => {
+    const originalRow = dispatches.find((row) => row.id === id);
+    setSaveState({ status: "saving" });
+
     // Atualização otimista imediata na UI
     setDispatches((prev) =>
       prev.map((row) => (row.id === id ? { ...row, ...updates } : row))
     );
 
-    // Persistência no serviço
-    await dispatchService.updateDispatch(id, updates);
+    try {
+      const saved = await dispatchService.updateDispatch(id, updates);
+      if (!saved) throw new Error("O banco não confirmou a alteração.");
+
+      setDispatches((prev) =>
+        prev.map((row) => (row.id === id ? { ...row, ...saved, ...updates } : row))
+      );
+
+      const typedNames = [
+        { name: updates.destination_name, id: saved.destination_location_id },
+        { name: updates.final_destination_name, id: saved.final_destination_location_id },
+      ].filter((item): item is { name: string; id: string } => Boolean(item.name && item.id));
+
+      if (typedNames.length) {
+        setLocations((current) => {
+          const next = [...current];
+          for (const item of typedNames) {
+            if (!next.some((location) => location.name.toUpperCase() === item.name.toUpperCase())) {
+              next.push({ id: item.id, name: item.name, is_active: true, created_at: new Date().toISOString() });
+            }
+          }
+          return next.sort((a, b) => a.name.localeCompare(b.name, "pt-BR"));
+        });
+      }
+
+      if (originalRow) {
+        const changedEntries = Object.entries(updates).filter(([, value]) =>
+          value === null || ["string", "number", "boolean"].includes(typeof value)
+        );
+        const newValues = Object.fromEntries(changedEntries);
+        const oldValues = Object.fromEntries(
+          changedEntries.map(([key]) => [key, originalRow[key as keyof DispatchRowModel] ?? null])
+        );
+        try {
+          await dispatchService.recordDispatchAudit(id, oldValues, newValues);
+        } catch (auditError) {
+          setSaveState({
+            status: "error",
+            message: auditError instanceof Error
+              ? `Alteração salva; auditoria: ${auditError.message}`
+              : "Alteração salva, mas a auditoria falhou.",
+          });
+          return;
+        }
+      }
+
+      setSaveState({ status: "saved" });
+    } catch (error) {
+      if (originalRow) {
+        setDispatches((prev) => prev.map((row) => (row.id === id ? originalRow : row)));
+      }
+      const saveError = error instanceof Error ? error : new Error("Erro ao salvar alteração");
+      setSaveState({
+        status: "error",
+        message: saveError.message,
+      });
+      throw saveError;
+    }
   };
 
   // Filtragem dos registros
@@ -177,11 +262,18 @@ export default function AcionamentoPage() {
             isLoading={isLoading}
           />
 
+          {loadError && (
+            <div role="alert" className="mx-3 mb-2 border border-rose-400 bg-rose-50 px-3 py-2 text-xs font-semibold text-rose-800">
+              Não foi possível carregar os dados reais: {loadError}. Use “Atualizar” para tentar novamente.
+            </div>
+          )}
+
           {/* Grade Operacional Estilo Planilha */}
           <DispatchGrid
             dispatches={filteredDispatches}
             onUpdateRow={handleUpdateRow}
             locations={locations}
+            saveState={saveState}
           />
         </main>
       </div>

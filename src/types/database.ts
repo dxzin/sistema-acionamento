@@ -1,16 +1,8 @@
 export type UserRole = "admin" | "supervisor" | "operator";
 
-export type DispatchStatus =
-  | "ACIONADO"
-  | "ABONADO"
-  | "APOIO"
-  | "TROCA"
-  | "FALTA"
-  | "ATESTADO"
-  | "AFASTADO"
-  | "BATE E VOLTA"
-  | "SUSPENSÃO"
-  | "VIAGEM FECHADA";
+// Os valores usuais são sugeridos na interface, mas o operador também pode
+// registrar livremente uma situação nova na folha diária.
+export type DispatchStatus = string;
 
 export type CargoStatus = "C" | "V";
 export type SheetStatus = "OPEN" | "LOCKED" | "CLOSED";

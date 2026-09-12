@@ -8,6 +8,8 @@ export interface DispatchRowModel extends Dispatch {
   origin_location?: Location;
   destination_location?: Location;
   final_destination_location?: Location;
+  destination_name?: string;
+  final_destination_name?: string;
   // Computed display helper fields
   formatted_worked_time?: string;
   is_overnight?: boolean;

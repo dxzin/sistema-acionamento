@@ -47,8 +47,9 @@ O sistema mantém a continuidade contínua de estado entre os dias:
    - **Regra:** O campo `PREVISÃO` do dia D herda automaticamente o valor de `PREV PRÓX. DIA` calculado no dia D-1 para o mesmo condutor.
    - **Caso Não Encontrado:** Se não houver registro em D-1, exibe `"INSERIR PREV"` ou permite digitação manual.
 2. **Local Inicial de Partida (`LOCAL`):**
-   - **Regra:** O campo `LOCAL` do dia D herda automaticamente o `DESTINO FINAL` (ou `DESTINO`) de D-1 para o mesmo condutor.
-   - **Caso Não Encontrado:** Se não houver registro em D-1, exibe `"INSERIR LOCAL"` ou permite seleção manual.
+   - **Regra:** O campo `LOCAL` do dia D herda automaticamente **somente** o `DESTINO FINAL` de D-1 para o mesmo condutor.
+   - **Destino normal não é alternativa:** O campo `DESTINO` de D-1 nunca deve ser usado para preencher o `LOCAL` do dia seguinte.
+   - **Caso Não Encontrado:** Se não houver `DESTINO FINAL` preenchido em D-1, o `LOCAL` permanece vazio e aguarda o operador.
 3. **Transição Entre Meses:** A continuidade opera normalmente na virada do mês (ex.: 01/07 herda de 30/06; 01/08 herda de 31/07).
 
 ---

@@ -4,6 +4,7 @@ import React from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
+  BarChart3,
   CalendarDays,
   ClipboardList,
   History,
@@ -38,6 +39,12 @@ export function Sidebar() {
       href: "/historico",
       icon: History,
       description: "Auditoria e consultas",
+    },
+    {
+      name: "Relatórios",
+      href: "/relatorios",
+      icon: BarChart3,
+      description: "Indicadores operacionais",
     },
     {
       name: "Administração",

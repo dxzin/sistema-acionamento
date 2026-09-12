@@ -3,15 +3,13 @@
 import React, { useState } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/lib/auth-context";
-import { Truck, Shield, ArrowRight, Lock, AlertCircle } from "lucide-react";
-import { UserRole } from "@/types/database";
+import { Truck, ArrowRight, Lock, AlertCircle } from "lucide-react";
 
 export default function LoginPage() {
   const router = useRouter();
   const { login } = useAuth();
-  const [email, setEmail] = useState("operador@logistica.com.br");
-  const [password, setPassword] = useState("Operador123!");
-  const [role, setRole] = useState<UserRole>("operator");
+  const [email, setEmail] = useState("torre@torre.com.br");
+  const [password, setPassword] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
@@ -25,7 +23,7 @@ export default function LoginPage() {
     setIsLoading(true);
     setErrorMessage(null);
 
-    const success = await login(email, role, password);
+    const success = await login(email, "operator", password);
     setIsLoading(false);
 
     if (success) {
@@ -33,24 +31,6 @@ export default function LoginPage() {
       router.refresh();
     } else {
       setErrorMessage("Falha na autenticação. Verifique suas credenciais.");
-    }
-  };
-
-  const handleQuickDemo = async (demoRole: UserRole, demoEmail: string, demoPass: string) => {
-    setEmail(demoEmail);
-    setPassword(demoPass);
-    setRole(demoRole);
-    setIsLoading(true);
-    setErrorMessage(null);
-
-    const success = await login(demoEmail, demoRole, demoPass);
-    setIsLoading(false);
-
-    if (success) {
-      router.push("/acionamento");
-      router.refresh();
-    } else {
-      setErrorMessage("Falha ao entrar com o usuário de demonstração.");
     }
   };
 
@@ -86,7 +66,7 @@ export default function LoginPage() {
               required
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              placeholder="operador@logistica.com.br"
+              placeholder="torre@torre.com.br"
               className="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded text-slate-100 placeholder-slate-500 text-sm focus:outline-none focus:border-emerald-500 font-sans"
             />
           </div>
@@ -108,21 +88,6 @@ export default function LoginPage() {
             </div>
           </div>
 
-          <div>
-            <label className="block text-xs font-semibold uppercase text-slate-300 mb-1">
-              Perfil de Acesso
-            </label>
-            <select
-              value={role}
-              onChange={(e) => setRole(e.target.value as UserRole)}
-              className="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded text-slate-100 text-sm focus:outline-none focus:border-emerald-500"
-            >
-              <option value="operator">Operador / Despachante</option>
-              <option value="supervisor">Supervisor de Tráfego</option>
-              <option value="admin">Administrador do Sistema</option>
-            </select>
-          </div>
-
           <button
             type="submit"
             disabled={isLoading}
@@ -133,35 +98,11 @@ export default function LoginPage() {
           </button>
         </form>
 
-        {/* Acesso Rápido de Demonstração */}
-        <div className="mt-8 pt-6 border-t border-slate-800">
-          <div className="text-center text-xs text-slate-400 mb-3 font-medium">
-            Ou acesse diretamente com 1 clique:
-          </div>
-          <div className="grid grid-cols-2 gap-2">
-            <button
-              type="button"
-              onClick={() => handleQuickDemo("operator", "operador@logistica.com.br", "Operador123!")}
-              className="px-3 py-2 bg-slate-800 hover:bg-slate-700 border border-slate-700 rounded text-xs text-slate-200 transition-colors text-left flex items-center space-x-2"
-            >
-              <Truck className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
-              <div>
-                <div className="font-semibold text-[11px]">Operador</div>
-                <div className="text-[9px] text-slate-400">Despacho</div>
-              </div>
-            </button>
-            <button
-              type="button"
-              onClick={() => handleQuickDemo("supervisor", "supervisor@logistica.com.br", "Supervisor123!")}
-              className="px-3 py-2 bg-slate-800 hover:bg-slate-700 border border-slate-700 rounded text-xs text-slate-200 transition-colors text-left flex items-center space-x-2"
-            >
-              <Shield className="w-3.5 h-3.5 text-amber-400 shrink-0" />
-              <div>
-                <div className="font-semibold text-[11px]">Supervisor</div>
-                <div className="text-[9px] text-slate-400">Aprovações</div>
-              </div>
-            </button>
-          </div>
+        {/* A conta é informada, mas a senha nunca fica embutida no código do navegador. */}
+        <div className="mt-8 border-t border-slate-800 pt-6 text-center">
+          <div className="text-xs font-medium text-slate-400">Conta compartilhada de homologação</div>
+          <div className="mt-1 text-[11px] font-semibold text-emerald-400">torre@torre.com.br</div>
+          <div className="mt-1 text-[9px] text-slate-500">Digite a senha fornecida pela operação.</div>
         </div>
       </div>
     </div>
