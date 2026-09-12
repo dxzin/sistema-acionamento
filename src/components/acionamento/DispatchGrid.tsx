@@ -4,7 +4,7 @@ import React, { useEffect, useState, useMemo, useRef } from "react";
 import { DispatchRowModel } from "@/types/domain";
 import { DispatchStatus, CargoStatus } from "@/types/database";
 import { normalizeClockTime } from "@/lib/calculations/jornada";
-import { ArrowUpDown, Check, ChevronDown, Columns3, Copy, Clock, Eye, EyeOff, Search, X } from "lucide-react";
+import { ArrowUpDown, Check, ChevronDown, Columns3, Copy, Clock, Eye, EyeOff, Minus, Plus, Search, X } from "lucide-react";
 
 interface DispatchGridProps {
   dispatches: DispatchRowModel[];
@@ -376,6 +376,7 @@ export function DispatchGrid({
   const [isSelecting, setIsSelecting] = useState(false);
   const [hiddenColumns, setHiddenColumns] = useState<number[]>([]);
   const [columnWidths, setColumnWidths] = useState<number[]>([...COLUMN_WIDTHS]);
+  const [gridZoom, setGridZoom] = useState(100);
   const [showColumnMenu, setShowColumnMenu] = useState(false);
   const [showFindReplace, setShowFindReplace] = useState(false);
   const [findText, setFindText] = useState("");
@@ -401,12 +402,18 @@ export function DispatchGrid({
           setColumnWidths(parsed.map((width, index) => Math.max(index < 2 ? COLUMN_WIDTHS[index] : 55, width)));
         }
       }
+      const savedZoom = Number(localStorage.getItem("dispatch-grid-zoom"));
+      if (Number.isFinite(savedZoom) && savedZoom >= 75 && savedZoom <= 150) setGridZoom(savedZoom);
     } catch { /* preferência local inválida: usa todas as colunas */ }
   }, []);
 
   useEffect(() => {
     localStorage.setItem("dispatch-column-widths", JSON.stringify(columnWidths));
   }, [columnWidths]);
+
+  useEffect(() => {
+    localStorage.setItem("dispatch-grid-zoom", String(gridZoom));
+  }, [gridZoom]);
 
   // Status de acionamento disponíveis
   const STATUS_OPTIONS: DispatchStatus[] = [
@@ -1104,6 +1111,7 @@ export function DispatchGrid({
             width: visibleTableWidth,
             minWidth: visibleTableWidth,
             maxWidth: visibleTableWidth,
+            zoom: gridZoom / 100,
           }}
           onMouseDown={(event) => {
             setContextMenu(null);
@@ -1690,6 +1698,39 @@ export function DispatchGrid({
         </span>
         <span className="ml-auto">{processedDispatches.length} linhas</span>
         <span className="border-l border-slate-300 pl-2">Ctrl+C · Ctrl+V · Delete · Ctrl+Z · Ctrl+D · Ctrl+R</span>
+        <div className="flex items-center gap-1 border-l border-slate-300 pl-2" aria-label="Zoom da planilha">
+          <button
+            type="button"
+            onClick={() => setGridZoom((current) => Math.max(75, current - 5))}
+            disabled={gridZoom <= 75}
+            className="flex h-5 w-5 items-center justify-center hover:bg-white disabled:opacity-40"
+            aria-label="Diminuir zoom"
+            title="Diminuir zoom"
+          >
+            <Minus className="h-3 w-3" />
+          </button>
+          <input
+            type="range"
+            min="75"
+            max="150"
+            step="5"
+            value={gridZoom}
+            onChange={(event) => setGridZoom(Number(event.target.value))}
+            className="!h-1 !min-h-0 w-24 cursor-pointer accent-[#217346]"
+            aria-label="Zoom da planilha em porcentagem"
+          />
+          <button
+            type="button"
+            onClick={() => setGridZoom((current) => Math.min(150, current + 5))}
+            disabled={gridZoom >= 150}
+            className="flex h-5 w-5 items-center justify-center hover:bg-white disabled:opacity-40"
+            aria-label="Aumentar zoom"
+            title="Aumentar zoom"
+          >
+            <Plus className="h-3 w-3" />
+          </button>
+          <span className="w-9 text-right tabular-nums">{gridZoom}%</span>
+        </div>
       </div>
     </div>
   );

@@ -80,6 +80,7 @@ Este documento registra decisões confirmadas durante os testes. Alterações ne
 5. A colagem deve ser efetivamente salva no banco, não apenas exibida na tela.
 6. Ocultar uma coluna não deve esticar as colunas restantes.
 7. O conteúdo das linhas operacionais utiliza fonte de `13px` para facilitar a leitura.
+8. A grade possui zoom entre `75%` e `150%`, com preferência salva no navegador do operador.
 
 ## Segurança e usuários
 
