@@ -3,6 +3,7 @@
 import React, { useEffect, useState, useMemo, useRef } from "react";
 import { DispatchRowModel } from "@/types/domain";
 import { DispatchStatus, CargoStatus } from "@/types/database";
+import { normalizeClockTime } from "@/lib/calculations/jornada";
 import { ArrowUpDown, Check, ChevronDown, Columns3, Copy, Clock, Eye, EyeOff, Search, X } from "lucide-react";
 
 interface DispatchGridProps {
@@ -631,12 +632,12 @@ export function DispatchGrid({
         const location = locations.find((item) => item.name.toUpperCase() === value.toUpperCase());
         return { origin_location_id: location?.id || null };
       }
-      case 7: return { entry_time: value || null };
+      case 7: return { entry_time: value ? normalizeClockTime(value) : null };
       case 8: return { fleet_code: value.toUpperCase() };
       case 9: return { cargo_status: (value.toUpperCase() || null) as CargoStatus | null };
       case 10: return { destination_name: value.toUpperCase() };
       case 11: return { final_destination_name: value.toUpperCase() };
-      case 12: return { exit_time: value || null };
+      case 12: return { exit_time: value ? normalizeClockTime(value) : null };
       case 13: return { observations: value || null };
       default: return null;
     }
@@ -1505,7 +1506,9 @@ export function DispatchGrid({
                     <EditableTextCell
                       value={row.entry_time || ""}
                       placeholder="--:--:--"
-                      onCommit={(value) => commitUpdate(row.id, { entry_time: value || null })}
+                      onCommit={(value) => commitUpdate(row.id, {
+                        entry_time: value ? normalizeClockTime(value) : null,
+                      })}
                       className="w-full text-center text-slate-900 font-mono font-medium placeholder-slate-400 focus:bg-white focus:outline-none rounded px-1"
                     />
                   </td>
@@ -1572,7 +1575,9 @@ export function DispatchGrid({
                     <EditableTextCell
                       value={row.exit_time || ""}
                       placeholder="--:--:--"
-                      onCommit={(value) => commitUpdate(row.id, { exit_time: value || null })}
+                      onCommit={(value) => commitUpdate(row.id, {
+                        exit_time: value ? normalizeClockTime(value) : null,
+                      })}
                       className="w-full text-center text-slate-900 font-mono font-medium placeholder-slate-400 focus:bg-white focus:outline-none rounded px-1"
                     />
                   </td>

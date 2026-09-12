@@ -18,6 +18,17 @@ export function minutesToTime(totalMinutes: number): string {
   return `${String(hours).padStart(2, "0")}:${String(minutes).padStart(2, "0")}:00`;
 }
 
+export function normalizeClockTime(value: string): string {
+  const trimmed = value.trim();
+  const match = trimmed.match(/^(\d{1,2}):([0-5]\d)(?::([0-5]\d))?$/);
+  if (!match) return trimmed;
+
+  const hours = Number(match[1]);
+  if (hours > 23) return trimmed;
+
+  return `${String(hours).padStart(2, "0")}:${match[2]}:${match[3] || "00"}`;
+}
+
 export function formatMinutesToDuration(totalMinutes: number | null | undefined): string {
   if (totalMinutes === null || totalMinutes === undefined || isNaN(totalMinutes)) {
     return "";

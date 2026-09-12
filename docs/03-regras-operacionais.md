@@ -43,6 +43,11 @@ Este documento registra decisões confirmadas durante os testes. Alterações ne
 1. `C` e `V` são os valores operacionais usuais, mas não limitam o preenchimento.
 2. O operador pode digitar livremente outro texto no campo `C/V`.
 
+## Horários de entrada e saída
+
+1. O operador pode digitar somente horas e minutos, como `17:00`.
+2. Ao concluir o preenchimento, o sistema completa e salva os segundos, resultando em `17:00:00`.
+
 ## Frota
 
 1. Não é necessário manter previamente um grupo de frotas cadastradas.

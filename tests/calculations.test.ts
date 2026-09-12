@@ -2,6 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import {
   calculateJornada,
+  normalizeClockTime,
   formatMinutesToDuration,
   minutesToTime,
   timeToMinutes,
@@ -13,6 +14,12 @@ test("converte horário e minutos sem perder a virada do dia", () => {
   assert.equal(minutesToTime(1450), "00:10:00");
   assert.equal(minutesToTime(-1), "--:--");
   assert.equal(formatMinutesToDuration(670), "11:10");
+});
+
+test("completa os segundos nos horários digitados", () => {
+  assert.equal(normalizeClockTime("17:00"), "17:00:00");
+  assert.equal(normalizeClockTime("7:05"), "07:05:00");
+  assert.equal(normalizeClockTime("17:00:35"), "17:00:35");
 });
 
 test("calcula jornada normal", () => {
@@ -56,4 +63,3 @@ test("calcula próxima previsão com 11h10 de descanso", () => {
   assert.equal(calculateNextForecast("23:30:00"), "10:40:00");
   assert.equal(calculateNextForecast(null), null);
 });
-
