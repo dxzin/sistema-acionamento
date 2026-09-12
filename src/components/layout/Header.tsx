@@ -2,11 +2,16 @@
 
 import React, { useEffect, useState } from "react";
 import { useAuth } from "@/lib/auth-context";
-import { Clock, LogOut, Shield, Truck, User } from "lucide-react";
+import { Clock, LogOut, Moon, Shield, Sun, Truck } from "lucide-react";
+
+type ThemePreference = "light" | "dark" | "auto";
 
 export function Header() {
   const { user, logout } = useAuth();
   const [time, setTime] = useState<string>("");
+  const [themePreference, setThemePreference] = useState<ThemePreference>("light");
+  const [systemDark, setSystemDark] = useState(false);
+  const [themeReady, setThemeReady] = useState(false);
 
   useEffect(() => {
     const update = () => {
@@ -25,6 +30,26 @@ export function Header() {
     return () => clearInterval(interval);
   }, []);
 
+  useEffect(() => {
+    const savedTheme = localStorage.getItem("app-theme") || localStorage.getItem("dispatch-grid-theme");
+    if (["light", "dark", "auto"].includes(savedTheme || "")) setThemePreference(savedTheme as ThemePreference);
+    setThemeReady(true);
+
+    const media = window.matchMedia("(prefers-color-scheme: dark)");
+    const syncTheme = () => setSystemDark(media.matches);
+    syncTheme();
+    media.addEventListener("change", syncTheme);
+    return () => media.removeEventListener("change", syncTheme);
+  }, []);
+
+  const darkMode = themePreference === "dark" || (themePreference === "auto" && systemDark);
+
+  useEffect(() => {
+    if (!themeReady) return;
+    localStorage.setItem("app-theme", themePreference);
+    document.documentElement.dataset.appTheme = darkMode ? "dark" : "light";
+  }, [darkMode, themePreference, themeReady]);
+
   return (
     <header className="excel-titlebar h-12 flex items-center justify-between px-3 sticky top-0 z-30 select-none">
       <div className="flex items-center space-x-3">
@@ -42,6 +67,20 @@ export function Header() {
       </div>
 
       <div className="flex items-center space-x-4">
+        <label className="excel-theme-control flex h-7 items-center gap-1 border border-white/25 bg-black/10 px-1.5 text-[10px] font-bold text-white" title="Tema do sistema">
+          {darkMode ? <Moon className="h-3.5 w-3.5" /> : <Sun className="h-3.5 w-3.5" />}
+          <select
+            value={themePreference}
+            onChange={(event) => setThemePreference(event.target.value as ThemePreference)}
+            className="bg-transparent text-[10px] font-bold text-white outline-none"
+            aria-label="Tema do sistema"
+          >
+            <option value="light">Claro</option>
+            <option value="dark">Escuro</option>
+            <option value="auto">Automático</option>
+          </select>
+        </label>
+
         {/* Relógio do Sistema em Tempo Real */}
         <div className="excel-clock flex items-center space-x-1.5 px-2.5 py-1 font-mono text-xs">
           <Clock className="w-3.5 h-3.5" />

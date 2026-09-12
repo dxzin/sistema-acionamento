@@ -81,9 +81,10 @@ Este documento registra decisões confirmadas durante os testes. Alterações ne
 6. Ocultar uma coluna não deve esticar as colunas restantes.
 7. O conteúdo das linhas operacionais utiliza fonte de `13px` para facilitar a leitura.
 8. A grade possui zoom entre `75%` e `150%`, com preferência salva no navegador do operador.
-9. A tela de acionamento oferece os temas `Claro`, `Escuro` e `Automático`; a escolha fica salva no navegador.
-10. O modo escuro usa tons de grafite em toda a tela de acionamento, incluindo menu lateral, indicadores, filtros, grade e janelas auxiliares.
-11. As cores operacionais de status e turnos permanecem preservadas e legíveis nos dois temas.
+9. O sistema oferece os temas `Claro`, `Escuro` e `Automático`; a escolha fica salva no navegador e vale para todas as telas.
+10. O seletor global fica no cabeçalho para permanecer disponível durante a navegação.
+11. O modo escuro usa tons de grafite em menus, indicadores, filtros, grades, formulários, relatórios e janelas auxiliares.
+12. As cores operacionais de status e turnos permanecem preservadas e legíveis nos dois temas.
 
 ## Segurança e usuários
 

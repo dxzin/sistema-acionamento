@@ -165,67 +165,65 @@ body {
 .excel-grid option { color: #111 !important; background: #fff !important; }
 
 /* Modo escuro da folha de acionamento: grafite, sem preto puro e sem apagar os parâmetros operacionais. */
-[data-dispatch-theme="dark"] body,
-[data-dispatch-theme="dark"] .excel-shell { color: #e5e7eb; background: #1d2126; }
-[data-dispatch-theme="dark"] .excel-workspace { background: #20242a; }
-[data-dispatch-theme="dark"] .excel-sidebar { color: #d9dee5; background: #252a31; border-color: #454c55; }
-[data-dispatch-theme="dark"] .excel-sidebar-title,
-[data-dispatch-theme="dark"] .excel-sidebar-footer { color: #aeb7c2; background: #292f36; border-color: #454c55; }
-[data-dispatch-theme="dark"] .excel-sheet-link { color: #d9dee5; }
-[data-dispatch-theme="dark"] .excel-sheet-link:hover { color: #fff; background: #303740; }
-[data-dispatch-theme="dark"] .excel-sheet-link.is-active { color: #9de0bb; background: #1f352b; border-left-color: #39a96b; box-shadow: inset 0 -1px 0 #405048, inset 0 1px 0 #405048; }
-[data-dispatch-theme="dark"] .excel-kpis { background: #454c55; border-color: #454c55; }
-[data-dispatch-theme="dark"] .excel-kpis > div { color: #e5e7eb !important; background: #292f36 !important; }
-[data-dispatch-theme="dark"] .excel-kpis > div > div > div:first-child { color: #aeb7c2 !important; }
-[data-dispatch-theme="dark"] .excel-kpis > div > div > div:last-child { color: #f1f5f9 !important; }
-[data-dispatch-theme="dark"] .excel-kpis svg { color: #65c18c !important; }
-[data-dispatch-theme="dark"] .excel-toolbar { color: #e5e7eb; background: #292f36; border-color: #454c55; box-shadow: none; }
-[data-dispatch-theme="dark"] .excel-toolbar input,
-[data-dispatch-theme="dark"] .excel-toolbar select,
-[data-dispatch-theme="dark"] .excel-toolbar > div > div { color: #e5e7eb !important; background-color: #343a42 !important; border-color: #59616b !important; }
-[data-dispatch-theme="dark"] .excel-toolbar input::placeholder { color: #9ca6b2 !important; }
-[data-dispatch-theme="dark"] .excel-toolbar svg { color: #b7c0ca !important; }
-.excel-grid-dark { color: #e5e7eb; background: #20242a; border-color: #4b5159; }
-.excel-grid-dark .excel-grid-actions,
-.excel-grid-dark .excel-statusbar { color: #cbd5e1; background: #292e35; border-color: #4b5159; }
-.excel-grid-dark .excel-grid-actions > button,
-.excel-grid-dark .excel-grid-actions > label { color: #e5e7eb; background: #343a42; border-color: #59616b; }
-.excel-grid-dark .excel-grid-actions select { color: #e5e7eb !important; }
-.excel-grid-dark .excel-grid-canvas,
-.excel-grid-dark table { background: #20242a !important; }
-.excel-grid-dark .excel-column-letters th { color: #cbd5e1 !important; background: #30353c !important; border-color: #555d67 !important; }
-.excel-grid-dark tbody tr,
-.excel-grid-dark tbody tr:nth-child(even) { background: #252a31; }
-.excel-grid-dark tbody tr:nth-child(even) { background: #292f36; }
-.excel-grid-dark tbody tr:hover,
-.excel-grid-dark tbody tr.excel-selected-row { background: #263f35 !important; }
-.excel-grid-dark tbody td { color: #e5e7eb !important; border-color: #454c55 !important; }
-.excel-grid-dark tbody [class~="text-slate-900"],
-.excel-grid-dark tbody [class~="text-slate-800"] { color: #f1f5f9 !important; }
-.excel-grid-dark tbody [class~="text-slate-700"] { color: #d7dde5 !important; }
-.excel-grid-dark tbody [class~="text-slate-400"] { color: #9ca6b2 !important; }
-.excel-grid-dark tbody tr td.sticky,
-.excel-grid-dark tbody tr:nth-child(even) td.sticky { background-color: #252a31; }
-.excel-grid-dark tbody tr:nth-child(even) td.sticky { background-color: #292f36; }
-.excel-grid-dark tbody tr:hover td.sticky,
-.excel-grid-dark tbody tr.excel-selected-row td.sticky { background-color: #263f35 !important; }
-.excel-grid-dark .excel-row-number { color: #b8c0ca !important; background: #30353c !important; border-color: #555d67 !important; }
-.excel-grid-dark tbody input,
-.excel-grid-dark tbody select { color: #f1f5f9 !important; }
-.excel-grid-dark tbody input::placeholder { color: #929ba7 !important; }
-.excel-grid-dark tbody input:focus,
-.excel-grid-dark tbody select:focus { color: #f8fafc !important; background: #343a42 !important; }
-.excel-grid-dark .excel-combobox-cell > button { color: #d1d5db; background: #343a42; border-color: #59616b; }
-.excel-grid-dark .excel-combobox-cell > div { color: #e5e7eb; background: #30353c; border-color: #59616b; }
-.excel-grid-dark .excel-combobox-cell > div button { color: #e5e7eb; }
-.excel-grid-dark .excel-dark-popup { color: #e5e7eb !important; background: #30353c !important; border-color: #59616b !important; }
-.excel-grid-dark .excel-dark-popup [class~="text-slate-900"],
-.excel-grid-dark .excel-dark-popup [class~="text-slate-800"],
-.excel-grid-dark .excel-dark-popup [class~="text-slate-700"] { color: #e5e7eb !important; }
-.excel-grid-dark .excel-dark-popup [class~="bg-white"],
-.excel-grid-dark .excel-dark-popup [class~="bg-[#f3f3f3]"] { background: #343a42 !important; }
-.excel-grid-dark .excel-dark-popup input { color: #f1f5f9 !important; background: #252a31 !important; border-color: #59616b !important; }
-.excel-grid-dark .excel-dark-popup button:hover { background: #244b38 !important; }
+[data-app-theme="dark"] body,
+[data-app-theme="dark"] .excel-shell { color: #e5e7eb; background: #1d2126; }
+[data-app-theme="dark"] .excel-workspace { background: #20242a; }
+[data-app-theme="dark"] .excel-sidebar { color: #d9dee5; background: #252a31; border-color: #454c55; }
+[data-app-theme="dark"] .excel-sidebar-title,
+[data-app-theme="dark"] .excel-sidebar-footer { color: #aeb7c2; background: #292f36; border-color: #454c55; }
+[data-app-theme="dark"] .excel-sheet-link { color: #d9dee5; }
+[data-app-theme="dark"] .excel-sheet-link:hover { color: #fff; background: #303740; }
+[data-app-theme="dark"] .excel-sheet-link.is-active { color: #9de0bb; background: #1f352b; border-left-color: #39a96b; box-shadow: inset 0 -1px 0 #405048, inset 0 1px 0 #405048; }
+[data-app-theme="dark"] .excel-kpis { background: #454c55; border-color: #454c55; }
+[data-app-theme="dark"] .excel-kpis > div { color: #e5e7eb !important; background: #292f36 !important; }
+[data-app-theme="dark"] .excel-kpis > div > div > div:first-child { color: #aeb7c2 !important; }
+[data-app-theme="dark"] .excel-kpis > div > div > div:last-child { color: #f1f5f9 !important; }
+[data-app-theme="dark"] .excel-kpis svg { color: #65c18c !important; }
+[data-app-theme="dark"] .excel-toolbar { color: #e5e7eb; background: #292f36; border-color: #454c55; box-shadow: none; }
+[data-app-theme="dark"] .excel-toolbar input,
+[data-app-theme="dark"] .excel-toolbar select,
+[data-app-theme="dark"] .excel-toolbar > div > div { color: #e5e7eb !important; background-color: #343a42 !important; border-color: #59616b !important; }
+[data-app-theme="dark"] .excel-toolbar input::placeholder { color: #9ca6b2 !important; }
+[data-app-theme="dark"] .excel-toolbar svg { color: #b7c0ca !important; }
+[data-app-theme="dark"] .excel-grid { color: #e5e7eb; background: #20242a; border-color: #4b5159; }
+[data-app-theme="dark"] .excel-grid .excel-grid-actions,
+[data-app-theme="dark"] .excel-grid .excel-statusbar { color: #cbd5e1; background: #292e35; border-color: #4b5159; }
+[data-app-theme="dark"] .excel-grid .excel-grid-actions > button,
+[data-app-theme="dark"] .excel-grid .excel-grid-actions > label { color: #e5e7eb; background: #343a42; border-color: #59616b; }
+[data-app-theme="dark"] .excel-grid .excel-grid-actions select { color: #e5e7eb !important; }
+[data-app-theme="dark"] .excel-grid .excel-grid-canvas,
+[data-app-theme="dark"] .excel-grid table { background: #20242a !important; }
+[data-app-theme="dark"] .excel-grid .excel-column-letters th { color: #cbd5e1 !important; background: #30353c !important; border-color: #555d67 !important; }
+[data-app-theme="dark"] .excel-grid tbody tr { background: #252a31; }
+[data-app-theme="dark"] .excel-grid tbody tr:nth-child(even) { background: #292f36; }
+[data-app-theme="dark"] .excel-grid tbody tr:hover,
+[data-app-theme="dark"] .excel-grid tbody tr.excel-selected-row { background: #263f35 !important; }
+[data-app-theme="dark"] .excel-grid tbody td { color: #e5e7eb !important; border-color: #454c55 !important; }
+[data-app-theme="dark"] .excel-grid tbody [class~="text-slate-900"],
+[data-app-theme="dark"] .excel-grid tbody [class~="text-slate-800"] { color: #f1f5f9 !important; }
+[data-app-theme="dark"] .excel-grid tbody [class~="text-slate-700"] { color: #d7dde5 !important; }
+[data-app-theme="dark"] .excel-grid tbody [class~="text-slate-400"] { color: #9ca6b2 !important; }
+[data-app-theme="dark"] .excel-grid tbody tr td.sticky { background-color: #252a31; }
+[data-app-theme="dark"] .excel-grid tbody tr:nth-child(even) td.sticky { background-color: #292f36; }
+[data-app-theme="dark"] .excel-grid tbody tr:hover td.sticky,
+[data-app-theme="dark"] .excel-grid tbody tr.excel-selected-row td.sticky { background-color: #263f35 !important; }
+[data-app-theme="dark"] .excel-grid .excel-row-number { color: #b8c0ca !important; background: #30353c !important; border-color: #555d67 !important; }
+[data-app-theme="dark"] .excel-grid tbody input,
+[data-app-theme="dark"] .excel-grid tbody select { color: #f1f5f9 !important; }
+[data-app-theme="dark"] .excel-grid tbody input::placeholder { color: #929ba7 !important; }
+[data-app-theme="dark"] .excel-grid tbody input:focus,
+[data-app-theme="dark"] .excel-grid tbody select:focus { color: #f8fafc !important; background: #343a42 !important; }
+[data-app-theme="dark"] .excel-grid .excel-combobox-cell > button { color: #d1d5db; background: #343a42; border-color: #59616b; }
+[data-app-theme="dark"] .excel-grid .excel-combobox-cell > div { color: #e5e7eb; background: #30353c; border-color: #59616b; }
+[data-app-theme="dark"] .excel-grid .excel-combobox-cell > div button { color: #e5e7eb; }
+[data-app-theme="dark"] .excel-grid .excel-dark-popup { color: #e5e7eb !important; background: #30353c !important; border-color: #59616b !important; }
+[data-app-theme="dark"] .excel-grid .excel-dark-popup [class~="text-slate-900"],
+[data-app-theme="dark"] .excel-grid .excel-dark-popup [class~="text-slate-800"],
+[data-app-theme="dark"] .excel-grid .excel-dark-popup [class~="text-slate-700"] { color: #e5e7eb !important; }
+[data-app-theme="dark"] .excel-grid .excel-dark-popup [class~="bg-white"],
+[data-app-theme="dark"] .excel-grid .excel-dark-popup [class~="bg-[#f3f3f3]"] { background: #343a42 !important; }
+[data-app-theme="dark"] .excel-grid .excel-dark-popup input { color: #f1f5f9 !important; background: #252a31 !important; border-color: #59616b !important; }
+[data-app-theme="dark"] .excel-grid .excel-dark-popup button:hover { background: #244b38 !important; }
 
 /* Status operacional: mantém as cores de referência da planilha no campo e na célula. */
 .excel-grid tbody td.excel-status-cell,
@@ -347,3 +345,79 @@ input:focus-visible, select:focus-visible, button:focus-visible, a:focus-visible
 .excel-schedule-grid tbody tr:nth-child(even) td.sticky { background-color: #fbfbfb; }
 .excel-schedule-grid tbody tr:hover td.sticky { background-color: var(--excel-green-soft) !important; }
 .excel-schedule-grid .excel-row-number { background-color: #ededed !important; color: #555 !important; }
+
+/* Tema escuro global: cobre as demais folhas sem descaracterizar a linguagem de planilha. */
+[data-app-theme="dark"] .excel-theme-control option { color: #111; background: #fff; }
+[data-app-theme="dark"] .excel-shell [class~="bg-white"],
+[data-app-theme="dark"] .excel-shell [class~="bg-slate-50"],
+[data-app-theme="dark"] .excel-shell [class~="bg-slate-100"],
+[data-app-theme="dark"] .excel-shell [class~="bg-[#f3f3f3]"] { background-color: #292f36 !important; }
+[data-app-theme="dark"] .excel-shell [class~="text-slate-900"],
+[data-app-theme="dark"] .excel-shell [class~="text-slate-800"] { color: #f1f5f9 !important; }
+[data-app-theme="dark"] .excel-shell [class~="text-slate-700"] { color: #d7dde5 !important; }
+[data-app-theme="dark"] .excel-shell [class~="text-slate-600"],
+[data-app-theme="dark"] .excel-shell [class~="text-slate-500"] { color: #aeb7c2 !important; }
+[data-app-theme="dark"] .excel-shell input,
+[data-app-theme="dark"] .excel-shell select { color: #f1f5f9; background-color: #343a42; border-color: #59616b; }
+[data-app-theme="dark"] .excel-shell input::placeholder { color: #9ca6b2; }
+[data-app-theme="dark"] .excel-catalog-grid,
+[data-app-theme="dark"] .excel-schedule-grid { color: #e5e7eb; background: #20242a; border-color: #4b5159; }
+[data-app-theme="dark"] .excel-catalog-grid .excel-column-letters th,
+[data-app-theme="dark"] .excel-schedule-grid .excel-column-letters th { color: #cbd5e1 !important; background: #30353c !important; border-color: #555d67 !important; }
+[data-app-theme="dark"] .excel-catalog-grid tbody tr,
+[data-app-theme="dark"] .excel-schedule-grid tbody tr { color: #e5e7eb; background: #252a31; }
+[data-app-theme="dark"] .excel-catalog-grid tbody tr:nth-child(even),
+[data-app-theme="dark"] .excel-schedule-grid tbody tr:nth-child(even) { background: #292f36; }
+[data-app-theme="dark"] .excel-catalog-grid tbody tr:hover,
+[data-app-theme="dark"] .excel-schedule-grid tbody tr:hover { background: #263f35 !important; }
+[data-app-theme="dark"] .excel-catalog-grid td,
+[data-app-theme="dark"] .excel-schedule-grid td { color: #e5e7eb; background-color: transparent; border-color: #454c55; }
+[data-app-theme="dark"] .excel-catalog-grid tbody tr td.sticky,
+[data-app-theme="dark"] .excel-schedule-grid tbody tr td.sticky,
+[data-app-theme="dark"] .excel-driver-cell,
+[data-app-theme="dark"] .excel-shift-cell { color: #e5e7eb !important; background-color: #252a31 !important; }
+[data-app-theme="dark"] .excel-catalog-grid tbody tr:nth-child(even) td.sticky,
+[data-app-theme="dark"] .excel-schedule-grid tbody tr:nth-child(even) td.sticky { background-color: #292f36 !important; }
+[data-app-theme="dark"] .excel-catalog-grid tbody tr:hover td.sticky,
+[data-app-theme="dark"] .excel-schedule-grid tbody tr:hover td.sticky { background-color: #263f35 !important; }
+[data-app-theme="dark"] .excel-driver-cell strong,
+[data-app-theme="dark"] .excel-schedule-grid .excel-driver-name { color: #f1f5f9 !important; }
+[data-app-theme="dark"] .excel-driver-cell small,
+[data-app-theme="dark"] .excel-schedule-grid .excel-driver-login { color: #aeb7c2 !important; }
+[data-app-theme="dark"] .excel-schedule-grid input:focus { color: #f8fafc !important; background: #343a42 !important; }
+[data-app-theme="dark"] .excel-report-sheet,
+[data-app-theme="dark"] .excel-report-heading,
+[data-app-theme="dark"] .excel-report-filters,
+[data-app-theme="dark"] .excel-report-kpis > div,
+[data-app-theme="dark"] .excel-report-block { color: #e5e7eb; background: #292f36; border-color: #4b5159; }
+[data-app-theme="dark"] .excel-report-heading h2,
+[data-app-theme="dark"] .excel-report-kpis strong { color: #e8f7ee; }
+[data-app-theme="dark"] .excel-report-heading p,
+[data-app-theme="dark"] .excel-report-kpis span,
+[data-app-theme="dark"] .excel-report-kpis small,
+[data-app-theme="dark"] .excel-report-loading,
+[data-app-theme="dark"] .excel-report-empty { color: #aeb7c2; }
+[data-app-theme="dark"] .excel-report-refresh,
+[data-app-theme="dark"] .excel-report-filters input,
+[data-app-theme="dark"] .excel-report-filters select { color: #e5e7eb; background: #343a42; border-color: #59616b; }
+[data-app-theme="dark"] .excel-report-block h3 { color: #b7e8cb; background: #244b38; border-color: #49705c; }
+[data-app-theme="dark"] .excel-report-bar-row,
+[data-app-theme="dark"] .excel-report-grid,
+[data-app-theme="dark"] .excel-report-kpis { border-color: #454c55; }
+[data-app-theme="dark"] .excel-report-bar-track { background: #20242a; border-color: #59616b; }
+[data-app-theme="dark"] .excel-report-table td,
+[data-app-theme="dark"] .excel-report-compact-table td { color: #e5e7eb; background: #252a31; border-color: #454c55; }
+[data-app-theme="dark"] .excel-report-table tbody tr:nth-child(even) td,
+[data-app-theme="dark"] .excel-report-compact-table tbody tr:nth-child(even) td { background: #292f36; }
+[data-app-theme="dark"] .excel-report-table td:first-child,
+[data-app-theme="dark"] .excel-report-compact-table td:first-child { color: #b8c0ca; background: #30353c; }
+
+@media print {
+  [data-app-theme="dark"] .excel-report-sheet,
+  [data-app-theme="dark"] .excel-report-heading,
+  [data-app-theme="dark"] .excel-report-filters,
+  [data-app-theme="dark"] .excel-report-kpis > div,
+  [data-app-theme="dark"] .excel-report-block,
+  [data-app-theme="dark"] .excel-report-table td,
+  [data-app-theme="dark"] .excel-report-compact-table td { color: #172033; background: #fff; }
+}
