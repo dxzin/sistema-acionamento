@@ -20,30 +20,34 @@ const supabase = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL, process.env.
 
 const { data: sheets, error: sheetsError } = await supabase
   .from("daily_sheets")
-  .select("id,date")
+  .select("id,date,status")
   .eq("region", region)
   .in("date", [previousDate, targetDate]);
 if (sheetsError) throw sheetsError;
 const currentSheet = (sheets || []).find((sheet) => sheet.date === targetDate);
 const previousSheet = (sheets || []).find((sheet) => sheet.date === previousDate);
 if (!currentSheet || !previousSheet) throw new Error("Folha atual ou anterior não encontrada.");
+if (currentSheet.status !== "OPEN") throw new Error("A folha de destino está fechada; nenhuma correção foi aplicada.");
 
 const [{ data: currentRows, error: currentError }, { data: previousRows, error: previousError }] = await Promise.all([
   supabase.from("dispatches").select("id,driver_id,forecast_start_time,forecast_source").eq("daily_sheet_id", currentSheet.id),
-  supabase.from("dispatches").select("driver_id,next_day_forecast_time").eq("daily_sheet_id", previousSheet.id),
+  supabase.from("dispatches").select("driver_id,dispatch_status,exit_time,next_day_forecast_time").eq("daily_sheet_id", previousSheet.id),
 ]);
 if (currentError) throw currentError;
 if (previousError) throw previousError;
 
 const previousByDriver = new Map((previousRows || []).map((row) => [row.driver_id, row]));
 const fixes = (currentRows || []).flatMap((row) => {
-  const expected = previousByDriver.get(row.driver_id)?.next_day_forecast_time;
-  if (!expected || row.forecast_source === "MANUAL" || row.forecast_start_time === expected) return [];
+  const previous = previousByDriver.get(row.driver_id);
+  const awaitingExit = previous?.dispatch_status?.trim().toUpperCase() === "ACIONADO" && !previous.exit_time;
+  const expected = awaitingExit ? null : previous?.next_day_forecast_time || null;
+  if ((!awaitingExit && !expected) || row.forecast_source === "MANUAL" || (row.forecast_start_time || null) === expected) return [];
   return [{
     id: row.id,
     driverId: row.driver_id,
     previousForecast: row.forecast_start_time,
     expectedForecast: expected,
+    reason: awaitingExit ? "AGUARDANDO_SAIDA" : "CONTINUIDADE",
   }];
 });
 

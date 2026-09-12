@@ -33,6 +33,8 @@ Este documento registra decisões confirmadas durante os testes. Alterações ne
 3. O horário da escala é utilizado como alternativa quando não existe previsão do dia anterior.
 4. Se a saída do dia anterior for preenchida depois que a próxima folha já existe, a previsão do dia seguinte é atualizada automaticamente.
 5. Uma previsão alterada manualmente pelo operador não pode ser sobrescrita por nenhuma regra automática.
+6. Se o condutor foi marcado como `ACIONADO` e ainda não possui `SAÍDA`, a previsão do dia seguinte permanece vazia e indica `AGUARD. SAÍDA`.
+7. Ao preencher a saída, a próxima previsão é calculada pela interjornada e passa para a folha seguinte.
 
 ## Local no primeiro dia da escala
 

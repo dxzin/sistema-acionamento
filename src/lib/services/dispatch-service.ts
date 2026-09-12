@@ -3,7 +3,7 @@ import { Base, DailySheet, Dispatch, Driver, Location, SheetStatus, Vehicle } fr
 import { DispatchRowModel } from "@/types/domain";
 import { calculateJornada } from "../calculations/jornada";
 import { calculateNextForecast } from "../calculations/interjornada";
-import { resolveDayContinuity, shouldRefreshContinuityOrigin } from "../calculations/continuity";
+import { isAwaitingPreviousExit, resolveDayContinuity, shouldRefreshContinuityOrigin } from "../calculations/continuity";
 import { resolveFirstDayBaseOrigin, resolveFirstDayForecast } from "../calculations/first-day-origin";
 import { canCreateDailySheet, currentDateInBrasilia } from "../dates/operational-date";
 import {
@@ -152,6 +152,7 @@ class DispatchService {
     const restDriverIds = new Set<string>();
     const currentScaleCodeByDriver = new Map<string, string>();
     const currentScaleShiftByDriver = new Map<string, string>();
+    const awaitingPreviousExitDriverIds = new Set<string>();
     const normalizedRegion = region === "ALL" ? "SP" : region;
     let currentSheetStatus: SheetStatus | null = null;
 
@@ -191,7 +192,7 @@ class DispatchService {
             if (previousSheet && sheet.status === "OPEN") {
               const { data: previousRows } = await supabase
                 .from("dispatches")
-                .select("driver_id,final_destination_location_id,next_day_forecast_time")
+                .select("driver_id,dispatch_status,exit_time,final_destination_location_id,next_day_forecast_time")
                 .eq("daily_sheet_id", previousSheet.id);
               const previousByDriver = new Map((previousRows || []).map((row) => [row.driver_id, row]));
 
@@ -199,6 +200,8 @@ class DispatchService {
               const continuityUpdates = rawDispatches.flatMap((row) => {
                 const previous = previousByDriver.get(row.driver_id);
                 const updates: Partial<Dispatch> = {};
+                const awaitingPreviousExit = isAwaitingPreviousExit(previous);
+                if (awaitingPreviousExit) awaitingPreviousExitDriverIds.add(row.driver_id);
                 if (previous && shouldRefreshContinuityOrigin(
                     row.origin_source,
                     row.origin_location_id,
@@ -207,13 +210,16 @@ class DispatchService {
                   updates.origin_location_id = previous.final_destination_location_id || null;
                   updates.origin_source = "CONTINUITY";
                 }
+                const expectedForecast = awaitingPreviousExit
+                  ? null
+                  : previous?.next_day_forecast_time || null;
                 if (
-                  canRefreshForecast &&
-                  row.forecast_source !== "MANUAL" &&
-                  previous?.next_day_forecast_time &&
-                  row.forecast_start_time !== previous.next_day_forecast_time
+                  canRefreshForecast && row.forecast_source !== "MANUAL" &&
+                  (awaitingPreviousExit || previous?.next_day_forecast_time) &&
+                  ((row.forecast_start_time || null) !== expectedForecast ||
+                    (awaitingPreviousExit && row.forecast_source !== "CONTINUITY"))
                 ) {
-                  updates.forecast_start_time = previous.next_day_forecast_time;
+                  updates.forecast_start_time = expectedForecast;
                   updates.forecast_source = "CONTINUITY";
                 }
                 return Object.keys(updates).length ? [{ id: row.id, updates }] : [];
@@ -344,6 +350,8 @@ class DispatchService {
                   const schedEntry = scheduleEntriesByDriver.get(d.id);
                   const prevDisp = prevDispatchesByDriver.get(d.id);
                   const continuity = resolveDayContinuity(d.id, prevDisp);
+                  const awaitingPreviousExit = isAwaitingPreviousExit(prevDisp);
+                  if (awaitingPreviousExit) awaitingPreviousExitDriverIds.add(d.id);
 
                   const scaleCode = (schedEntry?.scale_code || "").trim().toUpperCase();
                   if (["F", "FE"].includes(scaleCode)) return [];
@@ -351,8 +359,10 @@ class DispatchService {
                     daily_sheet_id: newSheet.id,
                     driver_id: d.id,
                     scale_day_status: scaleCode || null,
-                    forecast_start_time: continuity.forecastStartTime || schedEntry?.shift_time || d.default_start_time || null,
-                    forecast_source: continuity.forecastStartTime ? "CONTINUITY" : "SCHEDULE",
+                    forecast_start_time: awaitingPreviousExit
+                      ? null
+                      : continuity.forecastStartTime || schedEntry?.shift_time || d.default_start_time || null,
+                    forecast_source: awaitingPreviousExit || continuity.forecastStartTime ? "CONTINUITY" : "SCHEDULE",
                     // O status é uma decisão do operador e começa vazio.
                     dispatch_status: "",
                     abono_reason: null,
@@ -415,6 +425,7 @@ class DispatchService {
 
     const firstDayForecasts = rawDispatches.flatMap((row) => {
       if (currentSheetStatus && currentSheetStatus !== "OPEN") return [];
+      if (awaitingPreviousExitDriverIds.has(row.driver_id)) return [];
       const driver = driversMap.get(row.driver_id);
       const forecast = resolveFirstDayForecast(
         currentScaleCodeByDriver.get(row.driver_id) || row.scale_day_status,

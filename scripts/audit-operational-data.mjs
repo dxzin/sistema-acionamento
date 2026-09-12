@@ -124,6 +124,7 @@ const sheetSummary = (sheets || []).map((sheet) => {
 const continuityIssues = [];
 const manualOriginOverrides = [];
 const forecastContinuityIssues = [];
+const historicalAwaitingExitForecasts = [];
 for (const sheet of sheets || []) {
   const date = new Date(`${sheet.date}T12:00:00Z`);
   date.setUTCDate(date.getUTCDate() - 1);
@@ -145,15 +146,20 @@ for (const sheet of sheets || []) {
   for (const driver of drivers) {
     const previous = dispatchBySheetDriver.get(`${previousSheet.id}:${driver.id}`);
     const current = dispatchBySheetDriver.get(`${sheet.id}:${driver.id}`);
-    if (!previous?.next_day_forecast_time || !current) continue;
-    if (current.forecast_start_time !== previous.next_day_forecast_time) {
-      forecastContinuityIssues.push({
-        date: sheet.date,
-        driver: driver.name,
-        currentForecast: current.forecast_start_time,
-        expectedForecast: previous.next_day_forecast_time,
-      });
-    }
+    if (!previous || !current || current.forecast_source === "MANUAL") continue;
+    const awaitingExit = String(previous.dispatch_status || "").trim().toUpperCase() === "ACIONADO" && !previous.exit_time;
+    const expectedForecast = awaitingExit ? null : previous.next_day_forecast_time || null;
+    if ((!awaitingExit && !expectedForecast) || (current.forecast_start_time || null) === expectedForecast) continue;
+    const collection = awaitingExit && sheet.date < today
+      ? historicalAwaitingExitForecasts
+      : forecastContinuityIssues;
+    collection.push({
+      date: sheet.date,
+      driver: driver.name,
+      currentForecast: current.forecast_start_time,
+      expectedForecast,
+      reason: awaitingExit ? "aguardando saída" : "continuidade",
+    });
   }
 }
 
@@ -210,6 +216,7 @@ console.log(JSON.stringify({
   continuityIssues: { count: continuityIssues.length, samples: continuityIssues.slice(0, 20) },
   manualOriginOverrides: { count: manualOriginOverrides.length, samples: manualOriginOverrides.slice(0, 20) },
   forecastContinuityIssues: { count: forecastContinuityIssues.length, samples: forecastContinuityIssues.slice(0, 20) },
+  historicalAwaitingExitForecasts: { count: historicalAwaitingExitForecasts.length, samples: historicalAwaitingExitForecasts.slice(0, 20) },
   firstDayMissingOrigins: { count: firstDayMissingOrigins.length, samples: firstDayMissingOrigins.slice(0, 20) },
   firstDayForecastIssues: { count: firstDayForecastIssues.length, samples: firstDayForecastIssues.slice(0, 20) },
   anizioDay10,

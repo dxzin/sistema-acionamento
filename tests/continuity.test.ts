@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { resolveDayContinuity, shouldRefreshContinuityOrigin } from "../src/lib/calculations/continuity";
+import { isAwaitingPreviousExit, resolveDayContinuity, shouldRefreshContinuityOrigin } from "../src/lib/calculations/continuity";
 import type { Dispatch } from "../src/types/database";
 
 function previousDispatch(values: Partial<Dispatch>): Dispatch {
@@ -68,4 +68,12 @@ test("preserva origem digitada manualmente pelo operador", () => {
 
 test("limpa origem automática quando o destino final anterior é apagado", () => {
   assert.equal(shouldRefreshContinuityOrigin("CONTINUITY", "origem-antiga", null), true);
+});
+
+test("aguarda a saída quando o condutor foi acionado", () => {
+  assert.equal(isAwaitingPreviousExit(previousDispatch({ dispatch_status: "ACIONADO", exit_time: null })), true);
+});
+
+test("não bloqueia a previsão depois que a saída foi preenchida", () => {
+  assert.equal(isAwaitingPreviousExit(previousDispatch({ dispatch_status: "ACIONADO", exit_time: "18:00:00" })), false);
 });

@@ -1,5 +1,15 @@
 import { Dispatch } from "@/types/database";
 
+export function isAwaitingPreviousExit(
+  previousDayDispatch?: Pick<Dispatch, "dispatch_status" | "exit_time"> | null
+) {
+  return Boolean(
+    previousDayDispatch &&
+    previousDayDispatch.dispatch_status.trim().toLocaleUpperCase("pt-BR") === "ACIONADO" &&
+    !previousDayDispatch.exit_time
+  );
+}
+
 /**
  * Motor de Continuidade Diária (Herança D-1 -> D):
  * - PREVISÃO de hoje = PREV PRÓX. DIA de ontem

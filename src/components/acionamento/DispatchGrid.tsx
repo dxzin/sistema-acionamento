@@ -1453,7 +1453,7 @@ export function DispatchGrid({
                   <td className="px-1 py-1 text-center">
                     <EditableTextCell
                       value={row.forecast_start_time || ""}
-                      placeholder="INSERIR"
+                      placeholder={row.forecast_source === "CONTINUITY" ? "AGUARD. SAÍDA" : "INSERIR"}
                       onCommit={(value) => commitUpdate(row.id, { forecast_start_time: value || null })}
                       className="w-full text-center text-slate-900 font-mono font-medium placeholder-slate-400 focus:bg-white focus:outline-none rounded px-1"
                     />
