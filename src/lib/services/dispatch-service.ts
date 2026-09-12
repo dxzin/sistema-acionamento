@@ -3,9 +3,9 @@ import { Base, DailySheet, Dispatch, Driver, Location, OperatorPresence, SheetSt
 import { DispatchRowModel } from "@/types/domain";
 import { calculateJornada } from "../calculations/jornada";
 import { calculateNextForecast } from "../calculations/interjornada";
-import { isAwaitingPreviousExit, resolveDayContinuity, shouldRefreshContinuityOrigin } from "../calculations/continuity";
-import { resolveFirstDayBaseOrigin, resolveFirstDayForecast } from "../calculations/first-day-origin";
-import { canCreateDailySheet, currentDateInBrasilia } from "../dates/operational-date";
+import { isAwaitingPreviousExit, resolveDayContinuity } from "../calculations/continuity";
+import { resolveFirstDayForecast } from "../calculations/first-day-origin";
+import { canCreateDailySheet } from "../dates/operational-date";
 import {
   INITIAL_BASES,
   INITIAL_DISPATCHES,
@@ -27,6 +27,12 @@ class DispatchService {
   private localVehicles: Vehicle[] = [...INITIAL_VEHICLES];
   private localLocations: Location[] = [...INITIAL_LOCATIONS];
   private localBases: Base[] = [...INITIAL_BASES];
+  private catalogLoadedAt = { bases: 0, locations: 0, vehicles: 0, drivers: 0 };
+  private readonly catalogTtlMs = 30_000;
+
+  private catalogIsFresh(key: "bases" | "locations" | "vehicles" | "drivers"): boolean {
+    return Date.now() - this.catalogLoadedAt[key] < this.catalogTtlMs;
+  }
 
   private isSupabaseConfigured(): boolean {
     const url = process.env.NEXT_PUBLIC_SUPABASE_URL || "";
@@ -34,35 +40,16 @@ class DispatchService {
     return Boolean(url && key && !url.includes("placeholder") && !key.includes("placeholder"));
   }
 
-  async recordDispatchAudit(
-    id: string,
-    oldValues: Record<string, unknown>,
-    newValues: Record<string, unknown>
-  ): Promise<void> {
-    if (!this.isSupabaseConfigured()) return;
-
-    const supabase = createClient();
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) throw new Error("Sessão ausente para registrar a auditoria.");
-
-    const { error } = await supabase.from("audit_logs").insert({
-      user_id: user.id,
-      entity_name: "dispatches",
-      entity_id: id,
-      action: "UPDATE",
-      old_values: oldValues,
-      new_values: newValues,
-    });
-    if (error) throw new Error(error.message);
-  }
-
   async getBases(): Promise<Base[]> {
     if (this.isSupabaseConfigured()) {
+      if (this.catalogIsFresh("bases")) return this.localBases;
       try {
         const supabase = createClient();
         const { data, error } = await supabase.from("bases").select("*").order("name");
         if (error) throw new Error(error.message);
-        return data || [];
+        this.localBases = data || [];
+        this.catalogLoadedAt.bases = Date.now();
+        return this.localBases;
       } catch (e) {
         console.error("Falha ao buscar bases do Supabase:", e);
         throw e;
@@ -73,11 +60,14 @@ class DispatchService {
 
   async getLocations(): Promise<Location[]> {
     if (this.isSupabaseConfigured()) {
+      if (this.catalogIsFresh("locations")) return this.localLocations;
       try {
         const supabase = createClient();
         const { data, error } = await supabase.from("locations").select("*").order("name");
         if (error) throw new Error(error.message);
-        return data || [];
+        this.localLocations = data || [];
+        this.catalogLoadedAt.locations = Date.now();
+        return this.localLocations;
       } catch (e) {
         console.error("Falha ao buscar locais do Supabase:", e);
         throw e;
@@ -88,11 +78,14 @@ class DispatchService {
 
   async getVehicles(): Promise<Vehicle[]> {
     if (this.isSupabaseConfigured()) {
+      if (this.catalogIsFresh("vehicles")) return this.localVehicles;
       try {
         const supabase = createClient();
         const { data, error } = await supabase.from("vehicles").select("*").order("plate_code");
         if (error) throw new Error(error.message);
-        return data || [];
+        this.localVehicles = data || [];
+        this.catalogLoadedAt.vehicles = Date.now();
+        return this.localVehicles;
       } catch (e) {
         console.error("Falha ao buscar frotas do Supabase:", e);
         throw e;
@@ -103,11 +96,14 @@ class DispatchService {
 
   async getDrivers(): Promise<Driver[]> {
     if (this.isSupabaseConfigured()) {
+      if (this.catalogIsFresh("drivers")) return this.localDrivers;
       try {
         const supabase = createClient();
         const { data, error } = await supabase.from("drivers").select("*").order("name");
         if (error) throw new Error(error.message);
-        return data || [];
+        this.localDrivers = data || [];
+        this.catalogLoadedAt.drivers = Date.now();
+        return this.localDrivers;
       } catch (e) {
         console.error("Falha ao buscar condutores do Supabase:", e);
         throw e;
@@ -140,24 +136,12 @@ class DispatchService {
     if (!this.isSupabaseConfigured()) return null;
     const normalizedRegion = region === "ALL" ? "SP" : region;
     const supabase = createClient();
-    const { data: sheet, error: sheetError } = await supabase
-      .from("daily_sheets")
-      .select("id,updated_at")
-      .eq("date", date)
-      .eq("region", normalizedRegion)
-      .maybeSingle();
-    if (sheetError) throw new Error(sheetError.message);
-    if (!sheet) return null;
-
-    const { data: latestDispatch, error: dispatchError } = await supabase
-      .from("dispatches")
-      .select("updated_at")
-      .eq("daily_sheet_id", sheet.id)
-      .order("updated_at", { ascending: false })
-      .limit(1)
-      .maybeSingle();
-    if (dispatchError) throw new Error(dispatchError.message);
-    return `${sheet.updated_at}:${latestDispatch?.updated_at || ""}`;
+    const { data, error } = await supabase.rpc("get_daily_sheet_sync_token", {
+      p_date: date,
+      p_region: normalizedRegion,
+    });
+    if (error) throw new Error(error.message);
+    return typeof data === "string" ? data : null;
   }
 
   async setDailySheetStatus(id: string, status: Extract<SheetStatus, "OPEN" | "CLOSED">): Promise<DailySheet> {
@@ -201,6 +185,26 @@ class DispatchService {
     return (data || []) as OperatorPresence[];
   }
 
+  async touchAndGetOperatorPresence(
+    date: string,
+    region: string,
+    activeDispatchId: string | null,
+    displayName: string,
+    email: string
+  ): Promise<OperatorPresence[]> {
+    if (!this.isSupabaseConfigured()) return [];
+    const supabase = createClient();
+    const { data, error } = await supabase.rpc("touch_and_list_operator_presence", {
+      p_sheet_date: date,
+      p_region: region === "ALL" ? "SP" : region,
+      p_active_dispatch_id: activeDispatchId,
+      p_display_name: displayName,
+      p_email: email,
+    });
+    if (error) throw new Error(error.message);
+    return (data || []) as OperatorPresence[];
+  }
+
   async clearOperatorPresence(userId: string): Promise<void> {
     if (!this.isSupabaseConfigured()) return;
     const supabase = createClient();
@@ -210,11 +214,7 @@ class DispatchService {
   async getDispatchesForSheet(date: string, region: string = "SP"): Promise<DispatchRowModel[]> {
     let rawDispatches: Dispatch[] = [];
     const restDriverIds = new Set<string>();
-    const currentScaleCodeByDriver = new Map<string, string>();
-    const currentScaleShiftByDriver = new Map<string, string>();
-    const awaitingPreviousExitDriverIds = new Set<string>();
     const normalizedRegion = region === "ALL" ? "SP" : region;
-    let currentSheetStatus: SheetStatus | null = null;
 
     if (this.isSupabaseConfigured()) {
       try {
@@ -229,7 +229,6 @@ class DispatchService {
           .maybeSingle();
 
         if (sheet) {
-          currentSheetStatus = sheet.status as SheetStatus;
           const { data, error } = await supabase
             .from("dispatches")
             .select("*")
@@ -239,63 +238,6 @@ class DispatchService {
           if (!error && data && data.length > 0) {
             rawDispatches = data;
 
-            // Folhas já criadas também recebem a continuidade de D-1. Campos
-            // preenchidos manualmente são preservados.
-            const previousDate = this.getPreviousDate(date);
-            const { data: previousSheet } = await supabase
-              .from("daily_sheets")
-              .select("id")
-              .eq("date", previousDate)
-              .eq("region", normalizedRegion)
-              .maybeSingle();
-
-            if (previousSheet && sheet.status === "OPEN") {
-              const { data: previousRows } = await supabase
-                .from("dispatches")
-                .select("driver_id,dispatch_status,exit_time,final_destination_location_id,next_day_forecast_time")
-                .eq("daily_sheet_id", previousSheet.id);
-              const previousByDriver = new Map((previousRows || []).map((row) => [row.driver_id, row]));
-
-              const canRefreshForecast = date === currentDateInBrasilia() || canCreateDailySheet(date);
-              const continuityUpdates = rawDispatches.flatMap((row) => {
-                const previous = previousByDriver.get(row.driver_id);
-                const updates: Partial<Dispatch> = {};
-                const awaitingPreviousExit = isAwaitingPreviousExit(previous);
-                if (awaitingPreviousExit) awaitingPreviousExitDriverIds.add(row.driver_id);
-                if (previous && shouldRefreshContinuityOrigin(
-                    row.origin_source,
-                    row.origin_location_id,
-                    previous.final_destination_location_id
-                  )) {
-                  updates.origin_location_id = previous.final_destination_location_id || null;
-                  updates.origin_source = "CONTINUITY";
-                }
-                const expectedForecast = awaitingPreviousExit
-                  ? null
-                  : previous?.next_day_forecast_time || null;
-                if (
-                  canRefreshForecast && row.forecast_source !== "MANUAL" &&
-                  (awaitingPreviousExit || previous?.next_day_forecast_time) &&
-                  ((row.forecast_start_time || null) !== expectedForecast ||
-                    (awaitingPreviousExit && row.forecast_source !== "CONTINUITY"))
-                ) {
-                  updates.forecast_start_time = expectedForecast;
-                  updates.forecast_source = "CONTINUITY";
-                }
-                return Object.keys(updates).length ? [{ id: row.id, updates }] : [];
-              });
-
-              if (continuityUpdates.length) {
-                await Promise.all(continuityUpdates.map(({ id, updates }) =>
-                  supabase.from("dispatches").update(updates).eq("id", id)
-                ));
-                const updatesById = new Map(continuityUpdates.map((item) => [item.id, item.updates]));
-                rawDispatches = rawDispatches.map((row) => ({
-                  ...row,
-                  ...(updatesById.get(row.id) || {}),
-                }));
-              }
-            }
           }
         }
 
@@ -319,8 +261,6 @@ class DispatchService {
             .eq("day_of_month", Number(dayText));
           for (const entry of dayEntries || []) {
             const scaleCode = String(entry.scale_code || "").trim().toUpperCase();
-            currentScaleCodeByDriver.set(entry.driver_id, scaleCode);
-            if (entry.shift_time) currentScaleShiftByDriver.set(entry.driver_id, entry.shift_time);
             if (["F", "FE"].includes(scaleCode)) restDriverIds.add(entry.driver_id);
           }
         }
@@ -330,8 +270,13 @@ class DispatchService {
         // Uma folha ausente só é preparada para o próximo dia operacional.
         if (rawDispatches.length === 0 && canCreateDailySheet(date) && (!sheet || sheet.status === "OPEN")) {
           const targetBases = REGION_BASES[normalizedRegion] || ["LP", "CASTILHO"];
-          const { data: bases } = await supabase.from("bases").select("id,code").in("code", targetBases);
+          const [{ data: bases }, { data: baseLocations }] = await Promise.all([
+            supabase.from("bases").select("id,code").in("code", targetBases),
+            supabase.from("locations").select("id,name").eq("is_active", true),
+          ]);
           const baseIds = (bases || []).map((b) => b.id);
+          const baseCodeById = new Map((bases || []).map((base) => [base.id, base.code.toUpperCase()]));
+          const baseLocationByName = new Map((baseLocations || []).map((location) => [location.name.trim().toUpperCase(), location.id]));
 
           if (baseIds.length > 0) {
             const { data: activeDrivers } = await supabase
@@ -350,7 +295,6 @@ class DispatchService {
                 .single();
 
               if (!sheetErr && newSheet) {
-                currentSheetStatus = newSheet.status as SheetStatus;
                 // Obter dia, mês e ano da data selecionada
                 const [yStr, mStr, dStr] = date.split("-");
                 const dayNum = parseInt(dStr, 10);
@@ -411,23 +355,27 @@ class DispatchService {
                   const prevDisp = prevDispatchesByDriver.get(d.id);
                   const continuity = resolveDayContinuity(d.id, prevDisp);
                   const awaitingPreviousExit = isAwaitingPreviousExit(prevDisp);
-                  if (awaitingPreviousExit) awaitingPreviousExitDriverIds.add(d.id);
-
                   const scaleCode = (schedEntry?.scale_code || "").trim().toUpperCase();
                   if (["F", "FE"].includes(scaleCode)) return [];
+                  const firstDayForecast = !prevDisp
+                    ? resolveFirstDayForecast(scaleCode, schedEntry?.shift_time || d.default_start_time)
+                    : null;
+                  const baseOrigin = !prevDisp && scaleCode === "1"
+                    ? baseLocationByName.get(baseCodeById.get(d.base_id) || "") || null
+                    : null;
                   return [{
                     daily_sheet_id: newSheet.id,
                     driver_id: d.id,
                     scale_day_status: scaleCode || null,
                     forecast_start_time: awaitingPreviousExit
                       ? null
-                      : continuity.forecastStartTime || schedEntry?.shift_time || d.default_start_time || null,
+                      : continuity.forecastStartTime || firstDayForecast || schedEntry?.shift_time || d.default_start_time || null,
                     forecast_source: awaitingPreviousExit || continuity.forecastStartTime ? "CONTINUITY" : "SCHEDULE",
                     // O status é uma decisão do operador e começa vazio.
                     dispatch_status: "",
                     abono_reason: null,
-                    origin_location_id: continuity.originLocationId || null,
-                    origin_source: continuity.originLocationId ? "CONTINUITY" : "SCHEDULE",
+                    origin_location_id: continuity.originLocationId || baseOrigin,
+                    origin_source: continuity.originLocationId ? "CONTINUITY" : baseOrigin ? "BASE" : "SCHEDULE",
                   }];
                 });
 
@@ -467,71 +415,6 @@ class DispatchService {
     const basesMap = new Map(bases.map((b) => [b.id, b]));
     const vehiclesMap = new Map(vehicles.map((v) => [v.id, v]));
     const locationsMap = new Map(locations.map((l) => [l.id, l]));
-
-    // No primeiro dia do ciclo, quando não há destino final anterior, o LOCAL
-    // começa na base cadastrada do condutor (ex.: CASTILHO ou LP).
-    const firstDayOrigins = rawDispatches.flatMap((row) => {
-      if (currentSheetStatus && currentSheetStatus !== "OPEN") return [];
-      if (row.origin_source === "MANUAL") return [];
-      const originId = resolveFirstDayBaseOrigin(
-        currentScaleCodeByDriver.get(row.driver_id) || row.scale_day_status,
-        row.origin_location_id,
-        driversMap.get(row.driver_id),
-        bases,
-        locations
-      );
-      return originId ? [{ id: row.id, originId }] : [];
-    });
-
-    const firstDayForecasts = rawDispatches.flatMap((row) => {
-      if (currentSheetStatus && currentSheetStatus !== "OPEN") return [];
-      if (awaitingPreviousExitDriverIds.has(row.driver_id)) return [];
-      const driver = driversMap.get(row.driver_id);
-      const forecast = resolveFirstDayForecast(
-        currentScaleCodeByDriver.get(row.driver_id) || row.scale_day_status,
-        currentScaleShiftByDriver.get(row.driver_id) || driver?.default_start_time
-      );
-      if (!forecast || row.forecast_source === "MANUAL" || row.forecast_start_time === forecast) return [];
-      return [{ id: row.id, forecast }];
-    });
-
-    if (firstDayOrigins.length) {
-      if (this.isSupabaseConfigured()) {
-        const updateClient = createClient();
-        const results = await Promise.all(firstDayOrigins.map(({ id, originId }) =>
-          updateClient.from("dispatches").update({ origin_location_id: originId, origin_source: "BASE" }).eq("id", id)
-        ));
-        const failed = results.find((result) => result.error);
-        if (failed?.error) throw new Error(failed.error.message);
-      }
-      const originsById = new Map(firstDayOrigins.map((item) => [item.id, item.originId]));
-      rawDispatches = rawDispatches.map((row) => ({
-        ...row,
-        ...(originsById.has(row.id) ? {
-          origin_location_id: originsById.get(row.id),
-          origin_source: "BASE" as const,
-        } : {}),
-      }));
-    }
-
-    if (firstDayForecasts.length) {
-      if (this.isSupabaseConfigured()) {
-        const updateClient = createClient();
-        const results = await Promise.all(firstDayForecasts.map(({ id, forecast }) =>
-          updateClient.from("dispatches").update({ forecast_start_time: forecast, forecast_source: "SCHEDULE" }).eq("id", id)
-        ));
-        const failed = results.find((result) => result.error);
-        if (failed?.error) throw new Error(failed.error.message);
-      }
-      const forecastsById = new Map(firstDayForecasts.map((item) => [item.id, item.forecast]));
-      rawDispatches = rawDispatches.map((row) => ({
-        ...row,
-        ...(forecastsById.has(row.id) ? {
-          forecast_start_time: forecastsById.get(row.id),
-          forecast_source: "SCHEDULE" as const,
-        } : {}),
-      }));
-    }
 
     if (this.isSupabaseConfigured()) {
       this.localDispatches = [...rawDispatches];
@@ -577,7 +460,7 @@ class DispatchService {
     });
   }
 
-  async updateDispatch(id: string, updates: Partial<DispatchRowModel>, expectedUpdatedAt?: string): Promise<Dispatch | null> {
+  private async prepareDispatchUpdates(id: string, updates: Partial<DispatchRowModel>): Promise<Partial<Dispatch>> {
     const {
       fleet_code,
       driver: _driver,
@@ -633,6 +516,9 @@ class DispatchService {
       });
       const result = await response.json() as { id?: string | null; error?: string };
       if (!response.ok || !result.id) throw new Error(result.error || "Falha ao registrar o destino digitado.");
+      if (!this.localLocations.some((location) => location.id === result.id)) {
+        this.localLocations.push({ id: result.id, name, is_active: true, created_at: new Date().toISOString() });
+      }
       return result.id;
     };
 
@@ -658,6 +544,9 @@ class DispatchService {
           });
           const result = await response.json() as { id?: string; error?: string };
           if (!response.ok || !result.id) throw new Error(result.error || "Falha ao registrar a frota digitada.");
+          if (!this.localVehicles.some((vehicle) => vehicle.id === result.id)) {
+            this.localVehicles.push({ id: result.id, plate_code: normalizedFleet, vehicle_type: "CAVALO_MECANICO", is_active: true, created_at: new Date().toISOString() });
+          }
           processedUpdates.vehicle_id = result.id;
         } else {
           let vehicle = this.localVehicles.find((item) => item.plate_code === normalizedFleet);
@@ -687,6 +576,25 @@ class DispatchService {
       processedUpdates.next_day_forecast_time = calculateNextForecast(exitTime);
     }
 
+    return processedUpdates;
+  }
+
+  private translateMutationError(message: string): Error {
+    if (message.includes("DISPATCH_CONFLICT")) {
+      return new Error("Conflito: uma das linhas foi alterada por outra pessoa. Os dados foram recarregados; confira antes de tentar novamente.");
+    }
+    if (message.includes("DAILY_SHEET_CLOSED")) {
+      return new Error("Esta folha está fechada e não aceita alterações.");
+    }
+    if (message.includes("INVALID_BATCH_SIZE")) {
+      return new Error("A seleção deve conter entre 1 e 500 linhas.");
+    }
+    return new Error(message);
+  }
+
+  async updateDispatch(id: string, updates: Partial<DispatchRowModel>, expectedUpdatedAt?: string): Promise<Dispatch | null> {
+    const processedUpdates = await this.prepareDispatchUpdates(id, updates);
+
     if (this.isSupabaseConfigured()) {
       try {
         const supabase = createClient();
@@ -697,13 +605,7 @@ class DispatchService {
         }).single();
 
         if (error) {
-          if (error.message.includes("DISPATCH_CONFLICT")) {
-            throw new Error("Conflito: esta linha foi alterada por outra pessoa. Os dados foram recarregados; confira antes de tentar novamente.");
-          }
-          if (error.message.includes("DAILY_SHEET_CLOSED")) {
-            throw new Error("Esta folha está fechada e não aceita alterações.");
-          }
-          throw new Error(error.message);
+          throw this.translateMutationError(error.message);
         }
         if (data) {
           const saved = data as Dispatch;
@@ -727,6 +629,37 @@ class DispatchService {
     }
 
     return null;
+  }
+
+  async updateDispatchBatch(
+    updates: Array<{ id: string; changes: Partial<DispatchRowModel>; expectedUpdatedAt?: string }>
+  ): Promise<Dispatch[]> {
+    if (!updates.length) return [];
+    const prepared = await Promise.all(updates.map(async (item) => ({
+      id: item.id,
+      expected_updated_at: item.expectedUpdatedAt || null,
+      changes: await this.prepareDispatchUpdates(item.id, item.changes),
+    })));
+
+    if (this.isSupabaseConfigured()) {
+      const supabase = createClient();
+      const { data, error } = await supabase.rpc("update_dispatch_batch_with_audit", {
+        p_updates: prepared,
+      });
+      if (error) throw this.translateMutationError(error.message);
+      const saved = (data || []) as Dispatch[];
+      const savedById = new Map(saved.map((row) => [row.id, row]));
+      this.localDispatches = this.localDispatches.map((row) => savedById.get(row.id) || row);
+      return saved;
+    }
+
+    const now = new Date().toISOString();
+    const preparedById = new Map(prepared.map((item) => [item.id, item.changes]));
+    this.localDispatches = this.localDispatches.map((row) => {
+      const changes = preparedById.get(row.id);
+      return changes ? { ...row, ...changes, updated_at: now } : row;
+    });
+    return this.localDispatches.filter((row) => preparedById.has(row.id));
   }
 
   async createDispatch(dispatch: Omit<Dispatch, "id" | "created_at" | "updated_at">): Promise<Dispatch> {

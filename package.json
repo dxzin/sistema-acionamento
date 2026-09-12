@@ -8,6 +8,7 @@
     "start": "next start",
     "lint": "eslint .",
     "test": "tsx --test tests/**/*.test.ts",
+    "test:e2e": "playwright test",
     "verify": "npm run lint && npm run test && npm run build",
     "audit:data": "node scripts/audit-operational-data.mjs 2026 9 SP"
   },
@@ -23,6 +24,7 @@
     "tailwind-merge": "^2.5.4"
   },
   "devDependencies": {
+    "@playwright/test": "^1.63.0",
     "@types/node": "^20.17.0",
     "@types/react": "^19.3.0",
     "@types/react-dom": "^19.3.0",
@@ -32,8 +34,7 @@
     "postcss": "^8.4.47",
     "tailwindcss": "^3.4.14",
     "tsx": "^4.23.13",
-    "typescript": "^5.6.3",
-    "xlsx": "^0.18.5"
+    "typescript": "^5.6.3"
   },
   "overrides": {
     "uuid": "11.1.1"

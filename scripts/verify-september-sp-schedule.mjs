@@ -1,5 +1,5 @@
 import fs from "node:fs";
-import XLSX from "xlsx";
+import { readWorksheetRows } from "./lib/exceljs-reader.mjs";
 import { createClient } from "@supabase/supabase-js";
 
 for (const line of fs.readFileSync(".env.local", "utf8").split(/\r?\n/)) {
@@ -9,14 +9,16 @@ for (const line of fs.readFileSync(".env.local", "utf8").split(/\r?\n/)) {
 const normalize = (value) => String(value ?? "").trim().normalize("NFD").replace(/[\u0300-\u036f]/g, "").toUpperCase().replace(/[^A-Z0-9]/g, "");
 const code = (value) => String(value ?? "").trim().toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 4);
 const asTime = (value) => {
+  if (value instanceof Date) {
+    return `${String(value.getUTCHours()).padStart(2, "0")}:${String(value.getUTCMinutes()).padStart(2, "0")}:00`;
+  }
   if (typeof value === "number") {
     const minutes = Math.round((value % 1) * 1440) % 1440;
     return `${String(Math.floor(minutes / 60)).padStart(2, "0")}:${String(minutes % 60).padStart(2, "0")}:00`;
   }
   return String(value ?? "").slice(0, 8);
 };
-const workbook = XLSX.readFile("C:/Users/Livia/Desktop/CONTROLE DE ALOCAÇÃO - ACIONAMENTO2.xlsx", { cellDates: false });
-const source = XLSX.utils.sheet_to_json(workbook.Sheets["Escala Setembro 2026 - SP"], { header: 1, defval: null, raw: true }).slice(1).filter((row) => row[0] && row[1]);
+const source = (await readWorksheetRows("C:/Users/Livia/Desktop/CONTROLE DE ALOCAÇÃO - ACIONAMENTO2.xlsx", "Escala Setembro 2026 - SP")).slice(1).filter((row) => row[0] && row[1]);
 const supabase = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY, { auth: { persistSession: false } });
 const schedule = await supabase.from("monthly_schedules").select("id").eq("month", 9).eq("year", 2026).eq("region", "SP").single();
 if (schedule.error) throw schedule.error;

@@ -17,6 +17,9 @@ referencias/*.xls
 *.log
 *.tsbuildinfo
 supabase/.temp/
+backups/
+test-results/
+playwright-report/
 __pycache__/
 *.py[cod]
 .DS_Store

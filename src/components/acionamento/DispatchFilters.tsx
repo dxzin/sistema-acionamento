@@ -2,7 +2,7 @@
 
 import React from "react";
 import { DispatchFilterOptions } from "@/types/domain";
-import { Calendar, LockKeyhole, LockOpen, RefreshCw, Search, UsersRound } from "lucide-react";
+import { Calendar, CloudOff, LockKeyhole, LockOpen, RefreshCw, Search, UsersRound, Wifi } from "lucide-react";
 import { OperatorPresence, SheetStatus } from "@/types/database";
 import { nextOperationalDate } from "@/lib/dates/operational-date";
 
@@ -16,6 +16,7 @@ interface DispatchFiltersProps {
   isChangingSheetStatus?: boolean;
   onlineOperators?: OperatorPresence[];
   currentUserId?: string;
+  syncStatus?: "live" | "fallback" | "offline";
 }
 
 export function DispatchFilters({
@@ -28,6 +29,7 @@ export function DispatchFilters({
   isChangingSheetStatus = false,
   onlineOperators = [],
   currentUserId,
+  syncStatus = "fallback",
 }: DispatchFiltersProps) {
   return (
     <div className="excel-toolbar p-2 flex flex-wrap items-center justify-between gap-2 text-xs">
@@ -121,6 +123,13 @@ export function DispatchFilters({
 
       {/* Botão de Atualização / Recálculo */}
       <div className="flex items-center space-x-2">
+        <span
+          className={`excel-sync-indicator is-${syncStatus}`}
+          title={syncStatus === "live" ? "Alterações chegam em tempo real" : syncStatus === "fallback" ? "Rede bloqueou o tempo real; usando verificação automática rápida" : "Sem conexão com a internet"}
+        >
+          {syncStatus === "offline" ? <CloudOff className="h-3.5 w-3.5" /> : <Wifi className="h-3.5 w-3.5" />}
+          {syncStatus === "live" ? "Ao vivo" : syncStatus === "fallback" ? "Sincronização de segurança" : "Offline"}
+        </span>
         {sheetStatus && (
           <button
             type="button"

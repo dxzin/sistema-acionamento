@@ -1,5 +1,5 @@
 import fs from "node:fs";
-import XLSX from "xlsx";
+import { readWorksheetRows } from "./lib/exceljs-reader.mjs";
 import { createClient } from "@supabase/supabase-js";
 
 for (const line of fs.readFileSync(".env.local", "utf8").split(/\r?\n/)) {
@@ -12,6 +12,9 @@ const sheetName = "Escala Setembro 2026 - SP";
 const normalizeName = (value) => String(value ?? "").trim().normalize("NFD").replace(/[\u0300-\u036f]/g, "").toUpperCase().replace(/[^A-Z0-9]/g, "");
 const normalizeCode = (value) => String(value ?? "").trim().toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 4);
 const asTime = (value) => {
+  if (value instanceof Date) {
+    return `${String(value.getUTCHours()).padStart(2, "0")}:${String(value.getUTCMinutes()).padStart(2, "0")}:00`;
+  }
   if (typeof value === "number") {
     const minutes = Math.round((value % 1) * 1440) % 1440;
     return `${String(Math.floor(minutes / 60)).padStart(2, "0")}:${String(minutes % 60).padStart(2, "0")}:00`;
@@ -20,8 +23,7 @@ const asTime = (value) => {
   return match ? `${match[1].padStart(2, "0")}:${match[2]}:${match[3] || "00"}` : null;
 };
 
-const workbook = XLSX.readFile(sourcePath, { cellDates: false });
-const rows = XLSX.utils.sheet_to_json(workbook.Sheets[sheetName], { header: 1, defval: null, raw: true });
+const rows = await readWorksheetRows(sourcePath, sheetName);
 const sourceRows = rows.slice(1).filter((row) => row[0] && row[1]);
 if (sourceRows.length !== 100) throw new Error(`Esperados 100 condutores, encontrados ${sourceRows.length}.`);
 

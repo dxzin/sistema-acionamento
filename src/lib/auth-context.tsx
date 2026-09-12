@@ -43,9 +43,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           };
 
           setUser(activeUser);
-          if (typeof window !== "undefined") {
-            localStorage.setItem("sistema_acionamento_user", JSON.stringify(activeUser));
-          }
           setIsLoading(false);
           return;
         }
@@ -53,14 +50,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         console.warn("Falha ao recuperar sessao Supabase:", e);
       }
 
-      const stored = typeof window !== "undefined" ? localStorage.getItem("sistema_acionamento_user") : null;
-      if (stored) {
-        try {
-          setUser(JSON.parse(stored));
-        } catch {
-          localStorage.removeItem("sistema_acionamento_user");
-        }
-      }
+      // Com Supabase configurado, somente uma sessão validada no servidor
+      // representa um login. Nunca restaure um perfil gravado pelo navegador.
+      if (typeof window !== "undefined") localStorage.removeItem("sistema_acionamento_user");
       setIsLoading(false);
     };
 
@@ -101,15 +93,19 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           };
 
           setUser(activeUser);
-          if (typeof window !== "undefined") {
-            localStorage.setItem("sistema_acionamento_user", JSON.stringify(activeUser));
-          }
           setIsLoading(false);
           return true;
         }
       }
 
-      // Fallback local caso sem senha
+      // Modo demonstrativo local, disponível apenas quando o Supabase não está configurado.
+      const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || "";
+      const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || "";
+      const demoMode = !supabaseUrl || !supabaseKey || supabaseUrl.includes("placeholder") || supabaseKey.includes("placeholder");
+      if (!demoMode) {
+        setIsLoading(false);
+        return false;
+      }
       const profile: Profile = {
         id: `usr-${Date.now()}`,
         name: email.split("@")[0].toUpperCase(),
@@ -121,9 +117,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       };
 
       setUser(profile);
-      if (typeof window !== "undefined") {
-        localStorage.setItem("sistema_acionamento_user", JSON.stringify(profile));
-      }
       setIsLoading(false);
       return true;
     } catch (err) {

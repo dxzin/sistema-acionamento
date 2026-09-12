@@ -1,6 +1,6 @@
 import fs from "node:fs";
 import path from "node:path";
-import XLSX from "xlsx";
+import { readWorksheetObjects } from "./lib/exceljs-reader.mjs";
 import { createClient } from "@supabase/supabase-js";
 
 const workbookPath = process.argv[2];
@@ -23,10 +23,7 @@ const supabase = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL, process.env.
   auth: { persistSession: false },
 });
 
-const workbook = XLSX.readFile(workbookPath, { cellDates: false });
-const worksheet = workbook.Sheets[worksheetName];
-if (!worksheet) throw new Error(`Aba não encontrada: ${worksheetName}`);
-const rows = XLSX.utils.sheet_to_json(worksheet, { defval: null, raw: true });
+const rows = await readWorksheetObjects(workbookPath, worksheetName);
 
 const normalize = (value) => String(value ?? "").trim().toUpperCase().replace(/\s+/g, " ");
 const normalizeName = (value) => normalize(value).normalize("NFD").replace(/[\u0300-\u036f]/g, "");

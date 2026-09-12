@@ -9,6 +9,7 @@ import { ArrowUpDown, Check, ChevronDown, Columns3, Copy, Clock, Eye, EyeOff, Mi
 interface DispatchGridProps {
   dispatches: DispatchRowModel[];
   onUpdateRow: (id: string, updates: Partial<DispatchRowModel>) => Promise<void>;
+  onUpdateBatch: (updates: Map<string, Partial<DispatchRowModel>>) => Promise<void>;
   locations: { id: string; name: string }[];
   saveState: { status: "idle" | "saving" | "saved" | "error"; message?: string };
   readOnly?: boolean;
@@ -360,6 +361,7 @@ function EditableStatusCell({ value, listId, className, onCommit }: EditableStat
 export function DispatchGrid({
   dispatches,
   onUpdateRow,
+  onUpdateBatch,
   locations,
   saveState,
   readOnly = false,
@@ -696,9 +698,7 @@ export function DispatchGrid({
     if (readOnly) return;
     const changes = Array.from(updatesByRow, ([id, updates]) => historyChangeFor(id, updates))
       .filter((change): change is GridHistoryChange => Boolean(change));
-    for (const [id, updates] of updatesByRow) {
-      await onUpdateRow(id, updates);
-    }
+    await onUpdateBatch(updatesByRow);
     rememberAction(changes);
   };
 

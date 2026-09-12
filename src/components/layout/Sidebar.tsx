@@ -11,9 +11,11 @@ import {
   Settings,
   Users,
 } from "lucide-react";
+import { useAuth } from "@/lib/auth-context";
 
 export function Sidebar() {
   const pathname = usePathname();
+  const { user } = useAuth();
 
   const navigation = [
     {
@@ -61,7 +63,7 @@ export function Sidebar() {
           Planilhas do arquivo
         </div>
         <nav className="space-y-0.5">
-          {navigation.map((item) => {
+          {navigation.filter((item) => item.href !== "/admin" || user?.role === "admin" || user?.role === "supervisor").map((item) => {
             const isActive = pathname === item.href || (item.href === "/acionamento" && pathname === "/");
             const Icon = item.icon;
             return (

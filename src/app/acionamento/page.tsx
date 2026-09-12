@@ -24,6 +24,7 @@ export default function AcionamentoPage() {
   const [saveState, setSaveState] = useState<{ status: "idle" | "saving" | "saved" | "error"; message?: string }>({ status: "idle" });
   const [onlineOperators, setOnlineOperators] = useState<OperatorPresence[]>([]);
   const [activeDispatchId, setActiveDispatchId] = useState<string | null>(null);
+  const [syncStatus, setSyncStatus] = useState<"live" | "fallback" | "offline">("fallback");
   const loadRequestRef = useRef(0);
   const syncTokenRef = useRef<string | null>(null);
   const pendingWritesRef = useRef(0);
@@ -84,10 +85,9 @@ export default function AcionamentoPage() {
       if (running) return;
       running = true;
       try {
-        await dispatchService.touchOperatorPresence(
+        const presence = await dispatchService.touchAndGetOperatorPresence(
           filters.date, filters.region, activeDispatchId, user.name, user.email
         );
-        const presence = await dispatchService.getOperatorPresence(filters.date, filters.region);
         if (active) setOnlineOperators(presence);
       } catch (error) {
         console.warn("Presença dos operadores temporariamente indisponível:", error);
@@ -96,7 +96,7 @@ export default function AcionamentoPage() {
       }
     };
     void heartbeat();
-    const interval = window.setInterval(heartbeat, 4000);
+    const interval = window.setInterval(heartbeat, 10000);
     return () => {
       active = false;
       window.clearInterval(interval);
@@ -127,10 +127,15 @@ export default function AcionamentoPage() {
     const supabase = createClient();
     let refreshTimer: ReturnType<typeof setTimeout> | null = null;
     const channel = supabase
-      .channel("dispatches_changes")
+      .channel(`dispatches_changes:${dailySheet?.id || `${filters.date}:${filters.region}`}`)
       .on(
         "postgres_changes",
-        { event: "*", schema: "public", table: "dispatches" },
+        {
+          event: "*",
+          schema: "public",
+          table: "dispatches",
+          ...(dailySheet?.id ? { filter: `daily_sheet_id=eq.${dailySheet.id}` } : {}),
+        },
         () => {
           // Uma colagem pode atualizar dezenas de linhas. Agrupar os eventos
           // evita recargas concorrentes e preserva a atualização otimista.
@@ -143,13 +148,30 @@ export default function AcionamentoPage() {
         { event: "UPDATE", schema: "public", table: "daily_sheets" },
         syncFromRemote
       )
-      .subscribe();
+      .subscribe((status) => {
+        if (status === "SUBSCRIBED") setSyncStatus("live");
+        if (["CHANNEL_ERROR", "TIMED_OUT", "CLOSED"].includes(status)) {
+          setSyncStatus(navigator.onLine ? "fallback" : "offline");
+        }
+      });
 
     return () => {
       if (refreshTimer) clearTimeout(refreshTimer);
       supabase.removeChannel(channel);
     };
-  }, [syncFromRemote]);
+  }, [dailySheet?.id, filters.date, filters.region, syncFromRemote]);
+
+  useEffect(() => {
+    const online = () => setSyncStatus((current) => current === "offline" ? "fallback" : current);
+    const offline = () => setSyncStatus("offline");
+    window.addEventListener("online", online);
+    window.addEventListener("offline", offline);
+    if (!navigator.onLine) offline();
+    return () => {
+      window.removeEventListener("online", online);
+      window.removeEventListener("offline", offline);
+    };
+  }, []);
 
   // Algumas redes corporativas bloqueiam WebSocket. Este verificador leve
   // consulta somente a versão mais recente e recarrega a grade se algo mudou.
@@ -174,9 +196,10 @@ export default function AcionamentoPage() {
         checking = false;
       }
     };
-    const interval = window.setInterval(checkForChanges, 2500);
+    if (syncStatus === "offline") return;
+    const interval = window.setInterval(checkForChanges, syncStatus === "live" ? 15000 : 1500);
     return () => window.clearInterval(interval);
-  }, [filters.date, filters.region, loadData]);
+  }, [filters.date, filters.region, loadData, syncStatus]);
 
   // Recalcular periodicamente as jornadas em andamento (tempo real a cada 10s)
   useEffect(() => {
@@ -250,6 +273,41 @@ export default function AcionamentoPage() {
       if (saveError.message.startsWith("Conflito:") || saveError.message.includes("folha está fechada")) {
         await loadData();
       }
+      throw saveError;
+    } finally {
+      pendingWritesRef.current = Math.max(0, pendingWritesRef.current - 1);
+    }
+  };
+
+  const handleUpdateBatch = async (updatesByRow: Map<string, Partial<DispatchRowModel>>) => {
+    if (dailySheet?.status !== "OPEN") {
+      throw new Error("Esta folha está fechada e disponível somente para consulta.");
+    }
+    const snapshot = dispatches;
+    const payload = Array.from(updatesByRow, ([id, changes]) => ({
+      id,
+      changes,
+      expectedUpdatedAt: dispatches.find((row) => row.id === id)?.updated_at,
+    }));
+    if (!payload.length) return;
+
+    pendingWritesRef.current += 1;
+    setSaveState({ status: "saving" });
+    setDispatches((current) => current.map((row) => ({ ...row, ...(updatesByRow.get(row.id) || {}) })));
+    try {
+      const saved = await dispatchService.updateDispatchBatch(payload);
+      const savedById = new Map(saved.map((row) => [row.id, row]));
+      setDispatches((current) => current.map((row) => ({
+        ...row,
+        ...(savedById.get(row.id) || {}),
+        ...(updatesByRow.get(row.id) || {}),
+      })));
+      setSaveState({ status: "saved" });
+    } catch (error) {
+      setDispatches(snapshot);
+      const saveError = error instanceof Error ? error : new Error("Erro ao salvar a seleção");
+      setSaveState({ status: "error", message: saveError.message });
+      await loadData();
       throw saveError;
     } finally {
       pendingWritesRef.current = Math.max(0, pendingWritesRef.current - 1);
@@ -370,6 +428,7 @@ export default function AcionamentoPage() {
             isChangingSheetStatus={changingSheetStatus}
             onlineOperators={onlineOperators}
             currentUserId={user?.id}
+            syncStatus={syncStatus}
           />
 
           {loadError && (
@@ -382,6 +441,7 @@ export default function AcionamentoPage() {
           <DispatchGrid
             dispatches={filteredDispatches}
             onUpdateRow={handleUpdateRow}
+            onUpdateBatch={handleUpdateBatch}
             locations={locations}
             saveState={saveState}
             readOnly={dailySheet?.status !== "OPEN"}
