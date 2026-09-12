@@ -4,7 +4,9 @@ export type UserRole = "admin" | "supervisor" | "operator";
 // registrar livremente uma situação nova na folha diária.
 export type DispatchStatus = string;
 
-export type CargoStatus = "C" | "V";
+// C e V continuam sendo os valores usuais, mas o operador pode registrar
+// livremente outra indicação na folha diária.
+export type CargoStatus = string;
 export type SheetStatus = "OPEN" | "LOCKED" | "CLOSED";
 
 export interface Profile {

@@ -633,7 +633,7 @@ export function DispatchGrid({
       }
       case 7: return { entry_time: value || null };
       case 8: return { fleet_code: value.toUpperCase() };
-      case 9: return { cargo_status: (["C", "V"].includes(value.toUpperCase()) ? value.toUpperCase() : null) as CargoStatus | null };
+      case 9: return { cargo_status: (value.toUpperCase() || null) as CargoStatus | null };
       case 10: return { destination_name: value.toUpperCase() };
       case 11: return { final_destination_name: value.toUpperCase() };
       case 12: return { exit_time: value || null };
@@ -1097,7 +1097,7 @@ export function DispatchGrid({
         )}
       </div>
       {/* Contêiner com rolagem horizontal e vertical */}
-      <div className="overflow-x-auto overflow-y-auto max-h-[calc(100vh-210px)] relative select-none">
+      <div className="h-[calc(100vh-210px)] min-h-[320px] overflow-x-auto overflow-y-auto bg-white relative select-none">
         <table
           ref={tableRef}
           style={{
@@ -1537,23 +1537,14 @@ export function DispatchGrid({
 
                   {/* 10. C/V */}
                   <td className="px-0.5 py-1 text-center">
-                    <select
+                    <EditableTextCell
                       value={row.cargo_status || ""}
-                      onChange={(e) =>
-                        commitUpdate(row.id, { cargo_status: (e.target.value || null) as CargoStatus | null })
-                      }
-                      className="w-full text-center font-extrabold text-slate-900 focus:bg-white focus:outline-none rounded cursor-pointer"
-                    >
-                      <option value="" className="text-slate-400 font-normal">
-                        -
-                      </option>
-                      <option value="C" className="text-emerald-700 font-bold">
-                        C
-                      </option>
-                      <option value="V" className="text-amber-700 font-bold">
-                        V
-                      </option>
-                    </select>
+                      placeholder="C/V"
+                      onCommit={(value) => commitUpdate(row.id, {
+                        cargo_status: (value.trim().toUpperCase() || null) as CargoStatus | null,
+                      })}
+                      className="w-full text-center font-extrabold uppercase text-slate-900 placeholder-slate-400 focus:bg-white focus:outline-none rounded px-1"
+                    />
                   </td>
 
                   {/* 11. DESTINO */}

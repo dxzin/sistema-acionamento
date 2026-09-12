@@ -37,8 +37,11 @@ Este documento registra decisões confirmadas durante os testes. Alterações ne
 2. Quando não existe destino final anterior e o código do dia é `1`, o local inicial é a base cadastrada do condutor.
 3. Exemplo confirmado: Anizio Barros está cadastrado em `CASTILHO`; em seu primeiro dia da escala, sem continuidade anterior, o local deve ser `CASTILHO`.
 4. Nos códigos 2–5, a base não substitui a continuidade e o sistema não inventa um local.
-4. As opções conhecidas continuam disponíveis como ajuda de preenchimento.
-5. As cores de `ACIONADO`, `ABONADO`, `APOIO`, `BALDEIO` e demais estados conhecidos são parâmetros visuais da operação e devem ser preservadas.
+
+## Campo C/V
+
+1. `C` e `V` são os valores operacionais usuais, mas não limitam o preenchimento.
+2. O operador pode digitar livremente outro texto no campo `C/V`.
 
 ## Frota
 
