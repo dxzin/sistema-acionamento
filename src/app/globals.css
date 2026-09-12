@@ -327,6 +327,19 @@ input:focus-visible, select:focus-visible, button:focus-visible, a:focus-visible
   .excel-report-table th { position: static; }
 }
 
+/* No tema escuro, o texto do status mantém contraste com a cor operacional da célula. */
+[data-app-theme="dark"] .excel-grid .excel-status-acionado { color: #005a16 !important; -webkit-text-fill-color: #005a16; }
+[data-app-theme="dark"] .excel-grid .excel-status-abonado { color: #8f0010 !important; -webkit-text-fill-color: #8f0010; }
+[data-app-theme="dark"] .excel-grid .excel-status-apoio { color: #7a4200 !important; -webkit-text-fill-color: #7a4200; }
+[data-app-theme="dark"] .excel-grid .excel-status-troca,
+[data-app-theme="dark"] .excel-grid .excel-status-baldeio { color: #171717 !important; -webkit-text-fill-color: #171717; }
+[data-app-theme="dark"] .excel-grid .excel-status-falta { color: #fff !important; -webkit-text-fill-color: #fff; }
+[data-app-theme="dark"] .excel-grid .excel-status-atestado { color: #173f6b !important; -webkit-text-fill-color: #173f6b; }
+[data-app-theme="dark"] .excel-grid .excel-status-afastado { color: #52396d !important; -webkit-text-fill-color: #52396d; }
+[data-app-theme="dark"] .excel-grid .excel-status-bate-e-volta { color: #a94f00 !important; -webkit-text-fill-color: #a94f00; }
+[data-app-theme="dark"] .excel-grid .excel-status-suspensao { color: #842724 !important; -webkit-text-fill-color: #842724; }
+[data-app-theme="dark"] .excel-grid .excel-status-viagem-fechada { color: #173f6b !important; -webkit-text-fill-color: #173f6b; }
+
 @media (max-width: 900px) {
   .excel-sidebar { width: 52px; }
   .excel-sidebar-title, .excel-sidebar-footer, .excel-sheet-link span { display: none; }
