@@ -63,7 +63,7 @@ const sheetIds = (sheets || []).map((sheet) => sheet.id);
 const dispatches = sheetIds.length
   ? await allPages((from, to) => supabase
     .from("dispatches")
-    .select("id,daily_sheet_id,driver_id,dispatch_status,origin_location_id,destination_location_id,final_destination_location_id")
+    .select("id,daily_sheet_id,driver_id,dispatch_status,abono_reason,abono_authorized_by,origin_location_id,entry_time,vehicle_id,cargo_status,destination_location_id,final_destination_location_id,exit_time,observations")
     .in("daily_sheet_id", sheetIds)
     .order("daily_sheet_id")
     .order("driver_id")
@@ -100,6 +100,19 @@ const futureStatuses = dispatches.filter((dispatch) => {
   driver: driverById.get(dispatch.driver_id)?.name,
   status: dispatch.dispatch_status,
 }));
+
+const sheetSummary = (sheets || []).map((sheet) => {
+  const rows = dispatches.filter((dispatch) => dispatch.daily_sheet_id === sheet.id);
+  return {
+    date: sheet.date,
+    rows: rows.length,
+    filledStatuses: rows.filter((row) => String(row.dispatch_status || "").trim()).length,
+    filledOperationalFields: rows.filter((row) =>
+      row.entry_time || row.vehicle_id || row.cargo_status || row.destination_location_id ||
+      row.final_destination_location_id || row.exit_time || row.observations || row.abono_reason || row.abono_authorized_by
+    ).length,
+  };
+});
 
 const continuityIssues = [];
 for (const sheet of sheets || []) {
@@ -138,9 +151,9 @@ console.log(JSON.stringify({
     dailySheets: (sheets || []).length,
     dispatches: dispatches.length,
   },
+  sheets: sheetSummary,
   restDayDispatches: { count: restDayDispatches.length, samples: restDayDispatches.slice(0, 20) },
   futureStatuses: { count: futureStatuses.length, samples: futureStatuses.slice(0, 20) },
   continuityIssues: { count: continuityIssues.length, samples: continuityIssues.slice(0, 20) },
   anizioDay10,
 }, null, 2));
-

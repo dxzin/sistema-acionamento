@@ -4,6 +4,7 @@ import { DispatchRowModel } from "@/types/domain";
 import { calculateJornada } from "../calculations/jornada";
 import { calculateNextForecast } from "../calculations/interjornada";
 import { resolveDayContinuity } from "../calculations/continuity";
+import { canCreateDailySheet } from "../dates/operational-date";
 import {
   INITIAL_BASES,
   INITIAL_DISPATCHES,
@@ -208,7 +209,9 @@ class DispatchService {
         }
 
         // 2. Se a folha diária ainda não existir ou não tiver despachos, gera automaticamente
-        if (rawDispatches.length === 0) {
+        // Consultar datas antigas ou mais distantes nunca pode criar dados.
+        // Uma folha ausente só é preparada para o próximo dia operacional.
+        if (rawDispatches.length === 0 && canCreateDailySheet(date)) {
           const targetBases = REGION_BASES[normalizedRegion] || ["LP", "CASTILHO"];
           const { data: bases } = await supabase.from("bases").select("id,code").in("code", targetBases);
           const baseIds = (bases || []).map((b) => b.id);

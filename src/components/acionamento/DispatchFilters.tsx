@@ -3,6 +3,7 @@
 import React from "react";
 import { DispatchFilterOptions } from "@/types/domain";
 import { Calendar, Filter, RefreshCw, Search } from "lucide-react";
+import { nextOperationalDate } from "@/lib/dates/operational-date";
 
 interface DispatchFiltersProps {
   filters: DispatchFilterOptions;
@@ -39,6 +40,7 @@ export function DispatchFilters({
           <input
             type="date"
             value={filters.date}
+            max={nextOperationalDate()}
             onChange={(e) => onFilterChange({ date: e.target.value })}
             className="bg-transparent text-slate-200 text-xs focus:outline-none font-mono cursor-pointer"
           />

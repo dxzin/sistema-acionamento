@@ -5,19 +5,11 @@ import { BarChart3, CalendarRange, Download, FileCheck2, Loader2, Printer, Refre
 import { Header } from "@/components/layout/Header";
 import { Sidebar } from "@/components/layout/Sidebar";
 import { formatMinutesToDuration } from "@/lib/calculations/jornada";
+import { currentDateInBrasilia } from "@/lib/dates/operational-date";
 import { exportOperationalReport, loadOperationalReport, OperationalReport } from "@/lib/services/report-service";
 
-function dateInBrasilia() {
-  return new Intl.DateTimeFormat("en-CA", {
-    timeZone: "America/Sao_Paulo",
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-  }).format(new Date());
-}
-
 function initialPeriod() {
-  const endDate = dateInBrasilia();
+  const endDate = currentDateInBrasilia();
   return { startDate: `${endDate.slice(0, 7)}-01`, endDate };
 }
 

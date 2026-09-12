@@ -10,15 +10,7 @@ import { dispatchService } from "@/lib/services/dispatch-service";
 import { createClient } from "@/lib/supabase/client";
 import { DispatchRowModel, DispatchFilterOptions, DispatchSummaryKPIs } from "@/types/domain";
 import { Location } from "@/types/database";
-
-function currentDateInBrasilia() {
-  return new Intl.DateTimeFormat("en-CA", {
-    timeZone: "America/Sao_Paulo",
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-  }).format(new Date());
-}
+import { currentDateInBrasilia } from "@/lib/dates/operational-date";
 
 export default function AcionamentoPage() {
   const [dispatches, setDispatches] = useState<DispatchRowModel[]>([]);

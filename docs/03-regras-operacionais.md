@@ -15,6 +15,13 @@ Este documento registra decisões confirmadas durante os testes. Alterações ne
 2. Uma nova folha diária deve abrir com todos os status em branco.
 3. Apagar um status deve deixá-lo vazio; nenhum valor pode reaparecer automaticamente.
 4. O próprio banco usa status vazio como padrão; nenhuma inserção assume `ACIONADO` por omissão.
+
+## Criação da folha diária
+
+1. Uma folha nova só pode ser criada para o dia seguinte no calendário de Brasília.
+2. Exemplo: durante o dia 10, somente a folha do dia 11 pode ser preparada; ao entrar no dia 11, a próxima permitida passa a ser a do dia 12.
+3. Datas anteriores continuam disponíveis para consulta, mas consultar uma data sem folha não cria registros.
+4. Selecionar uma data além do dia seguinte nunca pode gerar folha ou condutores automaticamente.
 4. As opções conhecidas continuam disponíveis como ajuda de preenchimento.
 5. As cores de `ACIONADO`, `ABONADO`, `APOIO`, `BALDEIO` e demais estados conhecidos são parâmetros visuais da operação e devem ser preservadas.
 
