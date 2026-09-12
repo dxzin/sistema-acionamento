@@ -122,7 +122,7 @@ function EditableLocationCell({ value, options, label, onCommit }: EditableLocat
         <ChevronDown className="h-3 w-3" />
       </button>
       {showOptions && (
-        <div className="absolute left-0 top-full z-[70] max-h-48 min-w-full overflow-y-auto border border-[#7f7f7f] bg-white shadow-xl">
+        <div className="excel-dark-popup absolute left-0 top-full z-[70] max-h-48 min-w-full overflow-y-auto border border-[#7f7f7f] bg-white shadow-xl">
           {options
             .filter((option) => !draft || option.toUpperCase().includes(draft.toUpperCase()))
             .map((option) => (
@@ -250,7 +250,7 @@ function ExcelColumnFilter({ label, options, selected, onChange }: ExcelColumnFi
 
       {open && (
         <div
-          className="absolute left-0 top-5 z-[90] w-56 border border-[#7f7f7f] bg-white p-2 text-left shadow-xl"
+          className="excel-dark-popup absolute left-0 top-5 z-[90] w-56 border border-[#7f7f7f] bg-white p-2 text-left shadow-xl"
           onMouseDown={(event) => event.stopPropagation()}
         >
           <div className="mb-1 text-[10px] font-bold uppercase text-slate-700">{label}</div>
@@ -433,6 +433,13 @@ export function DispatchGrid({
   }, []);
 
   const darkMode = themePreference === "dark" || (themePreference === "auto" && systemDark);
+
+  useEffect(() => {
+    document.documentElement.dataset.dispatchTheme = darkMode ? "dark" : "light";
+    return () => {
+      delete document.documentElement.dataset.dispatchTheme;
+    };
+  }, [darkMode]);
 
   // Status de acionamento disponíveis
   const STATUS_OPTIONS: DispatchStatus[] = [
@@ -1043,7 +1050,7 @@ export function DispatchGrid({
           </select>
         </label>
         {showFindReplace && (
-          <div className="absolute right-24 top-8 z-[100] w-80 border border-[#7f7f7f] bg-white p-3 shadow-xl">
+          <div className="excel-dark-popup absolute right-24 top-8 z-[100] w-80 border border-[#7f7f7f] bg-white p-3 shadow-xl">
             <div className="mb-2 flex items-center justify-between border-b pb-1">
               <span className="text-xs font-bold text-slate-800">Localizar e substituir</span>
               <button type="button" onClick={() => setShowFindReplace(false)} aria-label="Fechar">
@@ -1092,7 +1099,7 @@ export function DispatchGrid({
           </div>
         )}
         {showColumnMenu && (
-          <div className="absolute right-2 top-8 z-50 w-56 border border-[#7f7f7f] bg-white p-2 shadow-xl">
+          <div className="excel-dark-popup absolute right-2 top-8 z-50 w-56 border border-[#7f7f7f] bg-white p-2 shadow-xl">
             <div className="mb-1 flex items-center justify-between border-b pb-1">
               <span className="text-xs font-bold text-slate-800">Exibir colunas</span>
               <button type="button" onClick={() => setShowColumnMenu(false)} aria-label="Fechar"><X className="h-3.5 w-3.5" /></button>
@@ -1679,7 +1686,7 @@ export function DispatchGrid({
         <div
           role="menu"
           style={{ left: contextMenu.x, top: contextMenu.y }}
-          className="fixed z-[120] w-44 border border-[#7f7f7f] bg-white py-1 text-[11px] text-slate-800 shadow-xl"
+          className="excel-dark-popup fixed z-[120] w-44 border border-[#7f7f7f] bg-white py-1 text-[11px] text-slate-800 shadow-xl"
           onMouseDown={(event) => event.stopPropagation()}
         >
           <button
