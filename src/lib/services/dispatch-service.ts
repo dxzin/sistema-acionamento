@@ -136,6 +136,30 @@ class DispatchService {
     return data;
   }
 
+  async getDailySheetSyncToken(date: string, region: string = "SP"): Promise<string | null> {
+    if (!this.isSupabaseConfigured()) return null;
+    const normalizedRegion = region === "ALL" ? "SP" : region;
+    const supabase = createClient();
+    const { data: sheet, error: sheetError } = await supabase
+      .from("daily_sheets")
+      .select("id,updated_at")
+      .eq("date", date)
+      .eq("region", normalizedRegion)
+      .maybeSingle();
+    if (sheetError) throw new Error(sheetError.message);
+    if (!sheet) return null;
+
+    const { data: latestDispatch, error: dispatchError } = await supabase
+      .from("dispatches")
+      .select("updated_at")
+      .eq("daily_sheet_id", sheet.id)
+      .order("updated_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    if (dispatchError) throw new Error(dispatchError.message);
+    return `${sheet.updated_at}:${latestDispatch?.updated_at || ""}`;
+  }
+
   async setDailySheetStatus(id: string, status: Extract<SheetStatus, "OPEN" | "CLOSED">): Promise<DailySheet> {
     if (!this.isSupabaseConfigured()) throw new Error("Fechamento disponível somente com o banco conectado.");
     const supabase = createClient();

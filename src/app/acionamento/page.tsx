@@ -21,6 +21,8 @@ export default function AcionamentoPage() {
   const [loadError, setLoadError] = useState<string | null>(null);
   const [saveState, setSaveState] = useState<{ status: "idle" | "saving" | "saved" | "error"; message?: string }>({ status: "idle" });
   const loadRequestRef = useRef(0);
+  const syncTokenRef = useRef<string | null>(null);
+  const pendingWritesRef = useRef(0);
 
   // Filtros
   const [filters, setFilters] = useState<DispatchFilterOptions>({
@@ -38,9 +40,10 @@ export default function AcionamentoPage() {
     setLoadError(null);
     try {
       const dispatchesData = await dispatchService.getDispatchesForSheet(filters.date, filters.region);
-      const [locs, sheet] = await Promise.all([
+      const [locs, sheet, syncToken] = await Promise.all([
         dispatchService.getLocations(),
         dispatchService.getDailySheet(filters.date, filters.region),
+        dispatchService.getDailySheetSyncToken(filters.date, filters.region),
       ]);
 
       // Uma resposta de uma data/região antiga nunca pode sobrescrever a
@@ -49,6 +52,7 @@ export default function AcionamentoPage() {
         setDispatches(dispatchesData);
         setLocations(locs);
         setDailySheet(sheet);
+        syncTokenRef.current = syncToken;
       }
     } catch (error) {
       console.error("Erro ao carregar dados da folha diária:", error);
@@ -64,6 +68,14 @@ export default function AcionamentoPage() {
 
   useEffect(() => {
     loadData();
+  }, [loadData]);
+
+  const syncFromRemote = useCallback(() => {
+    const activeElement = document.activeElement;
+    const operatorIsTyping = activeElement instanceof HTMLInputElement ||
+      activeElement instanceof HTMLSelectElement || activeElement instanceof HTMLTextAreaElement;
+    if (pendingWritesRef.current > 0 || operatorIsTyping) return;
+    void loadData();
   }, [loadData]);
 
   // Sincronização em tempo real via Supabase Realtime
@@ -83,13 +95,13 @@ export default function AcionamentoPage() {
           // Uma colagem pode atualizar dezenas de linhas. Agrupar os eventos
           // evita recargas concorrentes e preserva a atualização otimista.
           if (refreshTimer) clearTimeout(refreshTimer);
-          refreshTimer = setTimeout(() => loadData(), 700);
+          refreshTimer = setTimeout(syncFromRemote, 700);
         }
       )
       .on(
         "postgres_changes",
         { event: "UPDATE", schema: "public", table: "daily_sheets" },
-        () => loadData()
+        syncFromRemote
       )
       .subscribe();
 
@@ -97,7 +109,34 @@ export default function AcionamentoPage() {
       if (refreshTimer) clearTimeout(refreshTimer);
       supabase.removeChannel(channel);
     };
-  }, [loadData]);
+  }, [syncFromRemote]);
+
+  // Algumas redes corporativas bloqueiam WebSocket. Este verificador leve
+  // consulta somente a versão mais recente e recarrega a grade se algo mudou.
+  useEffect(() => {
+    let checking = false;
+    const checkForChanges = async () => {
+      if (checking || document.visibilityState !== "visible" || pendingWritesRef.current > 0) return;
+      const activeElement = document.activeElement;
+      if (activeElement instanceof HTMLInputElement || activeElement instanceof HTMLSelectElement || activeElement instanceof HTMLTextAreaElement) return;
+      checking = true;
+      try {
+        const token = await dispatchService.getDailySheetSyncToken(filters.date, filters.region);
+        if (syncTokenRef.current !== null && token !== syncTokenRef.current) {
+          syncTokenRef.current = token;
+          await loadData();
+        } else {
+          syncTokenRef.current = token;
+        }
+      } catch (error) {
+        console.warn("Sincronização automática temporariamente indisponível:", error);
+      } finally {
+        checking = false;
+      }
+    };
+    const interval = window.setInterval(checkForChanges, 2500);
+    return () => window.clearInterval(interval);
+  }, [filters.date, filters.region, loadData]);
 
   // Recalcular periodicamente as jornadas em andamento (tempo real a cada 10s)
   useEffect(() => {
@@ -125,6 +164,7 @@ export default function AcionamentoPage() {
     if (dailySheet?.status !== "OPEN") {
       throw new Error("Esta folha está fechada e disponível somente para consulta.");
     }
+    pendingWritesRef.current += 1;
     setSaveState({ status: "saving" });
 
     // Atualização otimista imediata na UI
@@ -171,6 +211,8 @@ export default function AcionamentoPage() {
         await loadData();
       }
       throw saveError;
+    } finally {
+      pendingWritesRef.current = Math.max(0, pendingWritesRef.current - 1);
     }
   };
 

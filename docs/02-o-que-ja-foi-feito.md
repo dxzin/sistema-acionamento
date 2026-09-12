@@ -35,6 +35,7 @@
 - Desfazer e refazer durante a sessão; uma colagem ou limpeza de intervalo é tratada como uma única ação.
 - Salvamento de destino, destino final e frota corrigido no ambiente publicado.
 - Sincronização em tempo real preparada para operadores simultâneos.
+- Sincronização automática de segurança para redes corporativas que bloqueiam o canal em tempo real, sem exigir o botão `Atualizar`.
 - Eventos em tempo real agrupados durante colagens grandes, evitando recargas concorrentes e valores aparentemente desaparecendo.
 - Em produção, uma falha no banco não mostra dados de demonstração: a grade fica vazia e apresenta um aviso explícito para evitar acionamentos fictícios.
 
