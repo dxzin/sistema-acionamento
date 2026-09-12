@@ -29,6 +29,13 @@ Este documento registra decisões confirmadas durante os testes. Alterações ne
 2. O horário da escala é utilizado somente quando não existe previsão do dia anterior.
 3. Se a saída do dia anterior for preenchida depois que a próxima folha já existe, a previsão do dia seguinte é atualizada automaticamente.
 4. Uma previsão alterada manualmente pelo operador não pode ser sobrescrita pela continuidade automática.
+
+## Local no primeiro dia da escala
+
+1. O `LOCAL` continua usando primeiro o `DESTINO FINAL` do dia anterior.
+2. Quando não existe destino final anterior e o código do dia é `1`, o local inicial é a base cadastrada do condutor.
+3. Exemplo confirmado: Anizio Barros está cadastrado em `CASTILHO`; em seu primeiro dia da escala, sem continuidade anterior, o local deve ser `CASTILHO`.
+4. Nos códigos 2–5, a base não substitui a continuidade e o sistema não inventa um local.
 4. As opções conhecidas continuam disponíveis como ajuda de preenchimento.
 5. As cores de `ACIONADO`, `ABONADO`, `APOIO`, `BALDEIO` e demais estados conhecidos são parâmetros visuais da operação e devem ser preservadas.
 

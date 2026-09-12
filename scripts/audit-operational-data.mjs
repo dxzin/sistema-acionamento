@@ -41,13 +41,15 @@ async function allPages(makeQuery) {
   }
 }
 
-const [{ data: schedule, error: scheduleError }, { data: sheets, error: sheetsError }, drivers] = await Promise.all([
+const [{ data: schedule, error: scheduleError }, { data: sheets, error: sheetsError }, drivers, { data: bases, error: basesError }] = await Promise.all([
   supabase.from("monthly_schedules").select("id").eq("month", month).eq("year", year).eq("region", region).maybeSingle(),
   supabase.from("daily_sheets").select("id,date").eq("region", region).gte("date", startDate).lte("date", endDate).order("date"),
-  allPages((from, to) => supabase.from("drivers").select("id,name,login_matricula").order("id").range(from, to)),
+  allPages((from, to) => supabase.from("drivers").select("id,name,login_matricula,base_id").order("id").range(from, to)),
+  supabase.from("bases").select("id,code,name"),
 ]);
 if (scheduleError) throw scheduleError;
 if (sheetsError) throw sheetsError;
+if (basesError) throw basesError;
 
 const scheduleEntries = schedule?.id
   ? await allPages((from, to) => supabase
@@ -71,6 +73,7 @@ const dispatches = sheetIds.length
   : [];
 
 const driverById = new Map(drivers.map((driver) => [driver.id, driver]));
+const baseById = new Map((bases || []).map((base) => [base.id, base]));
 const sheetById = new Map((sheets || []).map((sheet) => [sheet.id, sheet]));
 const sheetByDate = new Map((sheets || []).map((sheet) => [sheet.date, sheet]));
 const scheduleByCell = new Map(scheduleEntries.map((entry) => [
@@ -152,9 +155,23 @@ const anizio = drivers.find((driver) => /ANIZIO|ANIZIO/i.test(driver.name.normal
 const day10Sheet = sheetByDate.get(`${year}-${String(month).padStart(2, "0")}-10`);
 const anizioDay10 = anizio ? {
   driver: anizio.name,
+  base: baseById.get(anizio.base_id)?.code || baseById.get(anizio.base_id)?.name || null,
   scaleCode: scheduleByCell.get(`${anizio.id}:10`) || null,
   appearsInDailySheet: Boolean(day10Sheet && dispatchBySheetDriver.get(`${day10Sheet.id}:${anizio.id}`)),
 } : null;
+
+const firstDayMissingOrigins = dispatches.filter((dispatch) => {
+  const date = sheetById.get(dispatch.daily_sheet_id)?.date;
+  const day = date ? Number(date.slice(8, 10)) : 0;
+  return scheduleByCell.get(`${dispatch.driver_id}:${day}`) === "1" && !dispatch.origin_location_id;
+}).map((dispatch) => {
+  const driver = driverById.get(dispatch.driver_id);
+  return {
+    date: sheetById.get(dispatch.daily_sheet_id)?.date,
+    driver: driver?.name,
+    base: baseById.get(driver?.base_id)?.code || baseById.get(driver?.base_id)?.name || null,
+  };
+});
 
 console.log(JSON.stringify({
   auditedAt: new Date().toISOString(),
@@ -170,5 +187,6 @@ console.log(JSON.stringify({
   futureStatuses: { count: futureStatuses.length, samples: futureStatuses.slice(0, 20) },
   continuityIssues: { count: continuityIssues.length, samples: continuityIssues.slice(0, 20) },
   forecastContinuityIssues: { count: forecastContinuityIssues.length, samples: forecastContinuityIssues.slice(0, 20) },
+  firstDayMissingOrigins: { count: firstDayMissingOrigins.length, samples: firstDayMissingOrigins.slice(0, 20) },
   anizioDay10,
 }, null, 2));

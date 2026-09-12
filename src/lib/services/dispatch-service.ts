@@ -4,6 +4,7 @@ import { DispatchRowModel } from "@/types/domain";
 import { calculateJornada } from "../calculations/jornada";
 import { calculateNextForecast } from "../calculations/interjornada";
 import { resolveDayContinuity } from "../calculations/continuity";
+import { resolveFirstDayBaseOrigin } from "../calculations/first-day-origin";
 import { canCreateDailySheet, currentDateInBrasilia } from "../dates/operational-date";
 import {
   INITIAL_BASES,
@@ -124,6 +125,7 @@ class DispatchService {
   async getDispatchesForSheet(date: string, region: string = "SP"): Promise<DispatchRowModel[]> {
     let rawDispatches: Dispatch[] = [];
     const restDriverIds = new Set<string>();
+    const currentScaleCodeByDriver = new Map<string, string>();
     const normalizedRegion = region === "ALL" ? "SP" : region;
 
     if (this.isSupabaseConfigured()) {
@@ -211,13 +213,16 @@ class DispatchService {
           .maybeSingle();
 
         if (currentSchedule) {
-          const { data: restEntries } = await supabase
+          const { data: dayEntries } = await supabase
             .from("monthly_schedule_entries")
             .select("driver_id,scale_code")
             .eq("schedule_id", currentSchedule.id)
-            .eq("day_of_month", Number(dayText))
-            .in("scale_code", ["F", "FE"]);
-          for (const entry of restEntries || []) restDriverIds.add(entry.driver_id);
+            .eq("day_of_month", Number(dayText));
+          for (const entry of dayEntries || []) {
+            const scaleCode = String(entry.scale_code || "").trim().toUpperCase();
+            currentScaleCodeByDriver.set(entry.driver_id, scaleCode);
+            if (["F", "FE"].includes(scaleCode)) restDriverIds.add(entry.driver_id);
+          }
         }
 
         // 2. Se a folha diária ainda não existir ou não tiver despachos, gera automaticamente
@@ -347,10 +352,6 @@ class DispatchService {
     // Mantém a mesma fotografia carregada pela grade como base das edições.
     // Assim, alterar somente ENTRADA ou somente SAÍDA ainda usa o outro horário
     // já salvo para recalcular jornada e próxima previsão corretamente.
-    if (this.isSupabaseConfigured()) {
-      this.localDispatches = [...rawDispatches];
-    }
-
     const drivers = await this.getDrivers();
     const bases = await this.getBases();
     const vehicles = await this.getVehicles();
@@ -360,6 +361,39 @@ class DispatchService {
     const basesMap = new Map(bases.map((b) => [b.id, b]));
     const vehiclesMap = new Map(vehicles.map((v) => [v.id, v]));
     const locationsMap = new Map(locations.map((l) => [l.id, l]));
+
+    // No primeiro dia do ciclo, quando não há destino final anterior, o LOCAL
+    // começa na base cadastrada do condutor (ex.: CASTILHO ou LP).
+    const firstDayOrigins = rawDispatches.flatMap((row) => {
+      const originId = resolveFirstDayBaseOrigin(
+        currentScaleCodeByDriver.get(row.driver_id) || row.scale_day_status,
+        row.origin_location_id,
+        driversMap.get(row.driver_id),
+        bases,
+        locations
+      );
+      return originId ? [{ id: row.id, originId }] : [];
+    });
+
+    if (firstDayOrigins.length) {
+      if (this.isSupabaseConfigured()) {
+        const updateClient = createClient();
+        const results = await Promise.all(firstDayOrigins.map(({ id, originId }) =>
+          updateClient.from("dispatches").update({ origin_location_id: originId }).eq("id", id)
+        ));
+        const failed = results.find((result) => result.error);
+        if (failed?.error) throw new Error(failed.error.message);
+      }
+      const originsById = new Map(firstDayOrigins.map((item) => [item.id, item.originId]));
+      rawDispatches = rawDispatches.map((row) => ({
+        ...row,
+        origin_location_id: row.origin_location_id || originsById.get(row.id) || null,
+      }));
+    }
+
+    if (this.isSupabaseConfigured()) {
+      this.localDispatches = [...rawDispatches];
+    }
 
     return rawDispatches.filter((disp) => {
       const scaleCode = (disp.scale_day_status || "").trim().toUpperCase();
