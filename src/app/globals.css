@@ -418,7 +418,6 @@ input:focus-visible, select:focus-visible, button:focus-visible, a:focus-visible
   .excel-grid .excel-statusbar { right: 4px; left: 56px; }
 }
 
-
 /* Sticky columns for schedule grid */
 .excel-schedule-grid table { min-width: 100%; background: #fff; }
 .excel-schedule-grid tbody tr { background: #fff; }
@@ -503,4 +502,22 @@ input:focus-visible, select:focus-visible, button:focus-visible, a:focus-visible
   [data-app-theme="dark"] .excel-report-block,
   [data-app-theme="dark"] .excel-report-table td,
   [data-app-theme="dark"] .excel-report-compact-table td { color: #172033; background: #fff; }
+}
+
+/* Identificação operacional fixa dos condutores da base CASTILHO. */
+.excel-grid tbody tr td.excel-driver-castilho,
+.excel-grid tbody tr:hover td.excel-driver-castilho,
+.excel-grid tbody tr.excel-selected-row td.excel-driver-castilho,
+.excel-grid tbody tr.excel-collaborator-row td.excel-driver-castilho,
+[data-app-theme="dark"] .excel-grid tbody tr td.excel-driver-castilho,
+[data-app-theme="dark"] .excel-grid tbody tr:hover td.excel-driver-castilho,
+[data-app-theme="dark"] .excel-grid tbody tr.excel-selected-row td.excel-driver-castilho,
+[data-app-theme="dark"] .excel-grid tbody tr.excel-collaborator-row td.excel-driver-castilho {
+  background-color: #e2f0d9 !important;
+  color: #0b5a30 !important;
+}
+.excel-grid tbody td.excel-driver-castilho .excel-driver-name-value,
+[data-app-theme="dark"] .excel-grid tbody td.excel-driver-castilho .excel-driver-name-value {
+  color: #0b5a30 !important;
+  -webkit-text-fill-color: #0b5a30;
 }

@@ -1429,6 +1429,7 @@ export function DispatchGrid({
               const hasAbonoPending =
                 row.abono_authorized_by === "PENDENTE" && row.dispatch_status === "ABONADO";
               const rowEditors = activeEditors[row.id] || [];
+              const isCastilhoDriver = row.base?.code?.trim().toUpperCase() === "CASTILHO";
 
               return (
                 <tr
@@ -1455,9 +1456,11 @@ export function DispatchGrid({
                   </td>
 
                   {/* 1. CONDUTOR (Fixado - Texto Escuro e Nítido) */}
-                  <td className="sticky left-[44px] z-20 px-2.5 py-1 font-sans font-semibold group overflow-hidden border-r border-slate-300">
+                  <td className={`sticky left-[44px] z-20 px-2.5 py-1 font-sans font-semibold group overflow-hidden border-r border-slate-300 ${
+                    isCastilhoDriver ? "excel-driver-castilho" : ""
+                  }`}>
                     <div className="flex items-center justify-between gap-1 overflow-hidden">
-                      <span className="truncate text-slate-900 font-bold text-xs" title={row.driver.name}>
+                      <span className="excel-driver-name-value truncate text-slate-900 font-bold text-xs" title={row.driver.name}>
                         {row.driver.name}
                       </span>
                       {rowEditors.length > 0 && (
