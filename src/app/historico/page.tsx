@@ -4,6 +4,7 @@ import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { Header } from "@/components/layout/Header";
 import { Sidebar } from "@/components/layout/Sidebar";
 import { createClient } from "@/lib/supabase/client";
+import { escapeCsvCell } from "@/lib/exports/csv";
 import { Database, Download, History, Loader2, Search, ShieldCheck } from "lucide-react";
 
 const PAGE_SIZE = 50;
@@ -16,7 +17,6 @@ const FIELD_LABELS: Record<string, string> = {
   observations: "Observação", next_day_forecast_time: "Previsão do próximo dia",
   total_worked_minutes: "Tempo de jornada (min)", status: "Estado da folha",
 };
-const csvCell = (value: string) => `"${value.replaceAll('"', '""')}"`;
 
 export default function HistoricoPage() {
   const [events, setEvents] = useState<AuditEvent[]>([]);
@@ -95,7 +95,7 @@ export default function HistoricoPage() {
     return term ? events.filter((event) => `${event.user} ${event.driver} ${event.details}`.toLocaleLowerCase("pt-BR").includes(term)) : events;
   }, [events, search]);
   const exportCsv = () => {
-    const rows = ["Data;Operador;Condutor;Ação;Detalhes", ...visibleEvents.map((event) => [event.timestamp, event.user, event.driver, event.action, event.details].map(csvCell).join(";"))];
+    const rows = ["Data;Operador;Condutor;Ação;Detalhes", ...visibleEvents.map((event) => [event.timestamp, event.user, event.driver, event.action, event.details].map(escapeCsvCell).join(";"))];
     const blob = new Blob(["\uFEFF" + rows.join("\r\n")], { type: "text/csv;charset=utf-8" });
     const link = document.createElement("a"); link.href = URL.createObjectURL(blob); link.download = `historico-acionamento-${new Date().toISOString().slice(0, 10)}.csv`; link.click(); URL.revokeObjectURL(link.href);
   };
