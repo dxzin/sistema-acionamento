@@ -105,8 +105,8 @@ body {
 .excel-schedule-grid td.excel-schedule-rest,
 .excel-schedule-grid td.excel-schedule-rest input {
   background-color: #f00 !important;
-  color: #000 !important;
-  -webkit-text-fill-color: #000;
+  color: #fff !important;
+  -webkit-text-fill-color: #fff;
   font-weight: 700;
 }
 .excel-schedule-grid td.excel-schedule-vacation,
