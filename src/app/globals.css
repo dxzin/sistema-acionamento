@@ -102,6 +102,20 @@ body {
 .excel-schedule-grid td { height: 32px; padding: 0; background: #fff; border-right: 1px solid var(--excel-grid); border-bottom: 1px solid var(--excel-grid); }
 .excel-schedule-grid td.is-work { background: #e2f0d9; color: #0b5a30; font-weight: 700; }
 .excel-schedule-grid td.is-rest { background: #ffd8d8; color: #9c0006; font-weight: 700; }
+.excel-schedule-grid td.excel-schedule-rest,
+.excel-schedule-grid td.excel-schedule-rest input {
+  background-color: #f00 !important;
+  color: #000 !important;
+  -webkit-text-fill-color: #000;
+  font-weight: 700;
+}
+.excel-schedule-grid td.excel-schedule-work,
+.excel-schedule-grid td.excel-schedule-work input {
+  background-color: #00b050 !important;
+  color: #000 !important;
+  -webkit-text-fill-color: #000;
+  font-weight: 700;
+}
 .excel-schedule-grid td.is-exception { background: #fff2cc; color: #9c5700; font-weight: 700; }
 .excel-schedule-grid td.is-invalid { background: #fce8e6; color: #c00; }
 .excel-schedule-grid td.is-dirty input { background: #fff8e1; }

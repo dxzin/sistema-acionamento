@@ -56,10 +56,15 @@ function getShiftBadge(shift?: string | null) {
 }
 
 function getCodeCellClass(code: string, dirty: boolean) {
+  if (code === "F" || code === "FE") {
+    return `excel-schedule-rest${dirty ? " ring-1 ring-amber-400" : ""}`;
+  }
+  if (/^[1-4]$/.test(code)) {
+    return `excel-schedule-work${dirty ? " ring-1 ring-amber-400" : ""}`;
+  }
   if (dirty) return "bg-[#FFF8E1] text-[#B45309] font-bold ring-1 ring-amber-400";
-  if (code === "F" || code === "FE") return "bg-[#FFD8D8] text-[#9C0006] font-bold";
   if (["AT", "AF", "DESL"].includes(code)) return "bg-[#FFF2CC] text-[#9C5700] font-bold";
-  if (/^[1-6]$/.test(code)) return "bg-[#E2F0D9] text-[#0B5A30] font-bold";
+  if (/^[5-6]$/.test(code)) return "bg-[#E2F0D9] text-[#0B5A30] font-bold";
   if (code) return "bg-[#FCE8E6] text-[#DC2626] font-bold";
   return "bg-white text-slate-900";
 }
