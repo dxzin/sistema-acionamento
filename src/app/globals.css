@@ -188,6 +188,9 @@ body {
 .excel-combobox-input::placeholder { color: #94a3b8 !important; font-weight: 400; text-transform: none; }
 .excel-combobox-input:focus { background: #fff !important; color: #111 !important; outline: 2px solid var(--excel-selection) !important; outline-offset: -2px !important; }
 .excel-statusbar { display: flex; align-items: center; gap: 6px; min-height: 24px; padding: 2px 8px; border-top: 1px solid #a6a6a6; background: #f3f3f3; color: #475569; font: 600 10px Calibri, "Segoe UI", sans-serif; }
+.excel-grid-canvas::-webkit-scrollbar:horizontal { height: 0; }
+.excel-grid-bottom-scroll { border-top: 1px solid #b7b7b7; background: #f3f3f3; }
+.excel-grid-bottom-scroll > div { background: transparent; }
 .excel-save-dot { width: 7px; height: 7px; border-radius: 999px; background: #64748b; }
 .excel-save-dot.is-saving { background: #d97706; animation: pulse 1s ease-in-out infinite; }
 .excel-save-dot.is-saved { background: #107c41; }
@@ -231,7 +234,8 @@ body {
 [data-app-theme="dark"] .excel-operational-alerts.is-clear { border-color: #2f855a; background: #174d2d; color: #bbf7d0; }
 [data-app-theme="dark"] .excel-grid { color: #e5e7eb; background: #20242a; border-color: #4b5159; }
 [data-app-theme="dark"] .excel-grid .excel-grid-actions,
-[data-app-theme="dark"] .excel-grid .excel-statusbar { color: #cbd5e1; background: #292e35; border-color: #4b5159; }
+[data-app-theme="dark"] .excel-grid .excel-statusbar,
+[data-app-theme="dark"] .excel-grid .excel-grid-bottom-scroll { color: #cbd5e1; background: #292e35; border-color: #4b5159; }
 [data-app-theme="dark"] .excel-grid .excel-grid-actions > button,
 [data-app-theme="dark"] .excel-grid .excel-grid-actions > label { color: #e5e7eb; background: #343a42; border-color: #59616b; }
 [data-app-theme="dark"] .excel-grid .excel-grid-actions select { color: #e5e7eb !important; }

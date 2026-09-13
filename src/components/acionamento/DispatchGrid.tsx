@@ -377,6 +377,8 @@ export function DispatchGrid({
   const [isSearching, setIsSearching] = useState<boolean>(false);
   const [columnFilters, setColumnFilters] = useState<Partial<Record<ColumnFilterKey, string[]>>>({});
   const tableRef = useRef<HTMLTableElement>(null);
+  const gridCanvasRef = useRef<HTMLDivElement>(null);
+  const bottomScrollRef = useRef<HTMLDivElement>(null);
   const [selection, setSelection] = useState<{
     anchor: { row: number; column: number };
     focus: { row: number; column: number };
@@ -398,6 +400,19 @@ export function DispatchGrid({
     (total, width, index) => total + (hiddenColumns.includes(index) ? 0 : width),
     0
   );
+  const scaledTableWidth = visibleTableWidth * (gridZoom / 100);
+
+  const syncHorizontalScroll = (source: "grid" | "footer") => {
+    const grid = gridCanvasRef.current;
+    const footer = bottomScrollRef.current;
+    if (!grid || !footer) return;
+    if (source === "grid" && Math.abs(footer.scrollLeft - grid.scrollLeft) > 1) {
+      footer.scrollLeft = grid.scrollLeft;
+    }
+    if (source === "footer" && Math.abs(grid.scrollLeft - footer.scrollLeft) > 1) {
+      grid.scrollLeft = footer.scrollLeft;
+    }
+  };
 
   useEffect(() => {
     try {
@@ -1119,7 +1134,11 @@ export function DispatchGrid({
         )}
       </div>
       {/* Contêiner com rolagem horizontal e vertical */}
-      <div className="excel-grid-canvas relative min-h-0 flex-1 select-none overflow-x-auto overflow-y-auto bg-white">
+      <div
+        ref={gridCanvasRef}
+        onScroll={() => syncHorizontalScroll("grid")}
+        className="excel-grid-canvas relative min-h-0 flex-1 select-none overflow-x-auto overflow-y-auto bg-white"
+      >
         <table
           ref={tableRef}
           style={{
@@ -1714,6 +1733,14 @@ export function DispatchGrid({
           </button>
         </div>
       )}
+      <div
+        ref={bottomScrollRef}
+        onScroll={() => syncHorizontalScroll("footer")}
+        className="excel-grid-bottom-scroll h-4 shrink-0 overflow-x-auto overflow-y-hidden"
+        aria-label="Rolagem horizontal da planilha"
+      >
+        <div style={{ width: scaledTableWidth, height: 1 }} />
+      </div>
       <div className="excel-statusbar sticky bottom-0 z-40 shrink-0 overflow-hidden" role="status" aria-live="polite">
         <span className={`excel-save-dot is-${saveState.status}`} />
         <span className="min-w-0 truncate">
