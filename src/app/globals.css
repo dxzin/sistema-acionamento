@@ -109,9 +109,9 @@ body {
   -webkit-text-fill-color: #000;
   font-weight: 700;
 }
-.excel-schedule-grid td.excel-schedule-work,
-.excel-schedule-grid td.excel-schedule-work input {
-  background-color: #00b050 !important;
+.excel-schedule-grid td.excel-schedule-vacation,
+.excel-schedule-grid td.excel-schedule-vacation input {
+  background-color: #f4b183 !important;
   color: #000 !important;
   -webkit-text-fill-color: #000;
   font-weight: 700;
