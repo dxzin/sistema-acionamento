@@ -930,7 +930,7 @@ export function DispatchGrid({
 
   return (
     <div
-      className="excel-grid overflow-hidden flex flex-col flex-1"
+      className="excel-grid flex min-h-0 flex-1 flex-col overflow-hidden"
       tabIndex={0}
       onPaste={(event) => {
         if (readOnly) {
@@ -1119,7 +1119,7 @@ export function DispatchGrid({
         )}
       </div>
       {/* Contêiner com rolagem horizontal e vertical */}
-      <div className="excel-grid-canvas h-[calc(100vh-210px)] min-h-[320px] overflow-x-auto overflow-y-auto bg-white relative select-none">
+      <div className="excel-grid-canvas relative min-h-0 flex-1 select-none overflow-x-auto overflow-y-auto bg-white">
         <table
           ref={tableRef}
           style={{
@@ -1714,17 +1714,17 @@ export function DispatchGrid({
           </button>
         </div>
       )}
-      <div className="excel-statusbar" role="status" aria-live="polite">
+      <div className="excel-statusbar sticky bottom-0 z-40 shrink-0 overflow-hidden" role="status" aria-live="polite">
         <span className={`excel-save-dot is-${saveState.status}`} />
-        <span>
+        <span className="min-w-0 truncate">
           {saveState.status === "saving" && "Salvando alteração..."}
           {saveState.status === "saved" && "Alteração salva"}
           {saveState.status === "error" && (saveState.message || "Erro ao salvar alteração")}
           {saveState.status === "idle" && (readOnly ? "Folha fechada — somente leitura" : "Pronto")}
         </span>
-        <span className="ml-auto">{processedDispatches.length} linhas</span>
-        <span className="border-l border-slate-300 pl-2">Ctrl+C · Ctrl+V · Delete · Ctrl+Z · Ctrl+D · Ctrl+R</span>
-        <div className="flex items-center gap-1 border-l border-slate-300 pl-2" aria-label="Zoom da planilha">
+        <span className="ml-auto hidden shrink-0 sm:inline">{processedDispatches.length} linhas</span>
+        <span className="hidden shrink-0 border-l border-slate-300 pl-2 2xl:inline">Ctrl+C · Ctrl+V · Delete · Ctrl+Z · Ctrl+D · Ctrl+R</span>
+        <div className="ml-auto flex shrink-0 items-center gap-1 border-l border-slate-300 pl-2" aria-label="Zoom da planilha">
           <button
             type="button"
             onClick={() => setGridZoom((current) => Math.max(75, current - 5))}
