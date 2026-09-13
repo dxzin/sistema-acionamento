@@ -222,6 +222,44 @@ body {
 .excel-operational-alerts .is-info { border-color: #9dc3e6; background: #ddebf7; color: #173f6b; }
 .excel-operational-alerts.is-clear { border-color: #a9d08e; background: #e2f0d9; color: #176235; font-weight: 700; }
 .excel-grid option { color: #111 !important; background: #fff !important; }
+.dispatch-reminder-button { display: inline-flex; height: 22px; min-width: 22px; align-items: center; justify-content: center; gap: 3px; padding: 0 3px; border: 1px solid transparent; color: #64748b; background: transparent; }
+.dispatch-reminder-button:hover { border-color: #d6a319; color: #7a4b00; background: #fff2cc; }
+.dispatch-reminder-button.is-active { border-color: #d6a319; color: #7a4b00; background: #ffeb9c; font: 800 9px Consolas, monospace; }
+.dispatch-reminder-button svg { width: 13px; height: 13px; flex: 0 0 auto; }
+.dispatch-reminder-editor { position: fixed; z-index: 130; width: 270px; border: 1px solid #8a6d1d; background: #fff; color: #202020; box-shadow: 0 8px 24px rgba(15, 23, 42, .24); font: 11px Calibri, "Segoe UI", sans-serif; }
+.dispatch-reminder-editor-title { display: flex; min-height: 44px; align-items: center; gap: 8px; padding: 7px 8px; border-bottom: 1px solid #d6c46a; background: #fff2cc; }
+.dispatch-reminder-editor-title > svg { width: 18px; height: 18px; flex: 0 0 auto; color: #9c6500; }
+.dispatch-reminder-editor-title > div { display: grid; min-width: 0; flex: 1; }
+.dispatch-reminder-editor-title strong { font-size: 12px; color: #604500; }
+.dispatch-reminder-editor-title span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: #444; }
+.dispatch-reminder-editor-title button { display: grid; width: 24px; height: 24px; place-items: center; color: #6b5a2f; }
+.dispatch-reminder-editor-title button:hover { background: #f3df9b; }
+.dispatch-reminder-editor-title button svg { width: 14px; height: 14px; }
+.dispatch-reminder-editor label { display: grid; gap: 4px; padding: 9px 10px 4px; color: #4b5563; font-weight: 700; }
+.dispatch-reminder-editor input { height: 32px !important; padding: 3px 8px !important; border: 1px solid #9ca3af !important; background: #fff !important; color: #111827 !important; font: 700 14px Consolas, monospace !important; }
+.dispatch-reminder-editor > p { margin: 3px 10px; color: #9c0006; font-weight: 700; }
+.dispatch-reminder-editor > small { display: block; padding: 0 10px 9px; color: #64748b; }
+.dispatch-reminder-editor-actions { display: flex; justify-content: flex-end; gap: 5px; padding: 6px 10px; }
+.dispatch-reminder-editor-actions button { display: inline-flex; height: 28px; align-items: center; gap: 4px; padding: 0 9px; border: 1px solid #8a8a8a; background: #f3f3f3; color: #374151; font-weight: 700; }
+.dispatch-reminder-editor-actions button svg { width: 13px; height: 13px; }
+.dispatch-reminder-editor-actions .is-save { margin-left: auto; border-color: #0b5a30; background: #107c41; color: #fff; }
+.dispatch-reminder-editor-actions .is-save:disabled { cursor: not-allowed; opacity: .5; }
+.dispatch-reminder-editor-actions .is-delete { border-color: #d9a6a6; color: #8b1a1a; background: #fff; }
+.dispatch-reminder-alert { position: fixed; right: 18px; bottom: 62px; z-index: 140; display: flex; width: min(430px, calc(100vw - 32px)); align-items: center; gap: 10px; padding: 10px 38px 10px 10px; border: 2px solid #c47f00; background: #fff2cc; color: #3f3100; box-shadow: 0 10px 30px rgba(68, 48, 0, .28); font: 12px Calibri, "Segoe UI", sans-serif; animation: dispatch-reminder-enter .2s ease-out; }
+.dispatch-reminder-alert-icon { display: grid; width: 38px; height: 38px; flex: 0 0 auto; place-items: center; border: 1px solid #d6a319; border-radius: 50%; background: #ffdf66; color: #7a4b00; }
+.dispatch-reminder-alert-icon svg { width: 21px; height: 21px; animation: dispatch-reminder-ring .8s ease-in-out 2; }
+.dispatch-reminder-alert strong { display: block; color: #6b4300; font-size: 14px; }
+.dispatch-reminder-alert p { margin: 1px 0; color: #1f2937; font-size: 13px; font-weight: 800; }
+.dispatch-reminder-alert span { display: inline-flex; align-items: center; gap: 3px; font: 800 11px Consolas, monospace; }
+.dispatch-reminder-alert span svg { width: 12px; height: 12px; }
+.dispatch-reminder-alert small { margin-left: 7px; color: #7a4b00; font-weight: 700; }
+.dispatch-reminder-alert-actions { display: flex; flex: 0 0 auto; gap: 5px; }
+.dispatch-reminder-alert-actions button { height: 28px; padding: 0 8px; border: 1px solid #9b7a1c; background: #fff; color: #594a00; font-size: 10px; font-weight: 800; }
+.dispatch-reminder-alert-actions button.is-primary { border-color: #0b5a30; background: #107c41; color: #fff; }
+.dispatch-reminder-alert-close { position: absolute; top: 5px; right: 5px; display: grid; width: 24px; height: 24px; place-items: center; color: #6b5a2f; }
+.dispatch-reminder-alert-close svg { width: 14px; height: 14px; }
+@keyframes dispatch-reminder-enter { from { opacity: 0; transform: translateY(8px); } }
+@keyframes dispatch-reminder-ring { 0%, 100% { transform: rotate(0); } 25% { transform: rotate(14deg); } 75% { transform: rotate(-14deg); } }
 
 /* Modo escuro da folha de acionamento: grafite, sem preto puro e sem apagar os parâmetros operacionais. */
 [data-app-theme="dark"] body,
@@ -250,6 +288,12 @@ body {
 [data-app-theme="dark"] .excel-operational-alerts { border-color: #756622; background: #3c371f; color: #f5e9a8; }
 [data-app-theme="dark"] .excel-operational-alerts > strong { border-color: #756622; }
 [data-app-theme="dark"] .excel-operational-alerts.is-clear { border-color: #2f855a; background: #174d2d; color: #bbf7d0; }
+[data-app-theme="dark"] .dispatch-reminder-editor { border-color: #9a7d2f; background: #292f36; color: #e5e7eb; }
+[data-app-theme="dark"] .dispatch-reminder-editor-title { border-color: #756622; background: #3c371f; }
+[data-app-theme="dark"] .dispatch-reminder-editor-title strong { color: #fde68a; }
+[data-app-theme="dark"] .dispatch-reminder-editor-title span,
+[data-app-theme="dark"] .dispatch-reminder-editor label,
+[data-app-theme="dark"] .dispatch-reminder-editor > small { color: #cbd5e1; }
 [data-app-theme="dark"] .excel-grid { color: #e5e7eb; background: #20242a; border-color: #4b5159; }
 [data-app-theme="dark"] .excel-grid .excel-grid-actions,
 [data-app-theme="dark"] .excel-grid .excel-statusbar,

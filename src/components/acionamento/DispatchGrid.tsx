@@ -4,7 +4,7 @@ import React, { useEffect, useState, useMemo, useRef } from "react";
 import { DispatchRowModel } from "@/types/domain";
 import { DispatchStatus, CargoStatus } from "@/types/database";
 import { normalizeClockTime } from "@/lib/calculations/jornada";
-import { ArrowUpDown, Check, ChevronDown, Columns3, Copy, Clock, Eye, EyeOff, Maximize2, Minimize2, Minus, Plus, Search, X } from "lucide-react";
+import { ArrowUpDown, Bell, BellRing, Check, ChevronDown, Columns3, Copy, Clock, Eye, EyeOff, Maximize2, Minimize2, Minus, Plus, Search, Trash2, X } from "lucide-react";
 
 interface DispatchGridProps {
   dispatches: DispatchRowModel[];
@@ -15,6 +15,9 @@ interface DispatchGridProps {
   readOnly?: boolean;
   activeEditors?: Record<string, string[]>;
   onActiveRowChange?: (rowId: string | null) => void;
+  reminderTimes?: Record<string, string>;
+  onSetReminder?: (dispatchId: string, driverName: string, time: string) => string | null;
+  onRemoveReminder?: (dispatchId: string) => void;
 }
 
 interface GridHistoryChange {
@@ -367,6 +370,9 @@ export function DispatchGrid({
   readOnly = false,
   activeEditors = {},
   onActiveRowChange,
+  reminderTimes = {},
+  onSetReminder,
+  onRemoveReminder,
 }: DispatchGridProps) {
   const [copiedCell, setCopiedCell] = useState<string | null>(null);
   const [sortField, setSortField] = useState<SortField>("schedule_time");
@@ -395,6 +401,14 @@ export function DispatchGrid({
   const [matchWholeCell, setMatchWholeCell] = useState(true);
   const [replaceResult, setReplaceResult] = useState<string>("");
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; column: number } | null>(null);
+  const [reminderEditor, setReminderEditor] = useState<{
+    dispatchId: string;
+    driverName: string;
+    time: string;
+    x: number;
+    y: number;
+  } | null>(null);
+  const [reminderError, setReminderError] = useState("");
   const undoStack = useRef<GridHistoryAction[]>([]);
   const redoStack = useRef<GridHistoryAction[]>([]);
   const visibleTableWidth = ROW_NUMBER_WIDTH + columnWidths.reduce(
@@ -1033,6 +1047,62 @@ export function DispatchGrid({
           <option key={status} value={status} />
         ))}
       </datalist>
+      {reminderEditor && (
+        <div
+          className="dispatch-reminder-editor"
+          style={{ left: reminderEditor.x, top: reminderEditor.y }}
+          onMouseDown={(event) => event.stopPropagation()}
+          onKeyDown={(event) => event.stopPropagation()}
+          role="dialog"
+          aria-label={`Criar lembrete para ${reminderEditor.driverName}`}
+        >
+          <div className="dispatch-reminder-editor-title">
+            <BellRing aria-hidden="true" />
+            <div><strong>Lembrar de acionar</strong><span>{reminderEditor.driverName}</span></div>
+            <button type="button" onClick={() => setReminderEditor(null)} aria-label="Fechar"><X /></button>
+          </div>
+          <label>
+            Horário do alerta
+            <input
+              type="time"
+              autoFocus
+              value={reminderEditor.time}
+              onChange={(event) => {
+                setReminderError("");
+                setReminderEditor((current) => current ? { ...current, time: event.target.value } : null);
+              }}
+            />
+          </label>
+          {reminderError && <p role="alert">{reminderError}</p>}
+          <div className="dispatch-reminder-editor-actions">
+            {reminderTimes[reminderEditor.dispatchId] && (
+              <button
+                type="button"
+                className="is-delete"
+                onClick={() => {
+                  onRemoveReminder?.(reminderEditor.dispatchId);
+                  setReminderEditor(null);
+                }}
+              ><Trash2 /> Remover</button>
+            )}
+            <button
+              type="button"
+              className="is-save"
+              disabled={!reminderEditor.time}
+              onClick={() => {
+                const error = onSetReminder?.(
+                  reminderEditor.dispatchId,
+                  reminderEditor.driverName,
+                  reminderEditor.time
+                );
+                if (error) setReminderError(error);
+                else setReminderEditor(null);
+              }}
+            >Salvar alerta</button>
+          </div>
+          <small>O aviso aparecerá somente nesta sessão.</small>
+        </div>
+      )}
       <div className="excel-grid-actions relative flex items-center justify-end gap-2 border-b border-[#a6a6a6] bg-[#f3f3f3] px-2 py-1">
         <button
           type="button"
@@ -1468,6 +1538,34 @@ export function DispatchGrid({
                           {rowEditors[0]}{rowEditors.length > 1 ? ` +${rowEditors.length - 1}` : ""}
                         </span>
                       )}
+                      <button
+                        type="button"
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          const rect = event.currentTarget.getBoundingClientRect();
+                          const editorWidth = 270;
+                          const x = Math.min(rect.left, window.innerWidth - editorWidth - 12);
+                          const y = Math.min(rect.bottom + 5, window.innerHeight - 230);
+                          setReminderError("");
+                          setReminderEditor({
+                            dispatchId: row.id,
+                            driverName: row.driver.name,
+                            time: reminderTimes[row.id] || "",
+                            x: Math.max(8, x),
+                            y: Math.max(8, y),
+                          });
+                        }}
+                        className={`dispatch-reminder-button shrink-0 ${reminderTimes[row.id] ? "is-active" : ""}`}
+                        title={reminderTimes[row.id]
+                          ? `Alerta definido para ${reminderTimes[row.id]}`
+                          : `Criar alerta para acionar ${row.driver.name}`}
+                        aria-label={reminderTimes[row.id]
+                          ? `Alterar alerta de ${row.driver.name}, marcado para ${reminderTimes[row.id]}`
+                          : `Criar alerta para ${row.driver.name}`}
+                      >
+                        {reminderTimes[row.id] ? <BellRing /> : <Bell />}
+                        {reminderTimes[row.id] && <span>{reminderTimes[row.id]}</span>}
+                      </button>
                       <button
                         onClick={(e) => {
                           e.stopPropagation();

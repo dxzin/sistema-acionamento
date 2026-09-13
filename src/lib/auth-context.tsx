@@ -127,9 +127,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   const logout = async () => {
+    const activeUserId = user?.id;
     setUser(null);
     if (typeof window !== "undefined") {
       localStorage.removeItem("sistema_acionamento_user");
+      if (activeUserId) sessionStorage.removeItem(`dispatch-reminders:${activeUserId}`);
     }
     try {
       const supabase = createClient();

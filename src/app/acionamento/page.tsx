@@ -14,6 +14,14 @@ import { DailySheet, Location, OperatorPresence } from "@/types/database";
 import { currentDateInBrasilia } from "@/lib/dates/operational-date";
 import { OperationalAlerts } from "@/components/acionamento/OperationalAlerts";
 import { summarizeOperationalAlerts } from "@/lib/calculations/operational-alerts";
+import { BellRing, Clock3, X } from "lucide-react";
+import {
+  buildDispatchReminderDate,
+  DispatchReminder,
+  dispatchReminderStorageKey,
+  parseDispatchReminders,
+  reminderClockTime,
+} from "@/lib/reminders/dispatch-reminders";
 
 export default function AcionamentoPage() {
   const { user } = useAuth();
@@ -31,6 +39,11 @@ export default function AcionamentoPage() {
   const loadRequestRef = useRef(0);
   const syncTokenRef = useRef<string | null>(null);
   const pendingWritesRef = useRef(0);
+  const firedRemindersRef = useRef<Set<string>>(new Set());
+  const audioContextRef = useRef<AudioContext | null>(null);
+  const [reminders, setReminders] = useState<DispatchReminder[]>([]);
+  const [remindersReady, setRemindersReady] = useState(false);
+  const [reminderNow, setReminderNow] = useState(() => Date.now());
 
   // Filtros
   const [filters, setFilters] = useState<DispatchFilterOptions>({
@@ -79,6 +92,106 @@ export default function AcionamentoPage() {
   }, [loadData]);
 
   useEffect(() => setActiveDispatchId(null), [filters.date, filters.region]);
+
+  useEffect(() => {
+    if (!user?.id) {
+      setReminders([]);
+      setRemindersReady(false);
+      return;
+    }
+    setReminders(parseDispatchReminders(sessionStorage.getItem(dispatchReminderStorageKey(user.id))));
+    setRemindersReady(true);
+    firedRemindersRef.current.clear();
+  }, [user?.id]);
+
+  useEffect(() => {
+    if (!user?.id || !remindersReady) return;
+    sessionStorage.setItem(dispatchReminderStorageKey(user.id), JSON.stringify(reminders));
+  }, [reminders, remindersReady, user?.id]);
+
+  useEffect(() => {
+    const interval = window.setInterval(() => setReminderNow(Date.now()), 1000);
+    return () => window.clearInterval(interval);
+  }, []);
+
+  const unlockReminderSound = useCallback(() => {
+    try {
+      if (!audioContextRef.current) audioContextRef.current = new AudioContext();
+      if (audioContextRef.current.state === "suspended") void audioContextRef.current.resume();
+    } catch {
+      // O aviso visual continua funcionando em navegadores sem Web Audio.
+    }
+  }, []);
+
+  useEffect(() => {
+    const unlockOnInteraction = () => unlockReminderSound();
+    window.addEventListener("pointerdown", unlockOnInteraction, { once: true });
+    window.addEventListener("keydown", unlockOnInteraction, { once: true });
+    return () => {
+      window.removeEventListener("pointerdown", unlockOnInteraction);
+      window.removeEventListener("keydown", unlockOnInteraction);
+    };
+  }, [unlockReminderSound]);
+
+  const playReminderSound = useCallback(() => {
+    const context = audioContextRef.current;
+    if (!context) return;
+    void context.resume().then(() => {
+      [0, 0.28].forEach((delay, index) => {
+        const oscillator = context.createOscillator();
+        const gain = context.createGain();
+        oscillator.frequency.value = index === 0 ? 880 : 1046;
+        gain.gain.setValueAtTime(0.0001, context.currentTime + delay);
+        gain.gain.exponentialRampToValueAtTime(0.18, context.currentTime + delay + 0.02);
+        gain.gain.exponentialRampToValueAtTime(0.0001, context.currentTime + delay + 0.2);
+        oscillator.connect(gain);
+        gain.connect(context.destination);
+        oscillator.start(context.currentTime + delay);
+        oscillator.stop(context.currentTime + delay + 0.22);
+      });
+    }).catch(() => undefined);
+  }, []);
+
+  const dueReminders = useMemo(
+    () => reminders
+      .filter((reminder) => new Date(reminder.scheduledAt).getTime() <= reminderNow)
+      .sort((a, b) => a.scheduledAt.localeCompare(b.scheduledAt)),
+    [reminderNow, reminders]
+  );
+
+  useEffect(() => {
+    const newDue = dueReminders.filter((reminder) => !firedRemindersRef.current.has(reminder.dispatchId));
+    if (!newDue.length) return;
+    newDue.forEach((reminder) => firedRemindersRef.current.add(reminder.dispatchId));
+    playReminderSound();
+  }, [dueReminders, playReminderSound]);
+
+  const setDispatchReminder = useCallback((dispatchId: string, driverName: string, time: string): string | null => {
+    const scheduledAt = buildDispatchReminderDate(filters.date, time);
+    if (!scheduledAt) return "Informe um horário válido.";
+    if (scheduledAt.getTime() <= Date.now()) return "Esse horário já passou na data desta folha.";
+
+    unlockReminderSound();
+    firedRemindersRef.current.delete(dispatchId);
+    setReminders((current) => [
+      ...current.filter((reminder) => reminder.dispatchId !== dispatchId),
+      { dispatchId, driverName, sheetDate: filters.date, scheduledAt: scheduledAt.toISOString() },
+    ]);
+    return null;
+  }, [filters.date, unlockReminderSound]);
+
+  const removeDispatchReminder = useCallback((dispatchId: string) => {
+    firedRemindersRef.current.delete(dispatchId);
+    setReminders((current) => current.filter((reminder) => reminder.dispatchId !== dispatchId));
+  }, []);
+
+  const snoozeDispatchReminder = useCallback((dispatchId: string) => {
+    unlockReminderSound();
+    firedRemindersRef.current.delete(dispatchId);
+    setReminders((current) => current.map((reminder) => reminder.dispatchId === dispatchId
+      ? { ...reminder, scheduledAt: new Date(Date.now() + 5 * 60_000).toISOString() }
+      : reminder));
+  }, [unlockReminderSound]);
 
   useEffect(() => {
     if (!user) return;
@@ -424,6 +537,10 @@ export default function AcionamentoPage() {
     [filteredDispatches]
   );
 
+  const reminderTimes = useMemo(() => Object.fromEntries(
+    reminders.map((reminder) => [reminder.dispatchId, reminderClockTime(reminder)])
+  ), [reminders]);
+
   const handleExport = async () => {
     if (!filteredDispatches.length || isExporting) return;
     setIsExporting(true);
@@ -485,7 +602,31 @@ export default function AcionamentoPage() {
             readOnly={dailySheet?.status !== "OPEN"}
             activeEditors={activeEditors}
             onActiveRowChange={setActiveDispatchId}
+            reminderTimes={reminderTimes}
+            onSetReminder={setDispatchReminder}
+            onRemoveReminder={removeDispatchReminder}
           />
+          {dueReminders.length > 0 && (
+            <section className="dispatch-reminder-alert" role="alert" aria-live="assertive">
+              <div className="dispatch-reminder-alert-icon"><BellRing aria-hidden="true" /></div>
+              <div className="min-w-0 flex-1">
+                <strong>Hora de acionar</strong>
+                <p className="truncate">{dueReminders[0].driverName}</p>
+                <span><Clock3 aria-hidden="true" /> {reminderClockTime(dueReminders[0])}</span>
+                {dueReminders.length > 1 && <small>+{dueReminders.length - 1} lembrete(s) vencido(s)</small>}
+              </div>
+              <div className="dispatch-reminder-alert-actions">
+                <button type="button" onClick={() => snoozeDispatchReminder(dueReminders[0].dispatchId)}>Adiar 5 min</button>
+                <button type="button" className="is-primary" onClick={() => removeDispatchReminder(dueReminders[0].dispatchId)}>Entendido</button>
+              </div>
+              <button
+                type="button"
+                className="dispatch-reminder-alert-close"
+                onClick={() => removeDispatchReminder(dueReminders[0].dispatchId)}
+                aria-label="Dispensar lembrete"
+              ><X /></button>
+            </section>
+          )}
         </main>
       </div>
     </div>
