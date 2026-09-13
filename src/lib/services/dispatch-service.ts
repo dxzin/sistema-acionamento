@@ -269,7 +269,7 @@ class DispatchService {
         // F/FE para um dia trabalhado, sem sobrescrever linhas já preenchidas.
         // Consultar datas antigas ou mais distantes nunca pode criar dados.
         // Uma folha ausente só é preparada para o próximo dia operacional.
-        if (canCreateDailySheet(date) && (!sheet || sheet.status === "OPEN")) {
+        if (sheet?.status === "OPEN" || (!sheet && canCreateDailySheet(date))) {
           const targetBases = REGION_BASES[normalizedRegion] || ["LP", "CASTILHO"];
           const [{ data: bases }, { data: baseLocations }] = await Promise.all([
             supabase.from("bases").select("id,code").in("code", targetBases),
