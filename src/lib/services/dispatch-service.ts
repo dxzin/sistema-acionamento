@@ -213,7 +213,7 @@ class DispatchService {
 
   async getDispatchesForSheet(date: string, region: string = "SP"): Promise<DispatchRowModel[]> {
     let rawDispatches: Dispatch[] = [];
-    const restDriverIds = new Set<string>();
+    const scheduleEntriesByDriver = new Map<string, { scale_code: string; shift_letter?: string | null; shift_time?: string | null }>();
     const normalizedRegion = region === "ALL" ? "SP" : region;
 
     if (this.isSupabaseConfigured()) {
@@ -256,19 +256,20 @@ class DispatchService {
         if (currentSchedule) {
           const { data: dayEntries } = await supabase
             .from("monthly_schedule_entries")
-            .select("driver_id,scale_code,shift_time")
+            .select("driver_id,scale_code,shift_letter,shift_time")
             .eq("schedule_id", currentSchedule.id)
             .eq("day_of_month", Number(dayText));
           for (const entry of dayEntries || []) {
             const scaleCode = String(entry.scale_code || "").trim().toUpperCase();
-            if (["F", "FE"].includes(scaleCode)) restDriverIds.add(entry.driver_id);
+            scheduleEntriesByDriver.set(entry.driver_id, entry);
           }
         }
 
-        // 2. Se a folha diária ainda não existir ou não tiver despachos, gera automaticamente
+        // 2. Cria a folha quando necessário e inclui condutores que passaram de
+        // F/FE para um dia trabalhado, sem sobrescrever linhas já preenchidas.
         // Consultar datas antigas ou mais distantes nunca pode criar dados.
         // Uma folha ausente só é preparada para o próximo dia operacional.
-        if (rawDispatches.length === 0 && canCreateDailySheet(date) && (!sheet || sheet.status === "OPEN")) {
+        if (canCreateDailySheet(date) && (!sheet || sheet.status === "OPEN")) {
           const targetBases = REGION_BASES[normalizedRegion] || ["LP", "CASTILHO"];
           const [{ data: bases }, { data: baseLocations }] = await Promise.all([
             supabase.from("bases").select("id,code").in("code", targetBases),
@@ -295,37 +296,6 @@ class DispatchService {
                 .single();
 
               if (!sheetErr && newSheet) {
-                // Obter dia, mês e ano da data selecionada
-                const [yStr, mStr, dStr] = date.split("-");
-                const dayNum = parseInt(dStr, 10);
-                const monthNum = parseInt(mStr, 10);
-                const yearNum = parseInt(yStr, 10);
-                const scheduleRegion = normalizedRegion === "UBJP" ? "MG" : normalizedRegion;
-
-                // Buscar escalas mensais do dia
-                const { data: sched } = await supabase
-                  .from("monthly_schedules")
-                  .select("id")
-                  .eq("month", monthNum)
-                  .eq("year", yearNum)
-                  .eq("region", scheduleRegion)
-                  .maybeSingle();
-
-                let scheduleEntriesByDriver = new Map<string, { scale_code: string; shift_letter?: string | null; shift_time?: string | null }>();
-                if (sched) {
-                  const { data: entries } = await supabase
-                    .from("monthly_schedule_entries")
-                    .select("driver_id,scale_code,shift_letter,shift_time")
-                    .eq("schedule_id", sched.id)
-                    .eq("day_of_month", dayNum);
-
-                  if (entries) {
-                    for (const e of entries) {
-                      scheduleEntriesByDriver.set(e.driver_id, e);
-                    }
-                  }
-                }
-
                 // Buscar despachos de D-1 para continuidade
                 const prevDate = this.getPreviousDate(date);
                 const { data: prevSheet } = await supabase
@@ -349,8 +319,11 @@ class DispatchService {
                   }
                 }
 
-                // Montar novos despachos para cada condutor ativo
+                const existingDriverIds = new Set(rawDispatches.map((dispatch) => dispatch.driver_id));
+
+                // Montar despachos somente para condutores ainda ausentes.
                 const newDispatchesPayload = activeDrivers.flatMap((d) => {
+                  if (existingDriverIds.has(d.id)) return [];
                   const schedEntry = scheduleEntriesByDriver.get(d.id);
                   const prevDisp = prevDispatchesByDriver.get(d.id);
                   const continuity = resolveDayContinuity(d.id, prevDisp);
@@ -379,13 +352,16 @@ class DispatchService {
                   }];
                 });
 
-                const { data: inserted, error: insertErr } = await supabase
-                  .from("dispatches")
-                  .upsert(newDispatchesPayload, { onConflict: "daily_sheet_id,driver_id" })
-                  .select();
+                if (newDispatchesPayload.length > 0) {
+                  const { data: inserted, error: insertErr } = await supabase
+                    .from("dispatches")
+                    .upsert(newDispatchesPayload, { onConflict: "daily_sheet_id,driver_id" })
+                    .select();
 
-                if (!insertErr && inserted && inserted.length > 0) {
-                  rawDispatches = inserted;
+                  if (insertErr) throw new Error(insertErr.message);
+                  if (inserted && inserted.length > 0) {
+                    rawDispatches = [...rawDispatches, ...inserted];
+                  }
                 }
               }
             }
@@ -421,9 +397,11 @@ class DispatchService {
     }
 
     return rawDispatches.filter((disp) => {
-      const scaleCode = (disp.scale_day_status || "").trim().toUpperCase();
-      return !restDriverIds.has(disp.driver_id) && !["F", "FE"].includes(scaleCode);
+      const currentScaleCode = scheduleEntriesByDriver.get(disp.driver_id)?.scale_code;
+      const scaleCode = (currentScaleCode ?? disp.scale_day_status ?? "").trim().toUpperCase();
+      return !["F", "FE"].includes(scaleCode);
     }).map((disp) => {
+      const currentScaleCode = scheduleEntriesByDriver.get(disp.driver_id)?.scale_code;
       const driver = driversMap.get(disp.driver_id) || {
         id: disp.driver_id,
         name: "Condutor Não Identificado",
@@ -444,6 +422,7 @@ class DispatchService {
 
       return {
         ...disp,
+        scale_day_status: currentScaleCode ?? disp.scale_day_status,
         driver,
         base,
         vehicle,

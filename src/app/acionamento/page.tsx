@@ -151,6 +151,14 @@ export default function AcionamentoPage() {
         { event: "UPDATE", schema: "public", table: "daily_sheets" },
         syncFromRemote
       )
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "monthly_schedule_entries" },
+        () => {
+          if (refreshTimer) clearTimeout(refreshTimer);
+          refreshTimer = setTimeout(syncFromRemote, 700);
+        }
+      )
       .subscribe((status) => {
         if (status === "SUBSCRIBED") setSyncStatus("live");
         if (["CHANNEL_ERROR", "TIMED_OUT", "CLOSED"].includes(status)) {
