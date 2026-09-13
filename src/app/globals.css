@@ -514,10 +514,10 @@ input:focus-visible, select:focus-visible, button:focus-visible, a:focus-visible
 [data-app-theme="dark"] .excel-grid tbody tr.excel-selected-row td.excel-driver-castilho,
 [data-app-theme="dark"] .excel-grid tbody tr.excel-collaborator-row td.excel-driver-castilho {
   background-color: #e2f0d9 !important;
-  color: #0b5a30 !important;
+  color: #000 !important;
 }
 .excel-grid tbody td.excel-driver-castilho .excel-driver-name-value,
 [data-app-theme="dark"] .excel-grid tbody td.excel-driver-castilho .excel-driver-name-value {
-  color: #0b5a30 !important;
-  -webkit-text-fill-color: #0b5a30;
+  color: #000 !important;
+  -webkit-text-fill-color: #000;
 }
