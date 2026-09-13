@@ -4,7 +4,7 @@ import React, { useEffect, useState, useMemo, useRef } from "react";
 import { DispatchRowModel } from "@/types/domain";
 import { DispatchStatus, CargoStatus } from "@/types/database";
 import { normalizeClockTime } from "@/lib/calculations/jornada";
-import { ArrowUpDown, Check, ChevronDown, Columns3, Copy, Clock, Eye, EyeOff, Minus, Plus, Search, X } from "lucide-react";
+import { ArrowUpDown, Check, ChevronDown, Columns3, Copy, Clock, Eye, EyeOff, Maximize2, Minimize2, Minus, Plus, Search, X } from "lucide-react";
 
 interface DispatchGridProps {
   dispatches: DispatchRowModel[];
@@ -387,6 +387,7 @@ export function DispatchGrid({
   const [hiddenColumns, setHiddenColumns] = useState<number[]>([]);
   const [columnWidths, setColumnWidths] = useState<number[]>([...COLUMN_WIDTHS]);
   const [gridZoom, setGridZoom] = useState(100);
+  const [isExpanded, setIsExpanded] = useState(false);
   const [showColumnMenu, setShowColumnMenu] = useState(false);
   const [showFindReplace, setShowFindReplace] = useState(false);
   const [findText, setFindText] = useState("");
@@ -437,6 +438,15 @@ export function DispatchGrid({
   useEffect(() => {
     localStorage.setItem("dispatch-grid-zoom", String(gridZoom));
   }, [gridZoom]);
+
+  useEffect(() => {
+    if (!isExpanded) return;
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.body.style.overflow = previousOverflow;
+    };
+  }, [isExpanded]);
 
 
   // Status de acionamento disponíveis
@@ -945,7 +955,7 @@ export function DispatchGrid({
 
   return (
     <div
-      className="excel-grid flex min-h-0 flex-1 flex-col overflow-hidden"
+      className={`excel-grid flex flex-1 flex-col overflow-hidden ${isExpanded ? "is-expanded fixed inset-0 z-[100] min-h-0 bg-white" : ""}`}
       tabIndex={0}
       onPaste={(event) => {
         if (readOnly) {
@@ -955,6 +965,11 @@ export function DispatchGrid({
         handleGridPaste(event);
       }}
       onKeyDown={(event) => {
+        if (event.key === "Escape" && isExpanded) {
+          event.preventDefault();
+          setIsExpanded(false);
+          return;
+        }
         const key = event.key.toLowerCase();
         if ((event.ctrlKey || event.metaKey) && key === "c") {
           event.preventDefault();
@@ -1019,6 +1034,16 @@ export function DispatchGrid({
         ))}
       </datalist>
       <div className="excel-grid-actions relative flex items-center justify-end gap-2 border-b border-[#a6a6a6] bg-[#f3f3f3] px-2 py-1">
+        <button
+          type="button"
+          onClick={() => setIsExpanded((expanded) => !expanded)}
+          className="flex items-center gap-1 border border-[#a6a6a6] bg-white px-2 py-1 text-[10px] font-bold text-slate-700 hover:bg-[#e2f0d9]"
+          aria-pressed={isExpanded}
+          title={isExpanded ? "Voltar ao tamanho normal (Esc)" : "Expandir planilha na janela"}
+        >
+          {isExpanded ? <Minimize2 className="h-3.5 w-3.5" /> : <Maximize2 className="h-3.5 w-3.5" />}
+          {isExpanded ? "Restaurar" : "Expandir"}
+        </button>
         {hiddenColumns.length > 0 && (
           <span className="text-[10px] font-semibold text-slate-600">{hiddenColumns.length} oculta(s)</span>
         )}
@@ -1137,7 +1162,9 @@ export function DispatchGrid({
       <div
         ref={gridCanvasRef}
         onScroll={() => syncHorizontalScroll("grid")}
-        className="excel-grid-canvas relative min-h-0 flex-1 select-none overflow-x-auto overflow-y-auto bg-white"
+        className={`excel-grid-canvas relative select-none overflow-x-auto overflow-y-auto bg-white ${
+          isExpanded ? "min-h-0 flex-1" : "h-[calc(100vh-210px)] min-h-[320px]"
+        }`}
       >
         <table
           ref={tableRef}

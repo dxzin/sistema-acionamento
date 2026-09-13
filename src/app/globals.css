@@ -207,6 +207,8 @@ body {
   left: 184px;
   z-index: 80;
 }
+.excel-grid.is-expanded .excel-grid-bottom-scroll,
+.excel-grid.is-expanded .excel-statusbar { right: 0; left: 0; }
 .excel-save-dot { width: 7px; height: 7px; border-radius: 999px; background: #64748b; }
 .excel-save-dot.is-saving { background: #d97706; animation: pulse 1s ease-in-out infinite; }
 .excel-save-dot.is-saved { background: #107c41; }

@@ -443,11 +443,11 @@ export default function AcionamentoPage() {
   };
 
   return (
-    <div className="excel-shell flex h-screen flex-1 flex-col overflow-hidden">
+    <div className="excel-shell flex min-h-screen flex-1 flex-col">
       <Header />
-      <div className="flex min-h-0 flex-1 overflow-hidden">
+      <div className="flex flex-1 overflow-hidden">
         <Sidebar />
-        <main className="excel-workspace flex min-h-0 flex-1 flex-col overflow-hidden">
+        <main className="excel-workspace flex flex-1 flex-col overflow-hidden">
           {/* Barra de Indicadores Operacionais */}
           <DispatchStatsBar summary={summaryKPIs} />
 
