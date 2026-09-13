@@ -208,7 +208,7 @@ export default function AcionamentoPage() {
       }
     };
     if (syncStatus === "offline") return;
-    const interval = window.setInterval(checkForChanges, syncStatus === "live" ? 15000 : 1500);
+    const interval = window.setInterval(checkForChanges, syncStatus === "live" ? 30000 : 5000);
     return () => window.clearInterval(interval);
   }, [filters.date, filters.region, loadData, syncStatus]);
 

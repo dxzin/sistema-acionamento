@@ -269,7 +269,17 @@ class DispatchService {
         // F/FE para um dia trabalhado, sem sobrescrever linhas já preenchidas.
         // Consultar datas antigas ou mais distantes nunca pode criar dados.
         // Uma folha ausente só é preparada para o próximo dia operacional.
-        if (sheet?.status === "OPEN" || (!sheet && canCreateDailySheet(date))) {
+        const existingDriverIds = new Set(rawDispatches.map((dispatch) => dispatch.driver_id));
+        const missingScheduledDriverIds = [...scheduleEntriesByDriver.entries()]
+          .filter(([driverId, entry]) => {
+            const code = String(entry.scale_code || "").trim().toUpperCase();
+            return !existingDriverIds.has(driverId) && !["F", "FE"].includes(code);
+          })
+          .map(([driverId]) => driverId);
+        const shouldCreateSheet = !sheet && canCreateDailySheet(date);
+        const shouldReconcileOpenSheet = sheet?.status === "OPEN" && missingScheduledDriverIds.length > 0;
+
+        if (shouldCreateSheet || shouldReconcileOpenSheet) {
           const targetBases = REGION_BASES[normalizedRegion] || ["LP", "CASTILHO"];
           const [{ data: bases }, { data: baseLocations }] = await Promise.all([
             supabase.from("bases").select("id,code").in("code", targetBases),
@@ -280,22 +290,32 @@ class DispatchService {
           const baseLocationByName = new Map((baseLocations || []).map((location) => [location.name.trim().toUpperCase(), location.id]));
 
           if (baseIds.length > 0) {
-            const { data: activeDrivers } = await supabase
+            let activeDriversQuery = supabase
               .from("drivers")
               .select("*")
               .in("base_id", baseIds)
-              .eq("is_active", true)
-              .order("name");
+              .eq("is_active", true);
+            if (!shouldCreateSheet) {
+              activeDriversQuery = activeDriversQuery.in("id", missingScheduledDriverIds);
+            }
+            const { data: activeDrivers, error: driversError } = await activeDriversQuery.order("name");
+            if (driversError) throw new Error(driversError.message);
 
             if (activeDrivers && activeDrivers.length > 0) {
-              // Cria ou obtém a folha diária
-              const { data: newSheet, error: sheetErr } = await supabase
-                .from("daily_sheets")
-                .upsert({ date, region: normalizedRegion, status: "OPEN" }, { onConflict: "date,region" })
-                .select("id,status")
-                .single();
+              // Uma folha existente nunca é regravada durante uma simples leitura.
+              // O upsert só é usado na criação inicial para tratar acessos simultâneos.
+              let targetSheet = sheet;
+              if (!targetSheet) {
+                const { data: createdSheet, error: sheetErr } = await supabase
+                  .from("daily_sheets")
+                  .upsert({ date, region: normalizedRegion, status: "OPEN" }, { onConflict: "date,region" })
+                  .select("id,status")
+                  .single();
+                if (sheetErr) throw new Error(sheetErr.message);
+                targetSheet = createdSheet;
+              }
 
-              if (!sheetErr && newSheet) {
+              if (targetSheet) {
                 // Buscar despachos de D-1 para continuidade
                 const prevDate = this.getPreviousDate(date);
                 const { data: prevSheet } = await supabase
@@ -319,8 +339,6 @@ class DispatchService {
                   }
                 }
 
-                const existingDriverIds = new Set(rawDispatches.map((dispatch) => dispatch.driver_id));
-
                 // Montar despachos somente para condutores ainda ausentes.
                 const newDispatchesPayload = activeDrivers.flatMap((d) => {
                   if (existingDriverIds.has(d.id)) return [];
@@ -337,7 +355,7 @@ class DispatchService {
                     ? baseLocationByName.get(baseCodeById.get(d.base_id) || "") || null
                     : null;
                   return [{
-                    daily_sheet_id: newSheet.id,
+                    daily_sheet_id: targetSheet.id,
                     driver_id: d.id,
                     scale_day_status: scaleCode || null,
                     forecast_start_time: awaitingPreviousExit
