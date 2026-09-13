@@ -142,7 +142,7 @@ export default function AcionamentoPage() {
         const gain = context.createGain();
         oscillator.frequency.value = index === 0 ? 880 : 1046;
         gain.gain.setValueAtTime(0.0001, context.currentTime + delay);
-        gain.gain.exponentialRampToValueAtTime(0.18, context.currentTime + delay + 0.02);
+        gain.gain.exponentialRampToValueAtTime(0.26, context.currentTime + delay + 0.02);
         gain.gain.exponentialRampToValueAtTime(0.0001, context.currentTime + delay + 0.2);
         oscillator.connect(gain);
         gain.connect(context.destination);
