@@ -1736,12 +1736,12 @@ export function DispatchGrid({
       <div
         ref={bottomScrollRef}
         onScroll={() => syncHorizontalScroll("footer")}
-        className="excel-grid-bottom-scroll h-4 shrink-0 overflow-x-auto overflow-y-hidden"
+        className="excel-grid-bottom-scroll h-4 overflow-x-auto overflow-y-hidden"
         aria-label="Rolagem horizontal da planilha"
       >
         <div style={{ width: scaledTableWidth, height: 1 }} />
       </div>
-      <div className="excel-statusbar sticky bottom-0 z-40 shrink-0 overflow-hidden" role="status" aria-live="polite">
+      <div className="excel-statusbar overflow-hidden" role="status" aria-live="polite">
         <span className={`excel-save-dot is-${saveState.status}`} />
         <span className="min-w-0 truncate">
           {saveState.status === "saving" && "Salvando alteração..."}

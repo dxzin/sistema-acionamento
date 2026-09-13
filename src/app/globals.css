@@ -188,9 +188,25 @@ body {
 .excel-combobox-input::placeholder { color: #94a3b8 !important; font-weight: 400; text-transform: none; }
 .excel-combobox-input:focus { background: #fff !important; color: #111 !important; outline: 2px solid var(--excel-selection) !important; outline-offset: -2px !important; }
 .excel-statusbar { display: flex; align-items: center; gap: 6px; min-height: 24px; padding: 2px 8px; border-top: 1px solid #a6a6a6; background: #f3f3f3; color: #475569; font: 600 10px Calibri, "Segoe UI", sans-serif; }
+.excel-grid-canvas { padding-bottom: 40px; }
 .excel-grid-canvas::-webkit-scrollbar:horizontal { height: 0; }
-.excel-grid-bottom-scroll { border-top: 1px solid #b7b7b7; background: #f3f3f3; }
+.excel-grid-bottom-scroll {
+  position: fixed;
+  right: 8px;
+  bottom: 24px;
+  left: 184px;
+  z-index: 80;
+  border-top: 1px solid #b7b7b7;
+  background: #f3f3f3;
+}
 .excel-grid-bottom-scroll > div { background: transparent; }
+.excel-grid .excel-statusbar {
+  position: fixed;
+  right: 8px;
+  bottom: 0;
+  left: 184px;
+  z-index: 80;
+}
 .excel-save-dot { width: 7px; height: 7px; border-radius: 999px; background: #64748b; }
 .excel-save-dot.is-saving { background: #d97706; animation: pulse 1s ease-in-out infinite; }
 .excel-save-dot.is-saved { background: #107c41; }
@@ -396,6 +412,8 @@ input:focus-visible, select:focus-visible, button:focus-visible, a:focus-visible
   .excel-sheet-link { justify-content: center; padding: 10px 0; }
   .excel-sheet-link svg { margin-right: 0; }
   .excel-workspace { padding-left: 4px; padding-right: 4px; }
+  .excel-grid-bottom-scroll,
+  .excel-grid .excel-statusbar { right: 4px; left: 56px; }
 }
 
 
