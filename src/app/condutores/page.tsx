@@ -3,6 +3,7 @@
 import React, { FormEvent, useEffect, useMemo, useState } from "react";
 import { Header } from "@/components/layout/Header";
 import { Sidebar } from "@/components/layout/Sidebar";
+import { useAuth } from "@/lib/auth-context";
 import { createDriver, DriverCatalog, DriverFormData, loadDriverCatalog, updateDriver } from "@/lib/services/driver-service";
 import { Base, Driver } from "@/types/database";
 import {
@@ -72,6 +73,7 @@ function getHorarioBadge(timeStr?: string | null, shift?: string | null) {
 type SortField = "name" | "login_matricula" | "base" | "default_shift" | "default_start_time" | "is_active";
 
 export default function CondutoresPage() {
+  const { user } = useAuth();
   const [drivers, setDrivers] = useState<Driver[]>([]);
   const [bases, setBases] = useState<Base[]>([]);
   const [source, setSource] = useState<DriverCatalog["source"]>("demo");
@@ -176,8 +178,10 @@ export default function CondutoresPage() {
   }, [drivers, search, columnSearch, statusFilter, baseFilter, sortField, sortAsc, baseById]);
 
   const activeCount = drivers.filter((driver) => driver.is_active).length;
+  const canManageDrivers = source === "demo" || user?.role === "admin" || user?.role === "supervisor";
 
   function openCreate() {
+    if (!canManageDrivers) return;
     setEditing(null);
     setForm({ ...EMPTY_FORM, base_id: bases[0]?.id || "" });
     setError(null);
@@ -185,6 +189,7 @@ export default function CondutoresPage() {
   }
 
   function openEdit(driver: Driver) {
+    if (!canManageDrivers) return;
     setEditing(driver);
     setForm({
       name: driver.name,
@@ -200,6 +205,10 @@ export default function CondutoresPage() {
 
   async function handleSubmit(event: FormEvent) {
     event.preventDefault();
+    if (!canManageDrivers) {
+      setError("Seu perfil pode consultar condutores, mas somente supervisores e administradores podem alterar cadastros.");
+      return;
+    }
     setError(null);
     setSuccess(null);
     const normalized = {
@@ -236,6 +245,10 @@ export default function CondutoresPage() {
   }
 
   async function toggleStatus(driver: Driver) {
+    if (!canManageDrivers) {
+      setError("Seu perfil pode consultar condutores, mas somente supervisores e administradores podem alterar cadastros.");
+      return;
+    }
     setError(null);
     setSuccess(null);
     try {
@@ -339,7 +352,8 @@ export default function CondutoresPage() {
             <div className="flex flex-wrap items-center gap-2">
               <button
                 onClick={openCreate}
-                disabled={!bases.length}
+                disabled={!bases.length || !canManageDrivers}
+                title={canManageDrivers ? "Cadastrar novo condutor" : "Somente supervisores e administradores podem cadastrar condutores"}
                 className="flex h-7 items-center gap-1.5 rounded border border-[#0b5a30] bg-[#107c41] px-3 text-xs font-bold text-white hover:bg-[#0b5a30] disabled:opacity-50 transition-colors shadow-xs"
               >
                 <Plus className="h-3.5 w-3.5" />
@@ -358,6 +372,13 @@ export default function CondutoresPage() {
               </span>
             </div>
           </section>
+
+          {!canManageDrivers && !loading && (
+            <div className="flex items-center gap-2 rounded border border-amber-300 bg-amber-50 px-3 py-2 text-xs font-semibold text-amber-900">
+              <AlertCircle className="h-4 w-4 shrink-0" />
+              <span>Consulta habilitada. Alterações em condutores exigem perfil de supervisor ou administrador.</span>
+            </div>
+          )}
 
           {/* Avisos / Notificações */}
           {(error || success) && (
@@ -612,24 +633,28 @@ export default function CondutoresPage() {
 
                         {/* Ações */}
                         <td className="px-2 py-1 text-right border-b border-slate-300">
-                          <div className="flex justify-end gap-1">
-                            <button
-                              onClick={() => openEdit(driver)}
-                              title="Editar condutor"
-                              className="p-1 rounded text-slate-500 hover:bg-slate-200 hover:text-slate-900 transition-colors"
-                            >
-                              <Edit3 className="w-3.5 h-3.5" />
-                            </button>
-                            <button
-                              onClick={() => toggleStatus(driver)}
-                              title={driver.is_active ? "Inativar condutor" : "Reativar condutor"}
-                              className={`p-1 rounded hover:bg-slate-200 transition-colors ${
-                                driver.is_active ? "text-rose-600" : "text-emerald-700"
-                              }`}
-                            >
-                              {driver.is_active ? <UserX className="w-3.5 h-3.5" /> : <UserCheck className="w-3.5 h-3.5" />}
-                            </button>
-                          </div>
+                          {canManageDrivers ? (
+                            <div className="flex justify-end gap-1">
+                              <button
+                                onClick={() => openEdit(driver)}
+                                title="Editar condutor"
+                                className="p-1 rounded text-slate-500 hover:bg-slate-200 hover:text-slate-900 transition-colors"
+                              >
+                                <Edit3 className="w-3.5 h-3.5" />
+                              </button>
+                              <button
+                                onClick={() => toggleStatus(driver)}
+                                title={driver.is_active ? "Inativar condutor" : "Reativar condutor"}
+                                className={`p-1 rounded hover:bg-slate-200 transition-colors ${
+                                  driver.is_active ? "text-rose-600" : "text-emerald-700"
+                                }`}
+                              >
+                                {driver.is_active ? <UserX className="w-3.5 h-3.5" /> : <UserCheck className="w-3.5 h-3.5" />}
+                              </button>
+                            </div>
+                          ) : (
+                            <span className="text-[10px] font-semibold text-slate-400">Somente consulta</span>
+                          )}
                         </td>
                       </tr>
                     ))}

@@ -213,6 +213,23 @@ body {
 .excel-save-dot.is-saving { background: #d97706; animation: pulse 1s ease-in-out infinite; }
 .excel-save-dot.is-saved { background: #107c41; }
 .excel-save-dot.is-error { background: #dc2626; }
+.excel-grid tbody td[data-save-state] { position: relative; }
+.excel-grid tbody td[data-save-state]::after {
+  position: absolute;
+  top: 2px;
+  right: 2px;
+  width: 5px;
+  height: 5px;
+  border-radius: 999px;
+  background: #ca8a04;
+  content: "";
+  pointer-events: none;
+}
+.excel-grid tbody td[data-save-state="saving"]::after { background: #d97706; animation: pulse 1s ease-in-out infinite; }
+.excel-grid tbody td[data-save-state="saved"]::after { background: #107c41; }
+.excel-grid tbody td[data-save-state="error"] { box-shadow: inset 0 0 0 2px #dc2626; }
+.excel-grid tbody td[data-save-state="error"]::after { width: 7px; height: 7px; background: #dc2626; }
+.excel-grid tbody tr[data-save-state="error"] .excel-row-number { box-shadow: inset 3px 0 #dc2626; }
 .excel-operational-alerts { display: flex; min-height: 30px; align-items: center; gap: 7px; overflow-x: auto; margin: 0 0 8px; padding: 4px 8px; border: 1px solid #c4a000; background: #fffbe6; color: #594a00; font-size: 10px; white-space: nowrap; }
 .excel-operational-alerts > strong { padding-right: 7px; border-right: 1px solid #d6c46a; font-size: 11px; }
 .excel-operational-alerts > span { display: inline-flex; align-items: center; gap: 4px; min-height: 20px; padding: 1px 7px; border: 1px solid #d6c46a; background: #fff; font-weight: 600; }
@@ -236,7 +253,14 @@ body {
 .dispatch-reminder-editor-title button:hover { background: #f3df9b; }
 .dispatch-reminder-editor-title button svg { width: 14px; height: 14px; }
 .dispatch-reminder-editor label { display: grid; gap: 4px; padding: 9px 10px 4px; color: #4b5563; font-weight: 700; }
-.dispatch-reminder-editor input { height: 32px !important; padding: 3px 8px !important; border: 1px solid #9ca3af !important; background: #fff !important; color: #111827 !important; font: 700 14px Consolas, monospace !important; }
+.dispatch-reminder-editor input[type="time"] { height: 32px !important; padding: 3px 8px !important; border: 1px solid #9ca3af !important; background: #fff !important; color: #111827 !important; font: 700 14px Consolas, monospace !important; }
+.dispatch-reminder-volume { margin: 5px 10px 2px; padding: 7px 8px; border: 1px solid #d6c46a; background: #fffdf4; }
+.dispatch-reminder-volume-title { display: flex; align-items: center; justify-content: space-between; color: #4b5563; font-weight: 700; }
+.dispatch-reminder-volume-title output { color: #7a4b00; font: 800 11px Consolas, monospace; }
+.dispatch-reminder-volume-controls { display: flex; align-items: center; gap: 7px; margin-top: 5px; }
+.dispatch-reminder-volume-controls > svg { width: 15px; height: 15px; flex: 0 0 auto; color: #9c6500; }
+.dispatch-reminder-volume-controls input[type="range"] { min-width: 0; flex: 1; accent-color: #107c41; }
+.dispatch-reminder-volume-controls button { height: 24px; padding: 0 7px; border: 1px solid #8a8a8a; background: #fff; color: #374151; font-size: 10px; font-weight: 800; }
 .dispatch-reminder-editor > p { margin: 3px 10px; color: #9c0006; font-weight: 700; }
 .dispatch-reminder-editor > small { display: block; padding: 0 10px 9px; color: #64748b; }
 .dispatch-reminder-editor-actions { display: flex; justify-content: flex-end; gap: 5px; padding: 6px 10px; }
@@ -343,9 +367,9 @@ body {
 .excel-grid .excel-status-select:focus { font-weight: 800; text-align: center !important; text-align-last: center; padding-left: 0 !important; padding-right: 0 !important; text-indent: 0; appearance: none; }
 .excel-grid input.excel-status-select::-webkit-calendar-picker-indicator { display: none !important; width: 0; margin: 0; opacity: 0; }
 .excel-grid tbody td.excel-range-selected {
-  position: relative;
   box-shadow: inset 0 0 0 2px #217346 !important;
 }
+.excel-grid tbody td.excel-range-selected:not(.sticky) { position: relative; }
 .excel-grid tbody td.excel-range-selected::after {
   content: "";
   position: absolute;

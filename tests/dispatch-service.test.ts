@@ -1,6 +1,16 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { dispatchService } from "../src/lib/services/dispatch-service";
+import { dispatchService, isDispatchExcludedScaleCode } from "../src/lib/services/dispatch-service";
+
+test("F, FE e DESL não entram no acionamento", () => {
+  for (const code of ["F", "FE", "DESL", " desl "]) {
+    assert.equal(isDispatchExcludedScaleCode(code), true);
+  }
+
+  for (const code of ["1", "6", "AT", "AF", ""]) {
+    assert.equal(isDispatchExcludedScaleCode(code), false);
+  }
+});
 
 test("editar somente a entrada preserva a saída existente no cálculo", async () => {
   const saved = await dispatchService.updateDispatch("disp-1", { entry_time: "02:00:00" });

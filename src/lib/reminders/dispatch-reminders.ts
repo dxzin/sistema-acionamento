@@ -5,8 +5,21 @@ export interface DispatchReminder {
   scheduledAt: string;
 }
 
+export const DEFAULT_REMINDER_VOLUME = 65;
+
 export function dispatchReminderStorageKey(userId: string): string {
   return `dispatch-reminders:${userId}`;
+}
+
+export function dispatchReminderVolumeStorageKey(userId: string): string {
+  return `dispatch-reminder-volume:${userId}`;
+}
+
+export function parseDispatchReminderVolume(raw: string | null): number {
+  if (raw === null || raw.trim() === "") return DEFAULT_REMINDER_VOLUME;
+  const volume = Number(raw);
+  if (!Number.isFinite(volume)) return DEFAULT_REMINDER_VOLUME;
+  return Math.min(100, Math.max(0, Math.round(volume)));
 }
 
 export function buildDispatchReminderDate(sheetDate: string, time: string): Date | null {

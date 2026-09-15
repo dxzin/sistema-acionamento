@@ -4,20 +4,25 @@ import React, { useEffect, useState, useMemo, useRef } from "react";
 import { DispatchRowModel } from "@/types/domain";
 import { DispatchStatus, CargoStatus } from "@/types/database";
 import { normalizeClockTime } from "@/lib/calculations/jornada";
-import { ArrowUpDown, Bell, BellRing, Check, ChevronDown, Columns3, Copy, Clock, Eye, EyeOff, Maximize2, Minimize2, Minus, Plus, Search, Trash2, X } from "lucide-react";
+import { ArrowUpDown, Bell, BellRing, Check, ChevronDown, Columns3, Copy, Clock, Eye, EyeOff, Maximize2, Minimize2, Minus, Plus, Search, Trash2, Volume2, VolumeX, X } from "lucide-react";
 
 interface DispatchGridProps {
   dispatches: DispatchRowModel[];
+  onDraftRow?: (id: string, updates: Partial<DispatchRowModel>) => void;
   onUpdateRow: (id: string, updates: Partial<DispatchRowModel>) => Promise<void>;
   onUpdateBatch: (updates: Map<string, Partial<DispatchRowModel>>) => Promise<void>;
   locations: { id: string; name: string }[];
   saveState: { status: "idle" | "saving" | "saved" | "error"; message?: string };
+  cellSaveStates?: Record<string, { status: "pending" | "saving" | "saved" | "error"; message?: string }>;
   readOnly?: boolean;
   activeEditors?: Record<string, string[]>;
   onActiveRowChange?: (rowId: string | null) => void;
   reminderTimes?: Record<string, string>;
   onSetReminder?: (dispatchId: string, driverName: string, time: string) => string | null;
   onRemoveReminder?: (dispatchId: string) => void;
+  reminderVolume?: number;
+  onReminderVolumeChange?: (volume: number) => void;
+  onPreviewReminderSound?: () => void;
 }
 
 interface GridHistoryChange {
@@ -78,18 +83,28 @@ interface EditableLocationCellProps {
   options: string[];
   label: string;
   onCommit: (value: string) => void;
+  onDraftChange: (value: string) => void;
 }
 
-function EditableLocationCell({ value, options, label, onCommit }: EditableLocationCellProps) {
+function EditableLocationCell({ value, options, label, onCommit, onDraftChange }: EditableLocationCellProps) {
   const [draft, setDraft] = useState(value);
   const [showOptions, setShowOptions] = useState(false);
+  const editedRef = useRef(false);
+  const committedValueRef = useRef(value);
 
-  useEffect(() => setDraft(value), [value]);
+  useEffect(() => {
+    if (editedRef.current) return;
+    committedValueRef.current = value;
+    setDraft(value);
+  }, [value]);
 
   const commit = () => {
+    if (!editedRef.current) return;
     const normalized = draft.trim().replace(/\s+/g, " ").toUpperCase();
+    editedRef.current = false;
+    committedValueRef.current = normalized;
     setDraft(normalized);
-    if (normalized !== value) onCommit(normalized);
+    onCommit(normalized);
   };
 
   return (
@@ -100,7 +115,12 @@ function EditableLocationCell({ value, options, label, onCommit }: EditableLocat
         aria-label={label}
         autoComplete="off"
         placeholder="Digite ou escolha"
-        onChange={(event) => setDraft(event.target.value.toUpperCase())}
+        onChange={(event) => {
+          const next = event.target.value.toUpperCase();
+          editedRef.current = true;
+          setDraft(next);
+          onDraftChange(next);
+        }}
         onBlur={() => {
           commit();
           setTimeout(() => setShowOptions(false), 120);
@@ -108,7 +128,11 @@ function EditableLocationCell({ value, options, label, onCommit }: EditableLocat
         onKeyDown={(event) => {
           if (event.key === "Enter") event.currentTarget.blur();
           if (event.key === "Escape") {
-            setDraft(value);
+            const committed = committedValueRef.current;
+            editedRef.current = false;
+            setDraft(committed);
+            onDraftChange(committed);
+            onCommit(committed);
             event.currentTarget.blur();
           }
         }}
@@ -139,7 +163,10 @@ function EditableLocationCell({ value, options, label, onCommit }: EditableLocat
                   event.preventDefault();
                   setDraft(option);
                   setShowOptions(false);
-                  if (option !== value) onCommit(option);
+                  editedRef.current = false;
+                  committedValueRef.current = option;
+                  onDraftChange(option);
+                  onCommit(option);
                 }}
                 className="block w-full whitespace-nowrap px-2 py-1 text-left text-[11px] font-semibold text-slate-800 hover:bg-[#e2f0d9]"
               >
@@ -157,17 +184,27 @@ interface EditableTextCellProps {
   placeholder: string;
   className: string;
   onCommit: (value: string) => void;
+  onDraftChange: (value: string) => void;
 }
 
-function EditableTextCell({ value, placeholder, className, onCommit }: EditableTextCellProps) {
+function EditableTextCell({ value, placeholder, className, onCommit, onDraftChange }: EditableTextCellProps) {
   const [draft, setDraft] = useState(value);
+  const editedRef = useRef(false);
+  const committedValueRef = useRef(value);
 
-  useEffect(() => setDraft(value), [value]);
+  useEffect(() => {
+    if (editedRef.current) return;
+    committedValueRef.current = value;
+    setDraft(value);
+  }, [value]);
 
   const commit = () => {
+    if (!editedRef.current) return;
     const normalized = draft.trim();
+    editedRef.current = false;
+    committedValueRef.current = normalized;
     setDraft(normalized);
-    if (normalized !== value) onCommit(normalized);
+    onCommit(normalized);
   };
 
   return (
@@ -175,12 +212,20 @@ function EditableTextCell({ value, placeholder, className, onCommit }: EditableT
       type="text"
       value={draft}
       placeholder={placeholder}
-      onChange={(event) => setDraft(event.target.value)}
+      onChange={(event) => {
+        editedRef.current = true;
+        setDraft(event.target.value);
+        onDraftChange(event.target.value);
+      }}
       onBlur={commit}
       onKeyDown={(event) => {
         if (event.key === "Enter") event.currentTarget.blur();
         if (event.key === "Escape") {
-          setDraft(value);
+          const committed = committedValueRef.current;
+          editedRef.current = false;
+          setDraft(committed);
+          onDraftChange(committed);
+          onCommit(committed);
           event.currentTarget.blur();
         }
       }}
@@ -194,6 +239,7 @@ interface EditableStatusCellProps {
   listId: string;
   className: string;
   onCommit: (value: DispatchStatus) => void;
+  onDraftChange: (value: DispatchStatus) => void;
 }
 
 interface ExcelColumnFilterProps {
@@ -322,22 +368,31 @@ function ExcelColumnFilter({ label, options, selected, onChange }: ExcelColumnFi
   );
 }
 
-function EditableStatusCell({ value, listId, className, onCommit }: EditableStatusCellProps) {
+function EditableStatusCell({ value, listId, className, onCommit, onDraftChange }: EditableStatusCellProps) {
   const displayValue = value;
   const [draft, setDraft] = useState(displayValue);
+  const editedRef = useRef(false);
+  const committedValueRef = useRef(displayValue);
 
-  useEffect(() => setDraft(displayValue), [displayValue]);
+  useEffect(() => {
+    if (editedRef.current) return;
+    committedValueRef.current = displayValue;
+    setDraft(displayValue);
+  }, [displayValue]);
 
   const commit = () => {
+    if (!editedRef.current) return;
     const typed = draft.trim().replace(/\s+/g, " ").toUpperCase();
     const normalized = typed;
+    editedRef.current = false;
+    committedValueRef.current = normalized;
     if (!normalized) {
       setDraft("");
-      if (value) onCommit("");
+      onCommit("");
       return;
     }
     setDraft(normalized);
-    if (normalized !== value) onCommit(normalized);
+    onCommit(normalized);
   };
 
   return (
@@ -347,12 +402,21 @@ function EditableStatusCell({ value, listId, className, onCommit }: EditableStat
       value={draft}
       aria-label="Status do acionamento"
       autoComplete="off"
-      onChange={(event) => setDraft(event.target.value.toUpperCase())}
+      onChange={(event) => {
+        const next = event.target.value.toUpperCase();
+        editedRef.current = true;
+        setDraft(next);
+        onDraftChange(next);
+      }}
       onBlur={commit}
       onKeyDown={(event) => {
         if (event.key === "Enter") event.currentTarget.blur();
         if (event.key === "Escape") {
-          setDraft(displayValue);
+          const committed = committedValueRef.current;
+          editedRef.current = false;
+          setDraft(committed);
+          onDraftChange(committed);
+          onCommit(committed);
           event.currentTarget.blur();
         }
       }}
@@ -363,16 +427,21 @@ function EditableStatusCell({ value, listId, className, onCommit }: EditableStat
 
 export function DispatchGrid({
   dispatches,
+  onDraftRow = () => undefined,
   onUpdateRow,
   onUpdateBatch,
   locations,
   saveState,
+  cellSaveStates = {},
   readOnly = false,
   activeEditors = {},
   onActiveRowChange,
   reminderTimes = {},
   onSetReminder,
   onRemoveReminder,
+  reminderVolume = 65,
+  onReminderVolumeChange,
+  onPreviewReminderSound,
 }: DispatchGridProps) {
   const [copiedCell, setCopiedCell] = useState<string | null>(null);
   const [sortField, setSortField] = useState<SortField>("schedule_time");
@@ -615,6 +684,16 @@ export function DispatchGrid({
     [locations, dispatches]
   );
 
+  const cellFeedback = (rowId: string, field: keyof DispatchRowModel) => {
+    const feedback = cellSaveStates[`${rowId}:${String(field)}`];
+    return feedback ? {
+      "data-save-state": feedback.status,
+      title: feedback.status === "error"
+        ? feedback.message || "Erro ao salvar; a edição continua pendente."
+        : feedback.status === "saving" ? "Salvando..." : feedback.status === "saved" ? "Salvo" : "Alteração pendente",
+    } : {};
+  };
+
   useEffect(() => {
     localStorage.setItem("dispatch-hidden-columns", JSON.stringify(hiddenColumns));
     const table = tableRef.current;
@@ -727,18 +806,30 @@ export function DispatchGrid({
   };
 
   const commitUpdate = async (id: string, updates: Partial<DispatchRowModel>, recordHistory = true) => {
-    if (readOnly) return;
+    if (readOnly) return false;
     const change = recordHistory ? historyChangeFor(id, updates) : null;
-    await onUpdateRow(id, updates);
-    if (change) rememberAction([change]);
+    try {
+      await onUpdateRow(id, updates);
+      if (change) rememberAction([change]);
+      return true;
+    } catch {
+      // O estado de erro e o rascunho pendente são mantidos pela página.
+      return false;
+    }
   };
 
   const commitBatch = async (updatesByRow: Map<string, Partial<DispatchRowModel>>) => {
-    if (readOnly) return;
+    if (readOnly) return false;
     const changes = Array.from(updatesByRow, ([id, updates]) => historyChangeFor(id, updates))
       .filter((change): change is GridHistoryChange => Boolean(change));
-    await onUpdateBatch(updatesByRow);
-    rememberAction(changes);
+    try {
+      await onUpdateBatch(updatesByRow);
+      rememberAction(changes);
+      return true;
+    } catch {
+      // A seleção continua dirty e pode ser reenviada pelo botão Atualizar.
+      return false;
+    }
   };
 
   const undo = async () => {
@@ -903,8 +994,10 @@ export function DispatchGrid({
       setReplaceResult("Nenhuma célula editável encontrada.");
       return;
     }
-    await commitBatch(updatesByRow);
-    setReplaceResult(`${changedCells} célula(s) substituída(s) e salva(s).`);
+    const saved = await commitBatch(updatesByRow);
+    setReplaceResult(saved
+      ? `${changedCells} célula(s) substituída(s) e salva(s).`
+      : `${changedCells} célula(s) alterada(s), mas ainda pendente(s) de salvamento.`);
   };
 
   const moveSelection = (rowDelta: number, columnDelta: number, extend: boolean) => {
@@ -939,7 +1032,6 @@ export function DispatchGrid({
     if (selectedCount === 1 && singleValue) return;
 
     event.preventDefault();
-    if (event.target instanceof HTMLElement) event.target.blur();
     const updatesByRow = new Map<string, Partial<DispatchRowModel>>();
     const sourceColumnCount = Math.max(...matrix.map((row) => row.length));
     const targetIsRange = selectedCount > 1;
@@ -976,7 +1068,7 @@ export function DispatchGrid({
           event.preventDefault();
           return;
         }
-        handleGridPaste(event);
+        void handleGridPaste(event);
       }}
       onKeyDown={(event) => {
         if (event.key === "Escape" && isExpanded) {
@@ -1073,6 +1165,26 @@ export function DispatchGrid({
               }}
             />
           </label>
+          <div className="dispatch-reminder-volume">
+            <div className="dispatch-reminder-volume-title">
+              <span>Volume do alerta</span>
+              <output htmlFor="dispatch-reminder-volume">{reminderVolume}%</output>
+            </div>
+            <div className="dispatch-reminder-volume-controls">
+              {reminderVolume === 0 ? <VolumeX aria-hidden="true" /> : <Volume2 aria-hidden="true" />}
+              <input
+                id="dispatch-reminder-volume"
+                type="range"
+                min="0"
+                max="100"
+                step="5"
+                value={reminderVolume}
+                aria-label="Volume do alerta"
+                onChange={(event) => onReminderVolumeChange?.(Number(event.target.value))}
+              />
+              <button type="button" onClick={onPreviewReminderSound}>Testar</button>
+            </div>
+          </div>
           {reminderError && <p role="alert">{reminderError}</p>}
           <div className="dispatch-reminder-editor-actions">
             {reminderTimes[reminderEditor.dispatchId] && (
@@ -1500,6 +1612,10 @@ export function DispatchGrid({
                 row.abono_authorized_by === "PENDENTE" && row.dispatch_status === "ABONADO";
               const rowEditors = activeEditors[row.id] || [];
               const isCastilhoDriver = row.base?.code?.trim().toUpperCase() === "CASTILHO";
+              const rowFeedback = Object.entries(cellSaveStates)
+                .filter(([key]) => key.startsWith(`${row.id}:`))
+                .map(([, feedback]) => feedback)
+                .sort((a, b) => ["error", "saving", "pending", "saved"].indexOf(a.status) - ["error", "saving", "pending", "saved"].indexOf(b.status))[0];
 
               return (
                 <tr
@@ -1511,7 +1627,10 @@ export function DispatchGrid({
                   className={`h-8 ${selectedRow === row.id ? "excel-selected-row" : ""} ${
                     hasAbonoPending ? "bg-amber-50" : ""
                   } ${rowEditors.length ? "excel-collaborator-row" : ""}`}
-                  title={rowEditors.length ? `${rowEditors.join(", ")} está nesta linha` : undefined}
+                  data-save-state={rowFeedback?.status}
+                  title={rowFeedback?.status === "error"
+                    ? rowFeedback.message || "Esta linha possui uma edição que ainda não foi salva."
+                    : rowEditors.length ? `${rowEditors.join(", ")} está nesta linha` : undefined}
                 >
                   <td
                     className="excel-row-number sticky left-0 z-20 cursor-pointer text-center hover:bg-[#d9ead3]"
@@ -1545,7 +1664,7 @@ export function DispatchGrid({
                           const rect = event.currentTarget.getBoundingClientRect();
                           const editorWidth = 270;
                           const x = Math.min(rect.left, window.innerWidth - editorWidth - 12);
-                          const y = Math.min(rect.bottom + 5, window.innerHeight - 230);
+                          const y = Math.min(rect.bottom + 5, window.innerHeight - 300);
                           setReminderError("");
                           setReminderEditor({
                             dispatchId: row.id,
@@ -1612,21 +1731,23 @@ export function DispatchGrid({
                   </td>
 
                   {/* 4. PREVISÃO */}
-                  <td className="px-1 py-1 text-center">
+                  <td className="px-1 py-1 text-center" {...cellFeedback(row.id, "forecast_start_time")}>
                     <EditableTextCell
                       value={row.forecast_start_time || ""}
                       placeholder={row.forecast_source === "CONTINUITY" ? "AGUARD. SAÍDA" : "INSERIR"}
                       onCommit={(value) => commitUpdate(row.id, { forecast_start_time: value || null })}
+                      onDraftChange={(value) => onDraftRow(row.id, { forecast_start_time: value || null })}
                       className="w-full text-center text-slate-900 font-mono font-medium placeholder-slate-400 focus:bg-white focus:outline-none rounded px-1"
                     />
                   </td>
 
                   {/* 5. ACIONADO / STATUS */}
-                  <td className={`px-1 py-1 text-center excel-status-cell ${getStatusClass(row.dispatch_status)}`}>
+                  <td className={`px-1 py-1 text-center excel-status-cell ${getStatusClass(row.dispatch_status)}`} {...cellFeedback(row.id, "dispatch_status")}>
                     <EditableStatusCell
                       value={row.dispatch_status}
                       listId="dispatch-status-options"
                       onCommit={(value) => commitUpdate(row.id, { dispatch_status: value })}
+                      onDraftChange={(value) => onDraftRow(row.id, { dispatch_status: value })}
                       className={`excel-status-select w-full py-0.5 px-1 rounded text-center text-[10px] font-extrabold border cursor-pointer focus:outline-none shadow-xs ${getStatusClass(
                         row.dispatch_status
                       )}`}
@@ -1634,12 +1755,13 @@ export function DispatchGrid({
                   </td>
 
                   {/* 6. MOTIVO DO ABONO / APROVAÇÃO */}
-                  <td className="px-1.5 py-1">
+                  <td className="px-1.5 py-1" {...cellFeedback(row.id, "abono_reason")}>
                     <div className="flex items-center space-x-1">
                       <EditableTextCell
                         value={row.abono_reason || ""}
                         placeholder="Motivo da ocorrência..."
                         onCommit={(value) => commitUpdate(row.id, { abono_reason: value || null })}
+                        onDraftChange={(value) => onDraftRow(row.id, { abono_reason: value || null })}
                         className="flex-1 text-slate-900 placeholder-slate-400 focus:bg-white focus:outline-none rounded px-1 text-[11px] truncate font-sans"
                       />
                       {row.dispatch_status === "ABONADO" || row.abono_reason ? (
@@ -1664,29 +1786,23 @@ export function DispatchGrid({
                   </td>
 
                   {/* 7. LOCAL */}
-                  <td className="px-1 py-1 text-center">
-                    <select
-                      value={row.origin_location_id || ""}
-                      onChange={(e) => commitUpdate(row.id, { origin_location_id: e.target.value || null })}
-                      className="w-full text-center text-slate-900 font-semibold focus:bg-white focus:outline-none rounded cursor-pointer"
-                    >
-                      <option value="" className="text-slate-400">
-                        - Local -
-                      </option>
-                      {locations.map((loc) => (
-                        <option key={loc.id} value={loc.id} className="text-slate-900">
-                          {loc.name}
-                        </option>
-                      ))}
-                    </select>
+                  <td className="px-1 py-1 text-center" {...cellFeedback(row.id, "origin_location_id")}>
+                    <span className="block w-full text-center font-semibold text-slate-900">
+                      {locations.find((location) => location.id === row.origin_location_id)?.name
+                        ?? row.origin_location?.name
+                        ?? ""}
+                    </span>
                   </td>
 
                   {/* 8. ENTRADA */}
-                  <td className="px-1 py-1 text-center">
+                  <td className="px-1 py-1 text-center" {...cellFeedback(row.id, "entry_time")}>
                     <EditableTextCell
                       value={row.entry_time || ""}
                       placeholder="--:--:--"
                       onCommit={(value) => commitUpdate(row.id, {
+                        entry_time: value ? normalizeClockTime(value) : null,
+                      })}
+                      onDraftChange={(value) => onDraftRow(row.id, {
                         entry_time: value ? normalizeClockTime(value) : null,
                       })}
                       className="w-full text-center text-slate-900 font-mono font-medium placeholder-slate-400 focus:bg-white focus:outline-none rounded px-1"
@@ -1694,17 +1810,16 @@ export function DispatchGrid({
                   </td>
 
                   {/* 9. FROTA (Digitação Livre) */}
-                  <td className="px-1 py-1 text-center">
+                  <td className="px-1 py-1 text-center" {...cellFeedback(row.id, "fleet_code")}>
                     <input
                       type="text"
                       value={fleetDrafts[row.id] ?? (row.fleet_code || row.vehicle?.plate_code || "")}
                       placeholder="Ex: ABC1234"
-                      onChange={(e) =>
-                        setFleetDrafts((prev) => ({
-                          ...prev,
-                          [row.id]: e.target.value.toUpperCase(),
-                        }))
-                      }
+                      onChange={(e) => {
+                        const value = e.target.value.toUpperCase();
+                        setFleetDrafts((prev) => ({ ...prev, [row.id]: value }));
+                        onDraftRow(row.id, { fleet_code: value });
+                      }}
                       onBlur={(e) => {
                         const value = e.target.value.trim().toUpperCase();
                         setFleetDrafts((prev) => {
@@ -1719,11 +1834,14 @@ export function DispatchGrid({
                   </td>
 
                   {/* 10. C/V */}
-                  <td className="px-0.5 py-1 text-center">
+                  <td className="px-0.5 py-1 text-center" {...cellFeedback(row.id, "cargo_status")}>
                     <EditableTextCell
                       value={row.cargo_status || ""}
                       placeholder="C/V"
                       onCommit={(value) => commitUpdate(row.id, {
+                        cargo_status: (value.trim().toUpperCase() || null) as CargoStatus | null,
+                      })}
+                      onDraftChange={(value) => onDraftRow(row.id, {
                         cargo_status: (value.trim().toUpperCase() || null) as CargoStatus | null,
                       })}
                       className="w-full text-center font-extrabold uppercase text-slate-900 placeholder-slate-400 focus:bg-white focus:outline-none rounded px-1"
@@ -1731,31 +1849,36 @@ export function DispatchGrid({
                   </td>
 
                   {/* 11. DESTINO */}
-                  <td className="px-0 py-0">
+                  <td className="px-0 py-0" {...cellFeedback(row.id, "destination_name")}>
                     <EditableLocationCell
                       value={row.destination_name ?? row.destination_location?.name ?? ""}
                       options={locationNames}
                       label={`Destino de ${row.driver.name}`}
                       onCommit={(value) => commitUpdate(row.id, { destination_name: value })}
+                      onDraftChange={(value) => onDraftRow(row.id, { destination_name: value })}
                     />
                   </td>
 
                   {/* 12. DESTINO FINAL */}
-                  <td className="px-0 py-0">
+                  <td className="px-0 py-0" {...cellFeedback(row.id, "final_destination_name")}>
                     <EditableLocationCell
                       value={row.final_destination_name ?? row.final_destination_location?.name ?? ""}
                       options={locationNames}
                       label={`Destino final de ${row.driver.name}`}
                       onCommit={(value) => commitUpdate(row.id, { final_destination_name: value })}
+                      onDraftChange={(value) => onDraftRow(row.id, { final_destination_name: value })}
                     />
                   </td>
 
                   {/* 13. SAÍDA */}
-                  <td className="px-1 py-1 text-center">
+                  <td className="px-1 py-1 text-center" {...cellFeedback(row.id, "exit_time")}>
                     <EditableTextCell
                       value={row.exit_time || ""}
                       placeholder="--:--:--"
                       onCommit={(value) => commitUpdate(row.id, {
+                        exit_time: value ? normalizeClockTime(value) : null,
+                      })}
+                      onDraftChange={(value) => onDraftRow(row.id, {
                         exit_time: value ? normalizeClockTime(value) : null,
                       })}
                       className="w-full text-center text-slate-900 font-mono font-medium placeholder-slate-400 focus:bg-white focus:outline-none rounded px-1"
@@ -1763,11 +1886,12 @@ export function DispatchGrid({
                   </td>
 
                   {/* 14. OBSERVAÇÃO */}
-                  <td className="px-1.5 py-1">
+                  <td className="px-1.5 py-1" {...cellFeedback(row.id, "observations")}>
                     <EditableTextCell
                       value={row.observations || ""}
                       placeholder="Notas..."
                       onCommit={(value) => commitUpdate(row.id, { observations: value || null })}
+                      onDraftChange={(value) => onDraftRow(row.id, { observations: value || null })}
                       className="w-full text-slate-900 placeholder-slate-400 focus:bg-white focus:outline-none rounded px-1 text-[11px] truncate font-sans"
                     />
                   </td>
@@ -1875,7 +1999,7 @@ export function DispatchGrid({
           {saveState.status === "saving" && "Salvando alteração..."}
           {saveState.status === "saved" && "Alteração salva"}
           {saveState.status === "error" && (saveState.message || "Erro ao salvar alteração")}
-          {saveState.status === "idle" && (readOnly ? "Folha fechada — somente leitura" : "Pronto")}
+          {saveState.status === "idle" && (readOnly ? "Folha fechada — somente leitura" : saveState.message || "Pronto")}
         </span>
         <span className="ml-auto hidden shrink-0 sm:inline">{processedDispatches.length} linhas</span>
         <span className="hidden shrink-0 border-l border-slate-300 pl-2 2xl:inline">Ctrl+C · Ctrl+V · Delete · Ctrl+Z · Ctrl+D · Ctrl+R</span>

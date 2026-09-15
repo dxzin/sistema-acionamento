@@ -42,6 +42,14 @@ function saveDemoDrivers(drivers: Driver[]) {
   window.localStorage.setItem(STORAGE_KEY, JSON.stringify(drivers));
 }
 
+function driverMutationError(error: { code?: string; message: string }) {
+  if (error.code === "23505") return new Error("Esta matrícula já está cadastrada.");
+  if (error.code === "42501" || error.code === "PGRST116") {
+    return new Error("Somente supervisores e administradores podem alterar cadastros de condutores.");
+  }
+  return new Error(error.message);
+}
+
 export async function loadDriverCatalog(): Promise<DriverCatalog> {
   if (!hasSupabaseConfig()) {
     return { drivers: getDemoDrivers(), bases: INITIAL_BASES, source: "demo" };
@@ -73,7 +81,7 @@ export async function createDriver(input: DriverFormData, source: DriverCatalog[
   }
 
   const { data, error } = await createClient().from("drivers").insert(input).select().single();
-  if (error) throw new Error(error.code === "23505" ? "Esta matrícula já está cadastrada." : error.message);
+  if (error) throw driverMutationError(error);
   return data as Driver;
 }
 
@@ -84,7 +92,8 @@ export async function updateDriver(id: string, input: DriverFormData, source: Dr
     return updated;
   }
 
-  const { data, error } = await createClient().from("drivers").update(input).eq("id", id).select().single();
-  if (error) throw new Error(error.code === "23505" ? "Esta matrícula já está cadastrada." : error.message);
+  const { data, error } = await createClient().from("drivers").update(input).eq("id", id).select().maybeSingle();
+  if (error) throw driverMutationError(error);
+  if (!data) throw new Error("Somente supervisores e administradores podem alterar cadastros de condutores.");
   return data as Driver;
 }

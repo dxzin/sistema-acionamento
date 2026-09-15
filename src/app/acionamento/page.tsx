@@ -1,6 +1,7 @@
 "use client";
 
-import React, { useEffect, useState, useMemo, useCallback, useRef } from "react";
+import React, { Suspense, useEffect, useState, useMemo, useCallback, useRef } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { Header } from "@/components/layout/Header";
 import { Sidebar } from "@/components/layout/Sidebar";
 import { DispatchStatsBar } from "@/components/acionamento/DispatchStatsBar";
@@ -17,14 +18,31 @@ import { summarizeOperationalAlerts } from "@/lib/calculations/operational-alert
 import { BellRing, Clock3, X } from "lucide-react";
 import {
   buildDispatchReminderDate,
+  DEFAULT_REMINDER_VOLUME,
   DispatchReminder,
   dispatchReminderStorageKey,
+  dispatchReminderVolumeStorageKey,
   parseDispatchReminders,
+  parseDispatchReminderVolume,
   reminderClockTime,
 } from "@/lib/reminders/dispatch-reminders";
+import {
+  createDispatchSaveSnapshot,
+  hasPendingDispatchEdits,
+  markDispatchSnapshotSaving,
+  mergeServerDispatches,
+  PendingDispatchEdits,
+  resolveDispatchSnapshotFailure,
+  resolveDispatchSnapshotSuccess,
+  stageDispatchChanges,
+} from "@/lib/editing/dispatch-edit-state";
 
-export default function AcionamentoPage() {
+type CellSaveStatus = "pending" | "saving" | "saved" | "error";
+
+function AcionamentoContent() {
   const { user } = useAuth();
+  const router = useRouter();
+  const searchParams = useSearchParams();
   const [dispatches, setDispatches] = useState<DispatchRowModel[]>([]);
   const [locations, setLocations] = useState<Location[]>([]);
   const [dailySheet, setDailySheet] = useState<DailySheet | null>(null);
@@ -37,12 +55,20 @@ export default function AcionamentoPage() {
   const [syncStatus, setSyncStatus] = useState<"live" | "fallback" | "offline">("fallback");
   const [isExporting, setIsExporting] = useState(false);
   const loadRequestRef = useRef(0);
+  const foregroundLoadsRef = useRef(0);
   const syncTokenRef = useRef<string | null>(null);
   const pendingWritesRef = useRef(0);
+  const dispatchesRef = useRef<DispatchRowModel[]>([]);
+  const pendingEditsRef = useRef<PendingDispatchEdits>({});
+  const editVersionRef = useRef(0);
+  const saveLoopRef = useRef<Promise<boolean> | null>(null);
+  const [cellSaveStates, setCellSaveStates] = useState<Record<string, { status: CellSaveStatus; message?: string }>>({});
   const firedRemindersRef = useRef<Set<string>>(new Set());
   const audioContextRef = useRef<AudioContext | null>(null);
   const [reminders, setReminders] = useState<DispatchReminder[]>([]);
   const [remindersReady, setRemindersReady] = useState(false);
+  const [reminderVolume, setReminderVolume] = useState(DEFAULT_REMINDER_VOLUME);
+  const [reminderVolumeReady, setReminderVolumeReady] = useState(false);
   const [reminderNow, setReminderNow] = useState(() => Date.now());
 
   // Filtros
@@ -51,13 +77,176 @@ export default function AcionamentoPage() {
     statusFilter: "",
     baseFilter: "",
     shiftFilter: "",
-    date: currentDateInBrasilia(),
-    region: "SP",
+    date: searchParams.get("date") || currentDateInBrasilia(),
+    region: (searchParams.get("region") as DispatchFilterOptions["region"]) || "SP",
   });
 
-  const loadData = useCallback(async () => {
+  useEffect(() => {
+    dispatchesRef.current = dispatches;
+  }, [dispatches]);
+
+  useEffect(() => {
+    if (!Object.values(cellSaveStates).some((state) => state.status === "saved")) return;
+    const timer = window.setTimeout(() => {
+      setCellSaveStates((current) => Object.fromEntries(
+        Object.entries(current).filter(([, state]) => state.status !== "saved")
+      ));
+    }, 1800);
+    return () => window.clearTimeout(timer);
+  }, [cellSaveStates]);
+
+  useEffect(() => {
+    const requestedDate = searchParams.get("date") || currentDateInBrasilia();
+    const requestedRegion = searchParams.get("region");
+    const region = requestedRegion === "UBJP" || requestedRegion === "ALL" ? requestedRegion : "SP";
+    setFilters((current) => current.date === requestedDate && current.region === region
+      ? current
+      : { ...current, date: requestedDate, region });
+  }, [searchParams]);
+
+  const stageLocalEdits = useCallback((id: string, updates: Partial<DispatchRowModel>) => {
+    const expectedUpdatedAt = dispatchesRef.current.find((row) => row.id === id)?.updated_at;
+    const next = stageDispatchChanges(
+      pendingEditsRef.current,
+      id,
+      updates,
+      expectedUpdatedAt,
+      () => ++editVersionRef.current
+    );
+    pendingEditsRef.current = next;
+    setDispatches((current) => current.map((row) => row.id === id ? { ...row, ...updates } : row));
+    setCellSaveStates((current) => {
+      const updated = { ...current };
+      for (const key of Object.keys(updates)) updated[`${id}:${key}`] = { status: "pending" };
+      return updated;
+    });
+    setSaveState({ status: "idle", message: "Alterações pendentes" });
+  }, []);
+
+  const flushPendingEdits = useCallback(async (): Promise<boolean> => {
+    if (saveLoopRef.current) return saveLoopRef.current;
+
+    const loop = (async () => {
+      let completed = true;
+      while (true) {
+        const snapshot = createDispatchSaveSnapshot(pendingEditsRef.current);
+        if (!snapshot.length) break;
+        pendingEditsRef.current = markDispatchSnapshotSaving(pendingEditsRef.current, snapshot);
+        setCellSaveStates((current) => {
+          const next = { ...current };
+          for (const item of snapshot) {
+            for (const key of Object.keys(item.changes)) next[`${item.id}:${key}`] = { status: "saving" };
+          }
+          return next;
+        });
+        pendingWritesRef.current += 1;
+        setSaveState({ status: "saving" });
+
+        try {
+          const saved = await dispatchService.updateDispatchBatch(snapshot.map((item) => ({
+            id: item.id,
+            changes: item.changes,
+            expectedUpdatedAt: item.expectedUpdatedAt,
+          })));
+          const savedById = new Map(saved.map((row) => [row.id, row]));
+          const previousEdits = pendingEditsRef.current;
+          pendingEditsRef.current = resolveDispatchSnapshotSuccess(previousEdits, snapshot, saved);
+
+          setDispatches((current) => current.map((row) => {
+            const item = snapshot.find((candidate) => candidate.id === row.id);
+            const savedRow = savedById.get(row.id);
+            if (!item || !savedRow) return row;
+            const remaining = pendingEditsRef.current[row.id];
+            const remainingChanges = remaining ? Object.fromEntries(
+              Object.entries(remaining.fields).map(([key, field]) => [key, field?.value])
+            ) as Partial<DispatchRowModel> : {};
+            return { ...row, ...savedRow, ...item.changes, ...remainingChanges };
+          }));
+
+          setCellSaveStates((current) => {
+            const next = { ...current };
+            for (const item of snapshot) {
+              for (const [key, version] of Object.entries(item.versions)) {
+                const pending = pendingEditsRef.current[item.id]?.fields[key as keyof DispatchRowModel];
+                next[`${item.id}:${key}`] = pending
+                  ? { status: pending.status, message: pending.error }
+                  : { status: "saved" };
+                if (pending && pending.version === version) next[`${item.id}:${key}`] = { status: "pending" };
+              }
+            }
+            return next;
+          });
+          setSaveState(hasPendingDispatchEdits(pendingEditsRef.current)
+            ? { status: "idle", message: "Alterações pendentes" }
+            : { status: "saved" });
+        } catch (error) {
+          const saveError = error instanceof Error ? error : new Error("Erro ao salvar alteração");
+          pendingEditsRef.current = resolveDispatchSnapshotFailure(
+            pendingEditsRef.current,
+            snapshot,
+            saveError.message
+          );
+          setCellSaveStates((current) => {
+            const next = { ...current };
+            for (const item of snapshot) {
+              for (const key of Object.keys(item.changes)) {
+                const field = pendingEditsRef.current[item.id]?.fields[key as keyof DispatchRowModel];
+                if (field?.status === "error") next[`${item.id}:${key}`] = { status: "error", message: saveError.message };
+              }
+            }
+            return next;
+          });
+          setSaveState({ status: "error", message: `${saveError.message} A edição local foi mantida; tente salvar novamente.` });
+          completed = false;
+          break;
+        } finally {
+          pendingWritesRef.current = Math.max(0, pendingWritesRef.current - 1);
+        }
+      }
+      return completed && !hasPendingDispatchEdits(pendingEditsRef.current);
+    })();
+
+    saveLoopRef.current = loop;
+    try {
+      return await loop;
+    } finally {
+      if (saveLoopRef.current === loop) saveLoopRef.current = null;
+    }
+  }, []);
+
+  useEffect(() => {
+    const warnBeforeUnload = (event: BeforeUnloadEvent) => {
+      if (!hasPendingDispatchEdits(pendingEditsRef.current)) return;
+      event.preventDefault();
+      event.returnValue = "";
+    };
+    window.addEventListener("beforeunload", warnBeforeUnload);
+    return () => window.removeEventListener("beforeunload", warnBeforeUnload);
+  }, []);
+
+  useEffect(() => {
+    const finishBeforeNavigation = (event: MouseEvent) => {
+      if (event.defaultPrevented || event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+      const anchor = (event.target as Element | null)?.closest<HTMLAnchorElement>("a[href]");
+      if (!anchor || anchor.target || anchor.hasAttribute("download") || !hasPendingDispatchEdits(pendingEditsRef.current)) return;
+      const destination = new URL(anchor.href, window.location.href);
+      if (destination.origin !== window.location.origin) return;
+      event.preventDefault();
+      event.stopPropagation();
+      void flushPendingEdits().then((saved) => {
+        if (saved) router.push(`${destination.pathname}${destination.search}${destination.hash}`);
+      });
+    };
+    document.addEventListener("click", finishBeforeNavigation, true);
+    return () => document.removeEventListener("click", finishBeforeNavigation, true);
+  }, [flushPendingEdits, router]);
+
+  const loadData = useCallback(async (foreground = true) => {
     const requestId = ++loadRequestRef.current;
-    setIsLoading(true);
+    if (foreground) {
+      foregroundLoadsRef.current += 1;
+      setIsLoading(true);
+    }
     setLoadError(null);
     try {
       const dispatchesData = await dispatchService.getDispatchesForSheet(filters.date, filters.region);
@@ -70,7 +259,12 @@ export default function AcionamentoPage() {
       // Uma resposta de uma data/região antiga nunca pode sobrescrever a
       // consulta mais recente quando o operador navega rapidamente.
       if (requestId === loadRequestRef.current) {
-        setDispatches(dispatchesData);
+        const nextPending = { ...pendingEditsRef.current };
+        for (const row of dispatchesData) {
+          if (nextPending[row.id]) nextPending[row.id] = { ...nextPending[row.id], expectedUpdatedAt: row.updated_at };
+        }
+        pendingEditsRef.current = nextPending;
+        setDispatches((current) => mergeServerDispatches(dispatchesData, current, nextPending));
         setLocations(locs);
         setDailySheet(sheet);
         syncTokenRef.current = syncToken;
@@ -78,12 +272,17 @@ export default function AcionamentoPage() {
     } catch (error) {
       console.error("Erro ao carregar dados da folha diária:", error);
       if (requestId === loadRequestRef.current) {
-        setDispatches([]);
-        setDailySheet(null);
+        if (foreground && !hasPendingDispatchEdits(pendingEditsRef.current)) {
+          setDispatches([]);
+          setDailySheet(null);
+        }
         setLoadError(error instanceof Error ? error.message : "Não foi possível carregar a folha diária.");
       }
     } finally {
-      if (requestId === loadRequestRef.current) setIsLoading(false);
+      if (foreground) {
+        foregroundLoadsRef.current = Math.max(0, foregroundLoadsRef.current - 1);
+        if (foregroundLoadsRef.current === 0) setIsLoading(false);
+      }
     }
   }, [filters.date, filters.region]);
 
@@ -108,6 +307,23 @@ export default function AcionamentoPage() {
     if (!user?.id || !remindersReady) return;
     sessionStorage.setItem(dispatchReminderStorageKey(user.id), JSON.stringify(reminders));
   }, [reminders, remindersReady, user?.id]);
+
+  useEffect(() => {
+    if (!user?.id) {
+      setReminderVolume(DEFAULT_REMINDER_VOLUME);
+      setReminderVolumeReady(false);
+      return;
+    }
+    setReminderVolume(parseDispatchReminderVolume(
+      localStorage.getItem(dispatchReminderVolumeStorageKey(user.id))
+    ));
+    setReminderVolumeReady(true);
+  }, [user?.id]);
+
+  useEffect(() => {
+    if (!user?.id || !reminderVolumeReady) return;
+    localStorage.setItem(dispatchReminderVolumeStorageKey(user.id), String(reminderVolume));
+  }, [reminderVolume, reminderVolumeReady, user?.id]);
 
   useEffect(() => {
     const interval = window.setInterval(() => setReminderNow(Date.now()), 1000);
@@ -135,14 +351,15 @@ export default function AcionamentoPage() {
 
   const playReminderSound = useCallback(() => {
     const context = audioContextRef.current;
-    if (!context) return;
+    if (!context || reminderVolume <= 0) return;
     void context.resume().then(() => {
+      const peakVolume = Math.max(0.0001, (reminderVolume / 100) * 0.4);
       [0, 0.28].forEach((delay, index) => {
         const oscillator = context.createOscillator();
         const gain = context.createGain();
         oscillator.frequency.value = index === 0 ? 880 : 1046;
         gain.gain.setValueAtTime(0.0001, context.currentTime + delay);
-        gain.gain.exponentialRampToValueAtTime(0.26, context.currentTime + delay + 0.02);
+        gain.gain.exponentialRampToValueAtTime(peakVolume, context.currentTime + delay + 0.02);
         gain.gain.exponentialRampToValueAtTime(0.0001, context.currentTime + delay + 0.2);
         oscillator.connect(gain);
         gain.connect(context.destination);
@@ -150,7 +367,12 @@ export default function AcionamentoPage() {
         oscillator.stop(context.currentTime + delay + 0.22);
       });
     }).catch(() => undefined);
-  }, []);
+  }, [reminderVolume]);
+
+  const previewReminderSound = useCallback(() => {
+    unlockReminderSound();
+    playReminderSound();
+  }, [playReminderSound, unlockReminderSound]);
 
   const dueReminders = useMemo(
     () => reminders
@@ -227,11 +449,8 @@ export default function AcionamentoPage() {
   }, [user?.id]);
 
   const syncFromRemote = useCallback(() => {
-    const activeElement = document.activeElement;
-    const operatorIsTyping = activeElement instanceof HTMLInputElement ||
-      activeElement instanceof HTMLSelectElement || activeElement instanceof HTMLTextAreaElement;
-    if (pendingWritesRef.current > 0 || operatorIsTyping) return;
-    void loadData();
+    if (pendingWritesRef.current > 0) return;
+    void loadData(false);
   }, [loadData]);
 
   // Sincronização em tempo real via Supabase Realtime
@@ -303,14 +522,12 @@ export default function AcionamentoPage() {
     let checking = false;
     const checkForChanges = async () => {
       if (checking || document.visibilityState !== "visible" || pendingWritesRef.current > 0) return;
-      const activeElement = document.activeElement;
-      if (activeElement instanceof HTMLInputElement || activeElement instanceof HTMLSelectElement || activeElement instanceof HTMLTextAreaElement) return;
       checking = true;
       try {
         const token = await dispatchService.getDailySheetSyncToken(filters.date, filters.region);
         if (syncTokenRef.current !== null && token !== syncTokenRef.current) {
           syncTokenRef.current = token;
-          await loadData();
+          await loadData(false);
         } else {
           syncTokenRef.current = token;
         }
@@ -342,100 +559,49 @@ export default function AcionamentoPage() {
     return () => clearInterval(interval);
   }, []);
 
-  const handleFilterChange = (newFilters: Partial<DispatchFilterOptions>) => {
-    setFilters((prev) => ({ ...prev, ...newFilters }));
+  const handleFilterChange = async (newFilters: Partial<DispatchFilterOptions>) => {
+    const changesSheet = (newFilters.date && newFilters.date !== filters.date) ||
+      (newFilters.region && newFilters.region !== filters.region);
+    if (changesSheet && !(await flushPendingEdits())) return;
+
+    const next = { ...filters, ...newFilters };
+    setFilters(next);
+    if (changesSheet) {
+      const params = new URLSearchParams(searchParams.toString());
+      if (next.date === currentDateInBrasilia()) params.delete("date");
+      else params.set("date", next.date);
+      if (next.region === "SP") params.delete("region");
+      else params.set("region", next.region);
+      const query = params.toString();
+      router.replace(query ? `/acionamento?${query}` : "/acionamento", { scroll: false });
+    }
   };
 
   const handleUpdateRow = async (id: string, updates: Partial<DispatchRowModel>) => {
-    const originalRow = dispatches.find((row) => row.id === id);
     if (dailySheet?.status !== "OPEN") {
       throw new Error("Esta folha está fechada e disponível somente para consulta.");
     }
-    pendingWritesRef.current += 1;
-    setSaveState({ status: "saving" });
-
-    // Atualização otimista imediata na UI
-    setDispatches((prev) =>
-      prev.map((row) => (row.id === id ? { ...row, ...updates } : row))
-    );
-
-    try {
-      const saved = await dispatchService.updateDispatch(id, updates, originalRow?.updated_at);
-      if (!saved) throw new Error("O banco não confirmou a alteração.");
-
-      setDispatches((prev) =>
-        prev.map((row) => (row.id === id ? { ...row, ...saved, ...updates } : row))
-      );
-
-      const typedNames = [
-        { name: updates.destination_name, id: saved.destination_location_id },
-        { name: updates.final_destination_name, id: saved.final_destination_location_id },
-      ].filter((item): item is { name: string; id: string } => Boolean(item.name && item.id));
-
-      if (typedNames.length) {
-        setLocations((current) => {
-          const next = [...current];
-          for (const item of typedNames) {
-            if (!next.some((location) => location.name.toUpperCase() === item.name.toUpperCase())) {
-              next.push({ id: item.id, name: item.name, is_active: true, created_at: new Date().toISOString() });
-            }
-          }
-          return next.sort((a, b) => a.name.localeCompare(b.name, "pt-BR"));
-        });
-      }
-
-      setSaveState({ status: "saved" });
-    } catch (error) {
-      if (originalRow) {
-        setDispatches((prev) => prev.map((row) => (row.id === id ? originalRow : row)));
-      }
-      const saveError = error instanceof Error ? error : new Error("Erro ao salvar alteração");
-      setSaveState({
-        status: "error",
-        message: saveError.message,
-      });
-      if (saveError.message.startsWith("Conflito:") || saveError.message.includes("folha está fechada")) {
-        await loadData();
-      }
-      throw saveError;
-    } finally {
-      pendingWritesRef.current = Math.max(0, pendingWritesRef.current - 1);
-    }
+    stageLocalEdits(id, updates);
+    const saved = await flushPendingEdits();
+    if (!saved) throw new Error("A alteração continua pendente e não foi confirmada pelo banco.");
   };
 
   const handleUpdateBatch = async (updatesByRow: Map<string, Partial<DispatchRowModel>>) => {
     if (dailySheet?.status !== "OPEN") {
       throw new Error("Esta folha está fechada e disponível somente para consulta.");
     }
-    const snapshot = dispatches;
-    const payload = Array.from(updatesByRow, ([id, changes]) => ({
-      id,
-      changes,
-      expectedUpdatedAt: dispatches.find((row) => row.id === id)?.updated_at,
-    }));
-    if (!payload.length) return;
+    for (const [id, updates] of updatesByRow) stageLocalEdits(id, updates);
+    const saved = await flushPendingEdits();
+    if (!saved) throw new Error("Parte da seleção continua pendente e não foi confirmada pelo banco.");
+  };
 
-    pendingWritesRef.current += 1;
-    setSaveState({ status: "saving" });
-    setDispatches((current) => current.map((row) => ({ ...row, ...(updatesByRow.get(row.id) || {}) })));
-    try {
-      const saved = await dispatchService.updateDispatchBatch(payload);
-      const savedById = new Map(saved.map((row) => [row.id, row]));
-      setDispatches((current) => current.map((row) => ({
-        ...row,
-        ...(savedById.get(row.id) || {}),
-        ...(updatesByRow.get(row.id) || {}),
-      })));
-      setSaveState({ status: "saved" });
-    } catch (error) {
-      setDispatches(snapshot);
-      const saveError = error instanceof Error ? error : new Error("Erro ao salvar a seleção");
-      setSaveState({ status: "error", message: saveError.message });
-      await loadData();
-      throw saveError;
-    } finally {
-      pendingWritesRef.current = Math.max(0, pendingWritesRef.current - 1);
-    }
+  const handleManualRefresh = async () => {
+    const pendingHasError = Object.values(pendingEditsRef.current).some((row) =>
+      Object.values(row.fields).some((field) => field?.status === "error")
+    );
+    if (pendingHasError) await loadData(false);
+    if (hasPendingDispatchEdits(pendingEditsRef.current) && !(await flushPendingEdits())) return;
+    await loadData(true);
   };
 
   const handleToggleSheetStatus = async () => {
@@ -572,7 +738,7 @@ export default function AcionamentoPage() {
           <DispatchFilters
             filters={filters}
             onFilterChange={handleFilterChange}
-            onRefresh={loadData}
+            onRefresh={handleManualRefresh}
             isLoading={isLoading}
             sheetStatus={dailySheet?.status || null}
             onToggleSheetStatus={handleToggleSheetStatus}
@@ -595,16 +761,21 @@ export default function AcionamentoPage() {
           {/* Grade Operacional Estilo Planilha */}
           <DispatchGrid
             dispatches={filteredDispatches}
+            onDraftRow={stageLocalEdits}
             onUpdateRow={handleUpdateRow}
             onUpdateBatch={handleUpdateBatch}
             locations={locations}
             saveState={saveState}
+            cellSaveStates={cellSaveStates}
             readOnly={dailySheet?.status !== "OPEN"}
             activeEditors={activeEditors}
             onActiveRowChange={setActiveDispatchId}
             reminderTimes={reminderTimes}
             onSetReminder={setDispatchReminder}
             onRemoveReminder={removeDispatchReminder}
+            reminderVolume={reminderVolume}
+            onReminderVolumeChange={setReminderVolume}
+            onPreviewReminderSound={previewReminderSound}
           />
           {dueReminders.length > 0 && (
             <section className="dispatch-reminder-alert" role="alert" aria-live="assertive">
@@ -630,5 +801,13 @@ export default function AcionamentoPage() {
         </main>
       </div>
     </div>
+  );
+}
+
+export default function AcionamentoPage() {
+  return (
+    <Suspense fallback={null}>
+      <AcionamentoContent />
+    </Suspense>
   );
 }

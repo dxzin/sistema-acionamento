@@ -2,8 +2,11 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import {
   buildDispatchReminderDate,
+  DEFAULT_REMINDER_VOLUME,
   dispatchReminderStorageKey,
+  dispatchReminderVolumeStorageKey,
   parseDispatchReminders,
+  parseDispatchReminderVolume,
   reminderClockTime,
 } from "../src/lib/reminders/dispatch-reminders";
 
@@ -37,6 +40,7 @@ test("ignora conteúdo de sessão inválido e preserva lembretes válidos", () =
 
 test("isola o armazenamento pelo usuário e formata o relógio", () => {
   assert.equal(dispatchReminderStorageKey("user-1"), "dispatch-reminders:user-1");
+  assert.equal(dispatchReminderVolumeStorageKey("user-1"), "dispatch-reminder-volume:user-1");
   const date = new Date(2026, 8, 13, 7, 30);
   assert.equal(reminderClockTime({
     dispatchId: "dispatch-1",
@@ -44,4 +48,12 @@ test("isola o armazenamento pelo usuário e formata o relógio", () => {
     sheetDate: "2026-09-13",
     scheduledAt: date.toISOString(),
   }), "07:30");
+});
+
+test("normaliza o volume escolhido pelo operador", () => {
+  assert.equal(parseDispatchReminderVolume("82"), 82);
+  assert.equal(parseDispatchReminderVolume("120"), 100);
+  assert.equal(parseDispatchReminderVolume("-5"), 0);
+  assert.equal(parseDispatchReminderVolume("inválido"), DEFAULT_REMINDER_VOLUME);
+  assert.equal(parseDispatchReminderVolume(null), DEFAULT_REMINDER_VOLUME);
 });

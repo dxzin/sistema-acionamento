@@ -21,6 +21,12 @@ const REGION_BASES: Record<string, string[]> = {
   MS: ["MS"],
 };
 
+const DISPATCH_EXCLUDED_SCALE_CODES = new Set(["F", "FE", "DESL"]);
+
+export function isDispatchExcludedScaleCode(scaleCode: string | null | undefined): boolean {
+  return DISPATCH_EXCLUDED_SCALE_CODES.has(String(scaleCode || "").trim().toUpperCase());
+}
+
 class DispatchService {
   private localDispatches: Dispatch[] = [...INITIAL_DISPATCHES];
   private localDrivers: Driver[] = [...INITIAL_DRIVERS];
@@ -242,7 +248,7 @@ class DispatchService {
         }
 
         // Confere a escala mensal mesmo quando a folha diária já existia.
-        // Assim uma correção posterior de F/FE também remove o condutor da tela.
+        // Assim uma correção posterior para F, FE ou DESL também remove o condutor da tela.
         const [yearText, monthText, dayText] = date.split("-");
         const scheduleRegion = normalizedRegion === "UBJP" ? "MG" : normalizedRegion;
         const { data: currentSchedule } = await supabase
@@ -266,14 +272,14 @@ class DispatchService {
         }
 
         // 2. Cria a folha quando necessário e inclui condutores que passaram de
-        // F/FE para um dia trabalhado, sem sobrescrever linhas já preenchidas.
+        // F/FE/DESL para um dia trabalhado, sem sobrescrever linhas já preenchidas.
         // Consultar datas antigas ou mais distantes nunca pode criar dados.
         // Uma folha ausente só é preparada para o próximo dia operacional.
         const existingDriverIds = new Set(rawDispatches.map((dispatch) => dispatch.driver_id));
         const missingScheduledDriverIds = [...scheduleEntriesByDriver.entries()]
           .filter(([driverId, entry]) => {
             const code = String(entry.scale_code || "").trim().toUpperCase();
-            return !existingDriverIds.has(driverId) && !["F", "FE"].includes(code);
+            return !existingDriverIds.has(driverId) && !isDispatchExcludedScaleCode(code);
           })
           .map(([driverId]) => driverId);
         const shouldCreateSheet = !sheet && canCreateDailySheet(date);
@@ -347,7 +353,7 @@ class DispatchService {
                   const continuity = resolveDayContinuity(d.id, prevDisp);
                   const awaitingPreviousExit = isAwaitingPreviousExit(prevDisp);
                   const scaleCode = (schedEntry?.scale_code || "").trim().toUpperCase();
-                  if (["F", "FE"].includes(scaleCode)) return [];
+                  if (isDispatchExcludedScaleCode(scaleCode)) return [];
                   const firstDayForecast = !prevDisp
                     ? resolveFirstDayForecast(scaleCode, schedEntry?.shift_time || d.default_start_time)
                     : null;
@@ -417,7 +423,7 @@ class DispatchService {
     return rawDispatches.filter((disp) => {
       const currentScaleCode = scheduleEntriesByDriver.get(disp.driver_id)?.scale_code;
       const scaleCode = (currentScaleCode ?? disp.scale_day_status ?? "").trim().toUpperCase();
-      return !["F", "FE"].includes(scaleCode);
+      return !isDispatchExcludedScaleCode(scaleCode);
     }).map((disp) => {
       const currentScaleCode = scheduleEntriesByDriver.get(disp.driver_id)?.scale_code;
       const driver = driversMap.get(disp.driver_id) || {
@@ -645,6 +651,11 @@ class DispatchService {
       });
       if (error) throw this.translateMutationError(error.message);
       const saved = (data || []) as Dispatch[];
+      const savedIds = new Set(saved.map((row) => row.id));
+      const missingIds = prepared.filter((item) => !savedIds.has(item.id)).map((item) => item.id);
+      if (missingIds.length) {
+        throw new Error(`O banco não confirmou ${missingIds.length} linha(s) do lote. Nenhuma edição local foi descartada.`);
+      }
       const savedById = new Map(saved.map((row) => [row.id, row]));
       this.localDispatches = this.localDispatches.map((row) => savedById.get(row.id) || row);
       return saved;
