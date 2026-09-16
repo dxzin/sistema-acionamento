@@ -43,3 +43,11 @@ test("previsão digitada pelo operador fica protegida como manual", async () => 
   assert.equal(saved.forecast_start_time, "09:15:00");
   assert.equal(saved.forecast_source, "MANUAL");
 });
+
+test("entrada provisória aceita sequência e não calcula jornada até receber horário", async () => {
+  const sequence = await dispatchService.updateDispatch("disp-1", { entry_time: "2°" });
+  assert.equal(sequence?.entry_time, "2°");
+  assert.equal(sequence?.total_worked_minutes, null);
+  const realEntry = await dispatchService.updateDispatch("disp-1", { entry_time: "02:00:00" });
+  assert.equal(realEntry?.total_worked_minutes, 530);
+});

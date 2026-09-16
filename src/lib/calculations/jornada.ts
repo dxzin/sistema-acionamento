@@ -20,6 +20,8 @@ export function minutesToTime(totalMinutes: number): string {
 
 export function normalizeClockTime(value: string): string {
   const trimmed = value.trim();
+  const sequence = trimmed.match(/^(\d+)\s*[°º]$/);
+  if (sequence) return `${sequence[1]}°`;
   const match = trimmed.match(/^(\d{1,2}):([0-5]\d)(?::([0-5]\d))?$/);
   if (!match) return trimmed;
 
@@ -66,7 +68,11 @@ export function calculateJornada(
     return { minutes: null, formatted: "", isOvernight: false, isOngoing: false };
   }
 
-  const cleanEntry = entryTime.trim();
+  const cleanEntry = normalizeClockTime(entryTime);
+  // A sequência de acionamento ainda não representa uma entrada real.
+  if (!/^([01]\d|2[0-3]):[0-5]\d:[0-5]\d$/.test(cleanEntry)) {
+    return { minutes: null, formatted: "", isOvernight: false, isOngoing: false };
+  }
   const entryMinutes = timeToMinutes(cleanEntry);
 
   // Caso 1: Jornada em andamento (Saída vazia)
