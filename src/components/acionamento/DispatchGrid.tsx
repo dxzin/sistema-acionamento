@@ -1756,19 +1756,19 @@ export function DispatchGrid({
 
                   {/* 6. MOTIVO DO ABONO / APROVAÇÃO */}
                   <td className="px-1.5 py-1" {...cellFeedback(row.id, "abono_reason")}>
-                    <div className="flex items-center space-x-1">
+                    <div className="flex w-full min-w-0 items-center gap-1 overflow-hidden">
                       <EditableTextCell
                         value={row.abono_reason || ""}
                         placeholder="Motivo da ocorrência..."
                         onCommit={(value) => commitUpdate(row.id, { abono_reason: value || null })}
                         onDraftChange={(value) => onDraftRow(row.id, { abono_reason: value || null })}
-                        className="flex-1 text-slate-900 placeholder-slate-400 focus:bg-white focus:outline-none rounded px-1 text-[11px] truncate font-sans"
+                        className="w-0 min-w-0 flex-1 text-slate-900 placeholder-slate-400 focus:bg-white focus:outline-none rounded px-1 text-[11px] truncate font-sans"
                       />
                       {row.dispatch_status === "ABONADO" || row.abono_reason ? (
                         <select
                           value={row.abono_authorized_by || "PENDENTE"}
                           onChange={(e) => commitUpdate(row.id, { abono_authorized_by: e.target.value })}
-                          className={`text-[9px] px-1 py-0.5 rounded border font-bold ${
+                          className={`w-[94px] min-w-0 shrink-0 text-[9px] px-1 py-0.5 rounded border font-bold ${
                             row.abono_authorized_by === "PENDENTE"
                               ? "bg-amber-100 text-amber-900 border-amber-400"
                               : "bg-slate-100 text-slate-700 border-slate-300"
