@@ -2,7 +2,7 @@ import { Base, Driver, Location } from "@/types/database";
 import { minutesToTime, timeToMinutes } from "./jornada";
 
 function normalize(value: string | null | undefined) {
-  return (value || "").trim().toLocaleUpperCase("pt-BR");
+  return (value || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim().toLocaleUpperCase("pt-BR");
 }
 
 export function resolveFirstDayBaseOrigin(
@@ -18,9 +18,17 @@ export function resolveFirstDayBaseOrigin(
 
   const baseCode = normalize(base.code);
   const baseName = normalize(base.name);
+  const aliases: Record<string, string[]> = {
+    UB: ["UBERABA"],
+    LZ: ["LUIZLANDIA", "LUIZLANDIA DO OESTE"],
+    JP: ["JOAO PINHEIRO"],
+    LP: ["LENCOIS PAULISTA"],
+  };
+  const names = new Set([baseCode, baseName, ...(aliases[baseCode] || [])]);
   return locations.find((location) => {
+    if (!location.is_active) return false;
     const locationName = normalize(location.name);
-    return locationName === baseCode || locationName === baseName;
+    return names.has(locationName);
   })?.id || null;
 }
 

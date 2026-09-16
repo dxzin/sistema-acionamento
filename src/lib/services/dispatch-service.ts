@@ -4,7 +4,7 @@ import { DispatchRowModel } from "@/types/domain";
 import { calculateJornada } from "../calculations/jornada";
 import { calculateNextForecast } from "../calculations/interjornada";
 import { isAwaitingPreviousExit, resolveDayContinuity } from "../calculations/continuity";
-import { resolveFirstDayForecast } from "../calculations/first-day-origin";
+import { resolveFirstDayBaseOrigin, resolveFirstDayForecast } from "../calculations/first-day-origin";
 import { canCreateDailySheet } from "../dates/operational-date";
 import {
   INITIAL_BASES,
@@ -292,12 +292,10 @@ class DispatchService {
         if (shouldCreateSheet || shouldReconcileOpenSheet) {
           const targetBases = REGION_BASES[normalizedRegion] || ["LP", "CASTILHO"];
           const [{ data: bases }, { data: baseLocations }] = await Promise.all([
-            supabase.from("bases").select("id,code").in("code", targetBases),
-            supabase.from("locations").select("id,name").eq("is_active", true),
+            supabase.from("bases").select("*").in("code", targetBases),
+            supabase.from("locations").select("*").eq("is_active", true),
           ]);
           const baseIds = (bases || []).map((b) => b.id);
-          const baseCodeById = new Map((bases || []).map((base) => [base.id, base.code.toUpperCase()]));
-          const baseLocationByName = new Map((baseLocations || []).map((location) => [location.name.trim().toUpperCase(), location.id]));
 
           if (baseIds.length > 0) {
             let activeDriversQuery = supabase
@@ -362,8 +360,8 @@ class DispatchService {
                   const firstDayForecast = !prevDisp && !isClosedTrip
                     ? resolveFirstDayForecast(scaleCode, schedEntry?.shift_time || d.default_start_time)
                     : null;
-                  const baseOrigin = !prevDisp && scaleCode === "1"
-                    ? baseLocationByName.get(baseCodeById.get(d.base_id) || "") || null
+                  const baseOrigin = !prevDisp
+                    ? resolveFirstDayBaseOrigin(scaleCode, continuity.originLocationId, d, bases || [], baseLocations || [])
                     : null;
                   return [{
                     daily_sheet_id: targetSheet.id,
@@ -459,7 +457,11 @@ class DispatchService {
 
       const base = basesMap.get(driver.base_id);
       const vehicle = disp.vehicle_id ? vehiclesMap.get(disp.vehicle_id) : undefined;
-      const originLoc = disp.origin_location_id ? locationsMap.get(disp.origin_location_id) : undefined;
+      const firstDayOrigin = disp.origin_source !== "MANUAL"
+        ? resolveFirstDayBaseOrigin(currentScaleCode ?? disp.scale_day_status, disp.origin_location_id, driver, bases, locations)
+        : null;
+      const originId = disp.origin_location_id || firstDayOrigin;
+      const originLoc = originId ? locationsMap.get(originId) : undefined;
       const destLoc = disp.destination_location_id ? locationsMap.get(disp.destination_location_id) : undefined;
       const finalDestLoc = disp.final_destination_location_id ? locationsMap.get(disp.final_destination_location_id) : undefined;
 
@@ -467,6 +469,8 @@ class DispatchService {
 
       return {
         ...disp,
+        origin_location_id: originId,
+        origin_source: firstDayOrigin ? "BASE" : disp.origin_source,
         scale_day_status: currentScaleCode ?? disp.scale_day_status,
         driver,
         base,

@@ -16,6 +16,15 @@ test("não substitui continuidade existente nem usa base em outros dias", () => 
   assert.equal(resolveFirstDayBaseOrigin("2", null, driver, [base], locations), null);
 });
 
+test("resolve os nomes completos dos locais das bases de Minas", () => {
+  for (const [code, name] of [["UB", "UBERABA"], ["LZ", "LUIZLÂNDIA DO OESTE"], ["JP", "JOÃO PINHEIRO"]]) {
+    const mgBase = { ...base, code, name: `${name} - MG` };
+    const mgLocation = { ...locations[0], id: `loc-${code}`, name };
+    assert.equal(resolveFirstDayBaseOrigin("1", null, driver, [mgBase], [mgLocation]), mgLocation.id);
+    assert.equal(resolveFirstDayBaseOrigin("1", "local-manual", driver, [mgBase], [mgLocation]), null);
+  }
+});
+
 test("antecipa quatro horas a previsão do primeiro dia de cada turno", () => {
   assert.equal(resolveFirstDayForecast("1", "04:00:00"), "00:00:00");
   assert.equal(resolveFirstDayForecast("1", "12:00:00"), "08:00:00");
