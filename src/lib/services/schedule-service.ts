@@ -3,7 +3,7 @@ import { createClient } from "@/lib/supabase/client";
 import { Driver, MonthlyScheduleEntry } from "@/types/database";
 import ExcelJS from "exceljs";
 
-export const SCALE_CODES = ["1", "2", "3", "4", "5", "6", "F", "FE", "AT", "AF", "DESL"] as const;
+export const SCALE_CODES = ["1", "2", "3", "4", "5", "6", "F", "FE", "AT", "AF", "SATD", "DESL"] as const;
 
 export interface ScheduleCellChange {
   driver_id: string;
@@ -31,8 +31,53 @@ const REGION_BASE_CODES: Record<string, string[]> = {
   MS: ["MS"],
 };
 
-function normalizeCode(value: string) {
-  return value.toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 4);
+export function normalizeScaleCode(value: string) {
+  return value.toLocaleUpperCase("pt-BR").trim().replace(/\s+/g, " ").slice(0, 30);
+}
+
+export function parseScheduleClipboard(
+  text: string,
+  driverIds: string[],
+  startRow: number,
+  startDay: number,
+  daysInMonth: number,
+  selectionEndRow = startRow,
+  selectionEndDay = startDay
+): ScheduleCellChange[] {
+  const rows = text.replace(/\r\n?/g, "\n").split("\n");
+  while (rows.length && rows[rows.length - 1] === "") rows.pop();
+
+  const clipboardRows = rows.map((line) => line.split("\t"));
+  const isSingleValue = clipboardRows.length === 1 && clipboardRows[0]?.length === 1;
+
+  if (isSingleValue && (selectionEndRow > startRow || selectionEndDay > startDay)) {
+    const scaleCode = normalizeScaleCode(clipboardRows[0][0] || "");
+    const changes: ScheduleCellChange[] = [];
+    for (let row = startRow; row <= selectionEndRow; row++) {
+      const driverId = driverIds[row];
+      if (!driverId) continue;
+      for (let day = startDay; day <= Math.min(selectionEndDay, daysInMonth); day++) {
+        changes.push({ driver_id: driverId, day_of_month: day, scale_code: scaleCode });
+      }
+    }
+    return changes;
+  }
+
+  const changes: ScheduleCellChange[] = [];
+  clipboardRows.forEach((clipboardRow, rowOffset) => {
+    const driverId = driverIds[startRow + rowOffset];
+    if (!driverId) return;
+    clipboardRow.forEach((rawValue, columnOffset) => {
+      const day = startDay + columnOffset;
+      if (day < 1 || day > daysInMonth) return;
+      changes.push({
+        driver_id: driverId,
+        day_of_month: day,
+        scale_code: normalizeScaleCode(rawValue),
+      });
+    });
+  });
+  return changes;
 }
 
 function matchKey(value: string) {
@@ -254,7 +299,7 @@ export async function parseScheduleFile(
         if (rawCode !== undefined && rawCode !== null && String(rawCode).trim() !== "") {
           let codeStr = String(rawCode).trim().toUpperCase();
           if (codeStr.endsWith(".0")) codeStr = codeStr.slice(0, -2);
-          codeStr = normalizeCode(codeStr);
+          codeStr = normalizeScaleCode(codeStr);
           changes.push({
             driver_id: driver.id,
             day_of_month: day,

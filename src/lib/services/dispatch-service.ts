@@ -274,7 +274,7 @@ class DispatchService {
         // 2. Cria a folha quando necessário e inclui condutores que passaram de
         // F/FE/DESL para um dia trabalhado, sem sobrescrever linhas já preenchidas.
         // Consultar datas antigas ou mais distantes nunca pode criar dados.
-        // Uma folha ausente só é preparada para o próximo dia operacional.
+        // Uma folha ausente pode ser preparada para hoje ou para o próximo dia operacional.
         const existingDriverIds = new Set(rawDispatches.map((dispatch) => dispatch.driver_id));
         const missingScheduledDriverIds = [...scheduleEntriesByDriver.entries()]
           .filter(([driverId, entry]) => {

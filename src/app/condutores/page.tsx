@@ -42,15 +42,20 @@ function getShiftBadge(shift?: string | null, timeStr?: string | null) {
   const s = (shift || "").toUpperCase().trim();
   const t = (timeStr || "").trim();
 
-  if (s === "A" || t.startsWith("04:")) {
+  // O horário cadastrado define a cor. A letra do turno serve apenas como
+  // fallback quando o registro ainda não possui um horário reconhecido.
+  if (t.startsWith("04:")) {
     return "bg-[#FFF2CC] text-[#7F4B00] border border-[#FDE68A] font-bold px-2 py-0.5 rounded text-[11px] whitespace-nowrap shadow-xs";
   }
-  if (s === "B" || t.startsWith("12:")) {
+  if (t.startsWith("12:")) {
     return "bg-[#DDEBF7] text-[#0369A1] border border-[#BAE6FD] font-bold px-2 py-0.5 rounded text-[11px] whitespace-nowrap shadow-xs";
   }
-  if (s === "C" || t.startsWith("20:")) {
+  if (t.startsWith("20:")) {
     return "bg-[#EDE7F6] text-[#5B2C6F] border border-[#DDD6FE] font-bold px-2 py-0.5 rounded text-[11px] whitespace-nowrap shadow-xs";
   }
+  if (s === "A") return "bg-[#FFF2CC] text-[#7F4B00] border border-[#FDE68A] font-bold px-2 py-0.5 rounded text-[11px] whitespace-nowrap shadow-xs";
+  if (s === "B") return "bg-[#DDEBF7] text-[#0369A1] border border-[#BAE6FD] font-bold px-2 py-0.5 rounded text-[11px] whitespace-nowrap shadow-xs";
+  if (s === "C") return "bg-[#EDE7F6] text-[#5B2C6F] border border-[#DDD6FE] font-bold px-2 py-0.5 rounded text-[11px] whitespace-nowrap shadow-xs";
   return "bg-slate-100 text-slate-700 border border-slate-300 font-bold px-2 py-0.5 rounded text-[11px] whitespace-nowrap";
 }
 
@@ -58,15 +63,18 @@ function getHorarioBadge(timeStr?: string | null, shift?: string | null) {
   const t = (timeStr || "").trim();
   const s = (shift || "").toUpperCase().trim();
 
-  if (t.startsWith("04:") || s === "A") {
+  if (t.startsWith("04:")) {
     return "bg-[#FFF2CC] text-[#7F4B00] border border-[#FDE68A] font-bold px-2.5 py-0.5 rounded text-[11px] whitespace-nowrap shadow-xs font-mono";
   }
-  if (t.startsWith("12:") || s === "B") {
+  if (t.startsWith("12:")) {
     return "bg-[#DDEBF7] text-[#0369A1] border border-[#BAE6FD] font-bold px-2.5 py-0.5 rounded text-[11px] whitespace-nowrap shadow-xs font-mono";
   }
-  if (t.startsWith("20:") || s === "C") {
+  if (t.startsWith("20:")) {
     return "bg-[#EDE7F6] text-[#5B2C6F] border border-[#DDD6FE] font-bold px-2.5 py-0.5 rounded text-[11px] whitespace-nowrap shadow-xs font-mono";
   }
+  if (s === "A") return "bg-[#FFF2CC] text-[#7F4B00] border border-[#FDE68A] font-bold px-2.5 py-0.5 rounded text-[11px] whitespace-nowrap shadow-xs font-mono";
+  if (s === "B") return "bg-[#DDEBF7] text-[#0369A1] border border-[#BAE6FD] font-bold px-2.5 py-0.5 rounded text-[11px] whitespace-nowrap shadow-xs font-mono";
+  if (s === "C") return "bg-[#EDE7F6] text-[#5B2C6F] border border-[#DDD6FE] font-bold px-2.5 py-0.5 rounded text-[11px] whitespace-nowrap shadow-xs font-mono";
   return "bg-slate-100 text-slate-700 border border-slate-300 font-bold px-2.5 py-0.5 rounded text-[11px] whitespace-nowrap font-mono";
 }
 

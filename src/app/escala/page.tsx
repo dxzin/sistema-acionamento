@@ -1,14 +1,15 @@
 ﻿"use client";
 
-import { ChangeEvent, KeyboardEvent, useEffect, useMemo, useRef, useState } from "react";
+import { ChangeEvent, ClipboardEvent, KeyboardEvent, useEffect, useMemo, useRef, useState } from "react";
 import { Header } from "@/components/layout/Header";
 import { Sidebar } from "@/components/layout/Sidebar";
 import {
   exportScheduleToExcel,
   loadMonthlySchedule,
+  normalizeScaleCode,
   parseScheduleFile,
+  parseScheduleClipboard,
   saveMonthlySchedule,
-  SCALE_CODES,
   ScheduleCatalog,
   ScheduleCellChange,
 } from "@/lib/services/schedule-service";
@@ -31,14 +32,13 @@ const MONTHS = [
   "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro",
 ];
 const WEEKDAYS = ["dom", "seg", "ter", "qua", "qui", "sex", "sáb"];
-const VALID_CODES = new Set<string>(SCALE_CODES);
+type ScheduleSelection = {
+  anchor: { row: number; day: number };
+  focus: { row: number; day: number };
+};
 
 function cellKey(driverId: string, day: number) {
   return `${driverId}:${day}`;
-}
-
-function normalizeCode(value: string) {
-  return value.toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 4);
 }
 
 function getShiftBadge(shift?: string | null) {
@@ -63,9 +63,9 @@ function getCodeCellClass(code: string, dirty: boolean) {
     return `excel-schedule-vacation${dirty ? " ring-1 ring-amber-400" : ""}`;
   }
   if (dirty) return "bg-[#FFF8E1] text-[#B45309] font-bold ring-1 ring-amber-400";
-  if (["AT", "AF", "DESL"].includes(code)) return "bg-[#FFF2CC] text-[#9C5700] font-bold";
+  if (["AT", "AF", "SATD", "DESL"].includes(code)) return "bg-[#FFF2CC] text-[#9C5700] font-bold";
   if (/^[1-6]$/.test(code)) return "bg-[#E2F0D9] text-[#0B5A30] font-bold";
-  if (code) return "bg-[#FCE8E6] text-[#DC2626] font-bold";
+  if (code) return "bg-[#FFF2CC] text-[#9C5700] font-bold";
   return "bg-white text-slate-900";
 }
 
@@ -84,6 +84,8 @@ export default function EscalaPage() {
   const [importing, setImporting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
+  const [selection, setSelection] = useState<ScheduleSelection | null>(null);
+  const selectionModeRef = useRef<"cells" | "rows" | "columns" | null>(null);
   const inputRefs = useRef<Record<string, HTMLInputElement | null>>({});
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
@@ -91,11 +93,20 @@ export default function EscalaPage() {
   const days = useMemo(() => Array.from({ length: daysInMonth }, (_, index) => index + 1), [daysInMonth]);
 
   useEffect(() => {
+    const stopSelecting = () => {
+      selectionModeRef.current = null;
+    };
+    window.addEventListener("mouseup", stopSelecting);
+    return () => window.removeEventListener("mouseup", stopSelecting);
+  }, []);
+
+  useEffect(() => {
     let cancelled = false;
     setLoading(true);
     setError(null);
     setSuccess(null);
     setChanges({});
+    setSelection(null);
 
     loadMonthlySchedule(month, year, region)
       .then((catalog) => {
@@ -133,8 +144,67 @@ export default function EscalaPage() {
     );
   }, [drivers, search]);
 
+  const selectionBounds = useMemo(() => {
+    if (!selection) return null;
+    return {
+      startRow: Math.min(selection.anchor.row, selection.focus.row),
+      endRow: Math.max(selection.anchor.row, selection.focus.row),
+      startDay: Math.min(selection.anchor.day, selection.focus.day),
+      endDay: Math.max(selection.anchor.day, selection.focus.day),
+    };
+  }, [selection]);
+
+  function focusCellLater(row: number, day: number) {
+    const driverId = filteredDrivers[row]?.id;
+    if (!driverId) return;
+    window.setTimeout(() => inputRefs.current[cellKey(driverId, day)]?.focus(), 0);
+  }
+
+  function selectCell(row: number, day: number, extend = false) {
+    setSelection((current) => ({
+      anchor: extend && current ? current.anchor : { row, day },
+      focus: { row, day },
+    }));
+  }
+
+  function selectRow(row: number, extend = false) {
+    setSelection((current) => ({
+      anchor: extend && current ? current.anchor : { row, day: 1 },
+      focus: { row, day: daysInMonth },
+    }));
+    focusCellLater(row, 1);
+  }
+
+  function selectColumn(day: number, extend = false) {
+    if (!filteredDrivers.length) return;
+    setSelection((current) => ({
+      anchor: extend && current ? current.anchor : { row: 0, day },
+      focus: { row: filteredDrivers.length - 1, day },
+    }));
+    focusCellLater(0, day);
+  }
+
+  function selectAllCells() {
+    if (!filteredDrivers.length) return;
+    setSelection({
+      anchor: { row: 0, day: 1 },
+      focus: { row: filteredDrivers.length - 1, day: daysInMonth },
+    });
+    focusCellLater(0, 1);
+  }
+
+  function isCellSelected(row: number, day: number) {
+    return Boolean(
+      selectionBounds &&
+        row >= selectionBounds.startRow &&
+        row <= selectionBounds.endRow &&
+        day >= selectionBounds.startDay &&
+        day <= selectionBounds.endDay
+    );
+  }
+
   function updateCell(driverId: string, day: number, rawValue: string) {
-    const value = normalizeCode(rawValue);
+    const value = normalizeScaleCode(rawValue);
     const key = cellKey(driverId, day);
     setValues((current) => ({ ...current, [key]: value }));
     setChanges((current) => ({
@@ -144,6 +214,54 @@ export default function EscalaPage() {
     setSuccess(null);
   }
 
+  function handlePaste(event: ClipboardEvent<HTMLInputElement>, row: number, day: number) {
+    const text = event.clipboardData.getData("text/plain");
+    event.preventDefault();
+
+    const bounds = isCellSelected(row, day) && selectionBounds
+      ? selectionBounds
+      : { startRow: row, endRow: row, startDay: day, endDay: day };
+
+    const pasted = parseScheduleClipboard(
+      text,
+      filteredDrivers.map((driver) => driver.id),
+      bounds.startRow,
+      bounds.startDay,
+      daysInMonth,
+      bounds.endRow,
+      bounds.endDay
+    );
+    if (!pasted.length) return;
+
+    setValues((current) => {
+      const next = { ...current };
+      pasted.forEach((change) => {
+        next[cellKey(change.driver_id, change.day_of_month)] = change.scale_code;
+      });
+      return next;
+    });
+    setChanges((current) => {
+      const next = { ...current };
+      pasted.forEach((change) => {
+        next[cellKey(change.driver_id, change.day_of_month)] = change;
+      });
+      return next;
+    });
+    setError(null);
+    setSuccess(`${pasted.length} célula(s) colada(s). Clique em 'Salvar' para persistir.`);
+
+    const first = pasted[0];
+    const last = pasted[pasted.length - 1];
+    const firstRow = filteredDrivers.findIndex((driver) => driver.id === first.driver_id);
+    const lastRow = filteredDrivers.findIndex((driver) => driver.id === last.driver_id);
+    setSelection({
+      anchor: { row: firstRow, day: first.day_of_month },
+      focus: { row: lastRow, day: last.day_of_month },
+    });
+
+    window.setTimeout(() => inputRefs.current[cellKey(last.driver_id, last.day_of_month)]?.focus(), 0);
+  }
+
   function focusCell(row: number, day: number) {
     const boundedRow = Math.max(0, Math.min(filteredDrivers.length - 1, row));
     const boundedDay = Math.max(1, Math.min(daysInMonth, day));
@@ -151,7 +269,12 @@ export default function EscalaPage() {
   }
 
   function handleKeyDown(event: KeyboardEvent<HTMLInputElement>, row: number, day: number) {
-    if (event.key === "ArrowRight") {
+    if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "a") {
+      event.preventDefault();
+      selectAllCells();
+    } else if (event.key === "Escape") {
+      setSelection(null);
+    } else if (event.key === "ArrowRight") {
       event.preventDefault();
       focusCell(row, day + 1);
     } else if (event.key === "ArrowLeft") {
@@ -168,13 +291,6 @@ export default function EscalaPage() {
 
   async function handleSave() {
     const pending = Object.values(changes);
-    const invalid = pending.find(
-      (change) => change.scale_code && !VALID_CODES.has(change.scale_code)
-    );
-    if (invalid) {
-      setError(`Código inválido: “${invalid.scale_code}”. Use 1–6, F, FE, AT, AF ou DESL.`);
-      return;
-    }
     if (!pending.length) return;
 
     setSaving(true);
@@ -452,7 +568,18 @@ export default function EscalaPage() {
 
                   <thead className="sticky top-0 z-30">
                     <tr className="h-9">
-                      <th className="excel-row-number sticky left-0 z-40 bg-[#107c41] text-white p-1 text-center font-bold text-xs border-r border-[#4e9d72]">
+                      <th
+                        className={`excel-row-number sticky left-0 z-40 bg-[#107c41] text-white p-1 text-center font-bold text-xs border-r border-[#4e9d72] cursor-pointer ${
+                          selectionBounds && selectionBounds.startRow === 0 && selectionBounds.endRow === filteredDrivers.length - 1 && selectionBounds.startDay === 1 && selectionBounds.endDay === daysInMonth
+                            ? "excel-schedule-axis-selected"
+                            : ""
+                        }`}
+                        onMouseDown={(event) => {
+                          event.preventDefault();
+                          selectAllCells();
+                        }}
+                        title="Selecionar toda a escala visível"
+                      >
                         #
                       </th>
                       <th className="sticky left-[44px] z-40 bg-[#107c41] text-white px-2.5 py-1 text-left font-bold text-xs border-r border-[#4e9d72]">
@@ -470,9 +597,22 @@ export default function EscalaPage() {
                         return (
                           <th
                             key={day}
-                            className={`p-1 text-center border-r border-[#4e9d72] ${
+                            className={`p-1 text-center border-r border-[#4e9d72] cursor-pointer ${
                               isWeekend ? "bg-[#0b5a30] text-[#ffe082]" : "bg-[#107c41] text-white"
-                            }`}
+                            } ${selectionBounds && day >= selectionBounds.startDay && day <= selectionBounds.endDay && selectionBounds.startRow === 0 && selectionBounds.endRow === filteredDrivers.length - 1 ? "excel-schedule-axis-selected" : ""}`}
+                            onMouseDown={(event) => {
+                              event.preventDefault();
+                              selectionModeRef.current = "columns";
+                              selectColumn(day, event.shiftKey);
+                            }}
+                            onMouseEnter={() => {
+                              if (selectionModeRef.current !== "columns") return;
+                              setSelection((current) => current ? {
+                                ...current,
+                                focus: { row: filteredDrivers.length - 1, day },
+                              } : current);
+                            }}
+                            title={`Selecionar o dia ${day}`}
                           >
                             <div className="font-bold text-xs leading-tight">{day}</div>
                             <div className="text-[9px] uppercase font-mono opacity-85 leading-tight">
@@ -487,7 +627,26 @@ export default function EscalaPage() {
                   <tbody className="divide-y divide-[#d9d9d9]">
                     {filteredDrivers.map((driver, row) => (
                       <tr key={driver.id} className="h-8 group hover:bg-[#e2f0d9]">
-                        <td className="excel-row-number sticky left-0 z-20 bg-[#ededed] p-1 text-center text-slate-700 font-semibold border-r border-b border-slate-300 text-xs">
+                        <td
+                          className={`excel-row-number sticky left-0 z-20 bg-[#ededed] p-1 text-center text-slate-700 font-semibold border-r border-b border-slate-300 text-xs cursor-pointer ${
+                            selectionBounds && row >= selectionBounds.startRow && row <= selectionBounds.endRow && selectionBounds.startDay === 1 && selectionBounds.endDay === daysInMonth
+                              ? "excel-schedule-axis-selected"
+                              : ""
+                          }`}
+                          onMouseDown={(event) => {
+                            event.preventDefault();
+                            selectionModeRef.current = "rows";
+                            selectRow(row, event.shiftKey);
+                          }}
+                          onMouseEnter={() => {
+                            if (selectionModeRef.current !== "rows") return;
+                            setSelection((current) => current ? {
+                              ...current,
+                              focus: { row, day: daysInMonth },
+                            } : current);
+                          }}
+                          title={`Selecionar a linha ${row + 1}`}
+                        >
                           {row + 1}
                         </td>
                         <td
@@ -520,7 +679,19 @@ export default function EscalaPage() {
                               className={`p-0 text-center border-r border-b border-slate-300 font-mono ${getCodeCellClass(
                                 value,
                                 dirty
-                              )}`}
+                              )} ${isCellSelected(row, day) ? "excel-schedule-selected" : ""}`}
+                              onMouseDown={(event) => {
+                                event.preventDefault();
+                                selectCell(row, day, event.shiftKey);
+                                selectionModeRef.current = "cells";
+                                focusCellLater(row, day);
+                              }}
+                              onMouseEnter={() => {
+                                if (selectionModeRef.current === "cells") selectCell(row, day, true);
+                              }}
+                              onMouseUp={() => {
+                                selectionModeRef.current = null;
+                              }}
                             >
                               <input
                                 ref={(node) => {
@@ -529,6 +700,7 @@ export default function EscalaPage() {
                                 aria-label={`${driver.name}, dia ${day}`}
                                 value={value}
                                 onChange={(e) => updateCell(driver.id, day, e.target.value)}
+                                onPaste={(e) => handlePaste(e, row, day)}
                                 onKeyDown={(e) => handleKeyDown(e, row, day)}
                                 onFocus={(e) => e.currentTarget.select()}
                                 className="h-7 w-full border-0 bg-transparent text-center font-bold uppercase text-xs focus:bg-white focus:text-slate-900 focus:outline-none focus:ring-2 focus:ring-[#107c41]"

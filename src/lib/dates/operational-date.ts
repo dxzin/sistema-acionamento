@@ -18,5 +18,6 @@ export function nextOperationalDate(referenceDate = new Date()) {
 }
 
 export function canCreateDailySheet(targetDate: string, referenceDate = new Date()) {
-  return targetDate === nextOperationalDate(referenceDate);
+  const currentDate = currentDateInBrasilia(referenceDate);
+  return targetDate === currentDate || targetDate === addCalendarDays(currentDate, 1);
 }

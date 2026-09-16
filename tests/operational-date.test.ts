@@ -9,8 +9,9 @@ test("considera o calendário de Brasília ao calcular o dia operacional", () =>
   assert.equal(nextOperationalDate(lateOnDay10InBrasilia), "2026-09-11");
 });
 
-test("permite criar somente a folha do dia seguinte", () => {
+test("permite criar a folha de hoje ou do dia seguinte", () => {
   assert.equal(canCreateDailySheet("2026-09-11", lateOnDay10InBrasilia), true);
-  assert.equal(canCreateDailySheet("2026-09-10", lateOnDay10InBrasilia), false);
+  assert.equal(canCreateDailySheet("2026-09-10", lateOnDay10InBrasilia), true);
+  assert.equal(canCreateDailySheet("2026-09-09", lateOnDay10InBrasilia), false);
   assert.equal(canCreateDailySheet("2026-09-12", lateOnDay10InBrasilia), false);
 });
