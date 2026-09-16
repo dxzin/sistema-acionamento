@@ -21,10 +21,14 @@ const REGION_BASES: Record<string, string[]> = {
   MS: ["MS"],
 };
 
-const DISPATCH_EXCLUDED_SCALE_CODES = new Set(["F", "FE", "DESL"]);
+const DISPATCH_EXCLUDED_SCALE_CODES = new Set(["F", "FE", "AF", "DES", "DESL"]);
 
 export function isDispatchExcludedScaleCode(scaleCode: string | null | undefined): boolean {
   return DISPATCH_EXCLUDED_SCALE_CODES.has(String(scaleCode || "").trim().toUpperCase());
+}
+
+export function isDriverActiveForDispatch(driver: Pick<Driver, "is_active"> | null | undefined): boolean {
+  return driver?.is_active === true;
 }
 
 class DispatchService {
@@ -248,7 +252,7 @@ class DispatchService {
         }
 
         // Confere a escala mensal mesmo quando a folha diária já existia.
-        // Assim uma correção posterior para F, FE ou DESL também remove o condutor da tela.
+        // Assim uma correção posterior para F, FE, AF, DES ou DESL também remove o condutor da tela.
         const [yearText, monthText, dayText] = date.split("-");
         const scheduleRegion = normalizedRegion === "UBJP" ? "MG" : normalizedRegion;
         const { data: currentSchedule } = await supabase
@@ -272,7 +276,7 @@ class DispatchService {
         }
 
         // 2. Cria a folha quando necessário e inclui condutores que passaram de
-        // F/FE/DESL para um dia trabalhado, sem sobrescrever linhas já preenchidas.
+        // F/FE/AF/DES/DESL para um dia trabalhado, sem sobrescrever linhas já preenchidas.
         // Consultar datas antigas ou mais distantes nunca pode criar dados.
         // Uma folha ausente pode ser preparada para hoje ou para o próximo dia operacional.
         const existingDriverIds = new Set(rawDispatches.map((dispatch) => dispatch.driver_id));
@@ -421,9 +425,10 @@ class DispatchService {
     }
 
     return rawDispatches.filter((disp) => {
+      const driver = driversMap.get(disp.driver_id);
       const currentScaleCode = scheduleEntriesByDriver.get(disp.driver_id)?.scale_code;
       const scaleCode = (currentScaleCode ?? disp.scale_day_status ?? "").trim().toUpperCase();
-      return !isDispatchExcludedScaleCode(scaleCode);
+      return isDriverActiveForDispatch(driver) && !isDispatchExcludedScaleCode(scaleCode);
     }).map((disp) => {
       const currentScaleCode = scheduleEntriesByDriver.get(disp.driver_id)?.scale_code;
       const driver = driversMap.get(disp.driver_id) || {

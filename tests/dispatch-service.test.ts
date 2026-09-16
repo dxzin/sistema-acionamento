@@ -1,15 +1,25 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { dispatchService, isDispatchExcludedScaleCode } from "../src/lib/services/dispatch-service";
+import {
+  dispatchService,
+  isDispatchExcludedScaleCode,
+  isDriverActiveForDispatch,
+} from "../src/lib/services/dispatch-service";
 
-test("F, FE e DESL não entram no acionamento", () => {
-  for (const code of ["F", "FE", "DESL", " desl "]) {
+test("F, FE, AF, DES e DESL não entram no acionamento", () => {
+  for (const code of ["F", "FE", "AF", "DES", "DESL", " af ", " des ", " desl "]) {
     assert.equal(isDispatchExcludedScaleCode(code), true);
   }
 
-  for (const code of ["1", "6", "AT", "AF", ""]) {
+  for (const code of ["1", "6", "AT", "SATD", ""]) {
     assert.equal(isDispatchExcludedScaleCode(code), false);
   }
+});
+
+test("condutor inativo não entra no acionamento", () => {
+  assert.equal(isDriverActiveForDispatch({ is_active: true }), true);
+  assert.equal(isDriverActiveForDispatch({ is_active: false }), false);
+  assert.equal(isDriverActiveForDispatch(undefined), false);
 });
 
 test("editar somente a entrada preserva a saída existente no cálculo", async () => {

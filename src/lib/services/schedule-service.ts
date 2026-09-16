@@ -3,7 +3,7 @@ import { createClient } from "@/lib/supabase/client";
 import { Driver, MonthlyScheduleEntry } from "@/types/database";
 import ExcelJS from "exceljs";
 
-export const SCALE_CODES = ["1", "2", "3", "4", "5", "6", "F", "FE", "AT", "AF", "SATD", "DESL"] as const;
+export const SCALE_CODES = ["1", "2", "3", "4", "5", "6", "F", "FE", "AT", "AF", "SATD", "DES", "DESL"] as const;
 
 export interface ScheduleCellChange {
   driver_id: string;

@@ -63,7 +63,7 @@ function getCodeCellClass(code: string, dirty: boolean) {
     return `excel-schedule-vacation${dirty ? " ring-1 ring-amber-400" : ""}`;
   }
   if (dirty) return "bg-[#FFF8E1] text-[#B45309] font-bold ring-1 ring-amber-400";
-  if (["AT", "AF", "SATD", "DESL"].includes(code)) return "bg-[#FFF2CC] text-[#9C5700] font-bold";
+  if (["AT", "AF", "SATD", "DES", "DESL"].includes(code)) return "bg-[#FFF2CC] text-[#9C5700] font-bold";
   if (/^[1-6]$/.test(code)) return "bg-[#E2F0D9] text-[#0B5A30] font-bold";
   if (code) return "bg-[#FFF2CC] text-[#9C5700] font-bold";
   return "bg-white text-slate-900";
