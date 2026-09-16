@@ -19,6 +19,8 @@ O foco atual é homologar o comportamento da grade como uma planilha Excel, refo
 
 ## Documentos técnicos existentes
 
+- [API de consulta para dashboard](API_DASHBOARD.md)
+
 - [Documentação técnica e funcional](../DOCUMENTACAO_SISTEMA.md)
 - [Regras de negócio completas](../REGRAS_NEGOCIO.md)
 - [Roadmap técnico original](../ROADMAP.md)
