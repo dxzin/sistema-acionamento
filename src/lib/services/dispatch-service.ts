@@ -430,8 +430,9 @@ class DispatchService {
       const scaleCode = (currentScaleCode ?? disp.scale_day_status ?? "").trim().toUpperCase();
       return isDriverActiveForDispatch(driver) && !isDispatchExcludedScaleCode(scaleCode);
     }).map((disp) => {
-      const currentScaleCode = scheduleEntriesByDriver.get(disp.driver_id)?.scale_code;
-      const driver = driversMap.get(disp.driver_id) || {
+      const currentScheduleEntry = scheduleEntriesByDriver.get(disp.driver_id);
+      const currentScaleCode = currentScheduleEntry?.scale_code;
+      const driverCatalogEntry = driversMap.get(disp.driver_id) || {
         id: disp.driver_id,
         name: "Condutor Não Identificado",
         login_matricula: "-----",
@@ -440,6 +441,13 @@ class DispatchService {
         created_at: "",
         updated_at: "",
       };
+      const driver = currentScheduleEntry?.shift_time
+        ? {
+            ...driverCatalogEntry,
+            default_shift: currentScheduleEntry.shift_letter || driverCatalogEntry.default_shift,
+            default_start_time: currentScheduleEntry.shift_time,
+          }
+        : driverCatalogEntry;
 
       const base = basesMap.get(driver.base_id);
       const vehicle = disp.vehicle_id ? vehiclesMap.get(disp.vehicle_id) : undefined;

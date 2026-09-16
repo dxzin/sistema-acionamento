@@ -9,6 +9,12 @@ export interface ScheduleCellChange {
   driver_id: string;
   day_of_month: number;
   scale_code: string;
+  shift_time?: string | null;
+}
+
+export interface ScheduleTimeChange {
+  driver_id: string;
+  shift_time: string;
 }
 
 export interface ScheduleCatalog {
@@ -33,6 +39,37 @@ const REGION_BASE_CODES: Record<string, string[]> = {
 
 export function normalizeScaleCode(value: string) {
   return value.toLocaleUpperCase("pt-BR").trim().replace(/\s+/g, " ").slice(0, 30);
+}
+
+export function normalizeScheduleTime(value: string): string | null {
+  const match = value.trim().match(/^(\d{1,2})(?::(\d{2}))?(?::\d{2})?$/);
+  if (!match) return null;
+  const hours = Number(match[1]);
+  const minutes = Number(match[2] || "00");
+  if (hours > 23 || minutes > 59) return null;
+  return `${String(hours).padStart(2, "0")}:${String(minutes).padStart(2, "0")}`;
+}
+
+export function parseScheduleTimeClipboard(
+  text: string,
+  driverIds: string[],
+  startRow: number,
+  selectionEndRow = startRow
+): ScheduleTimeChange[] {
+  const rows = text.replace(/\r\n?/g, "\n").split("\n");
+  while (rows.length && rows[rows.length - 1] === "") rows.pop();
+  const rawTimes = rows.map((row) => row.split("\t")[0] || "");
+  const values = rawTimes.length === 1 && selectionEndRow > startRow
+    ? Array.from({ length: selectionEndRow - startRow + 1 }, () => rawTimes[0])
+    : rawTimes;
+
+  return values.flatMap((rawValue, offset) => {
+    const driverId = driverIds[startRow + offset];
+    if (!driverId) return [];
+    const shiftTime = normalizeScheduleTime(rawValue);
+    if (!shiftTime) throw new Error(`Horário inválido: “${rawValue.trim() || "vazio"}”. Use HH:MM.`);
+    return [{ driver_id: driverId, shift_time: shiftTime }];
+  });
 }
 
 export function parseScheduleClipboard(
@@ -323,16 +360,18 @@ export async function exportScheduleToExcel(
   year: number,
   region: string,
   drivers: Driver[],
-  values: Record<string, string>
+  values: Record<string, string>,
+  scheduleTimes: Record<string, string> = {}
 ) {
   const daysInMonth = new Date(year, month, 0).getDate();
-  const headers = ["#", "Condutor", "Login", "Turno", ...Array.from({ length: daysInMonth }, (_, i) => String(i + 1))];
+  const headers = ["#", "Condutor", "Login", "Turno", "Horário", ...Array.from({ length: daysInMonth }, (_, i) => String(i + 1))];
   const dataRows = drivers.map((d, idx) => {
     const row: (string | number)[] = [
       idx + 1,
       d.name,
       d.login_matricula,
       d.default_shift || "",
+      scheduleTimes[d.id] || d.default_start_time?.slice(0, 5) || "",
     ];
     for (let day = 1; day <= daysInMonth; day++) {
       row.push(values[`${d.id}:${day}`] || "");
@@ -342,12 +381,12 @@ export async function exportScheduleToExcel(
 
   const workbook = new ExcelJS.Workbook();
   const worksheet = workbook.addWorksheet(`Escala ${month}-${year}`, {
-    views: [{ state: "frozen", xSplit: 4, ySplit: 1 }],
+    views: [{ state: "frozen", xSplit: 5, ySplit: 1 }],
   });
   worksheet.addRows([headers, ...dataRows]);
   worksheet.autoFilter = { from: "A1", to: worksheet.getRow(1).getCell(headers.length).address };
   worksheet.columns = headers.map((header, index) => ({
-    width: index === 1 ? 34 : index === 2 ? 14 : index < 4 ? 10 : Math.max(5, String(header).length + 2),
+    width: index === 1 ? 34 : index === 2 ? 14 : index < 5 ? 10 : Math.max(5, String(header).length + 2),
   }));
   worksheet.getRow(1).eachCell((cell) => {
     cell.font = { bold: true, color: { argb: "FFFFFFFF" } };

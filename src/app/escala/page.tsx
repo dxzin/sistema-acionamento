@@ -7,8 +7,10 @@ import {
   exportScheduleToExcel,
   loadMonthlySchedule,
   normalizeScaleCode,
+  normalizeScheduleTime,
   parseScheduleFile,
   parseScheduleClipboard,
+  parseScheduleTimeClipboard,
   saveMonthlySchedule,
   ScheduleCatalog,
   ScheduleCellChange,
@@ -36,6 +38,7 @@ type ScheduleSelection = {
   anchor: { row: number; day: number };
   focus: { row: number; day: number };
 };
+type RowSelection = { anchor: number; focus: number };
 
 function cellKey(driverId: string, day: number) {
   return `${driverId}:${day}`;
@@ -77,6 +80,8 @@ export default function EscalaPage() {
   const [search, setSearch] = useState("");
   const [drivers, setDrivers] = useState<Driver[]>([]);
   const [values, setValues] = useState<Record<string, string>>({});
+  const [scheduleTimes, setScheduleTimes] = useState<Record<string, string>>({});
+  const [timeChanges, setTimeChanges] = useState<Record<string, string>>({});
   const [source, setSource] = useState<ScheduleCatalog["source"]>("demo");
   const [changes, setChanges] = useState<Record<string, ScheduleCellChange>>({});
   const [loading, setLoading] = useState(true);
@@ -85,8 +90,10 @@ export default function EscalaPage() {
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
   const [selection, setSelection] = useState<ScheduleSelection | null>(null);
-  const selectionModeRef = useRef<"cells" | "rows" | "columns" | null>(null);
+  const [timeSelection, setTimeSelection] = useState<RowSelection | null>(null);
+  const selectionModeRef = useRef<"cells" | "rows" | "columns" | "times" | null>(null);
   const inputRefs = useRef<Record<string, HTMLInputElement | null>>({});
+  const timeInputRefs = useRef<Record<string, HTMLInputElement | null>>({});
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
   const daysInMonth = new Date(year, month, 0).getDate();
@@ -106,7 +113,9 @@ export default function EscalaPage() {
     setError(null);
     setSuccess(null);
     setChanges({});
+    setTimeChanges({});
     setSelection(null);
+    setTimeSelection(null);
 
     loadMonthlySchedule(month, year, region)
       .then((catalog) => {
@@ -118,6 +127,20 @@ export default function EscalaPage() {
             catalog.entries.map((entry) => [
               cellKey(entry.driver_id, entry.day_of_month),
               entry.scale_code,
+            ])
+          )
+        );
+        const entryTimeByDriver = new Map<string, string>();
+        catalog.entries.forEach((entry) => {
+          if (entry.shift_time && !entryTimeByDriver.has(entry.driver_id)) {
+            entryTimeByDriver.set(entry.driver_id, entry.shift_time.slice(0, 5));
+          }
+        });
+        setScheduleTimes(
+          Object.fromEntries(
+            catalog.drivers.map((driver) => [
+              driver.id,
+              entryTimeByDriver.get(driver.id) || driver.default_start_time?.slice(0, 5) || "",
             ])
           )
         );
@@ -154,6 +177,14 @@ export default function EscalaPage() {
     };
   }, [selection]);
 
+  const timeSelectionBounds = useMemo(() => {
+    if (!timeSelection) return null;
+    return {
+      startRow: Math.min(timeSelection.anchor, timeSelection.focus),
+      endRow: Math.max(timeSelection.anchor, timeSelection.focus),
+    };
+  }, [timeSelection]);
+
   function focusCellLater(row: number, day: number) {
     const driverId = filteredDrivers[row]?.id;
     if (!driverId) return;
@@ -161,6 +192,7 @@ export default function EscalaPage() {
   }
 
   function selectCell(row: number, day: number, extend = false) {
+    setTimeSelection(null);
     setSelection((current) => ({
       anchor: extend && current ? current.anchor : { row, day },
       focus: { row, day },
@@ -168,6 +200,7 @@ export default function EscalaPage() {
   }
 
   function selectRow(row: number, extend = false) {
+    setTimeSelection(null);
     setSelection((current) => ({
       anchor: extend && current ? current.anchor : { row, day: 1 },
       focus: { row, day: daysInMonth },
@@ -177,6 +210,7 @@ export default function EscalaPage() {
 
   function selectColumn(day: number, extend = false) {
     if (!filteredDrivers.length) return;
+    setTimeSelection(null);
     setSelection((current) => ({
       anchor: extend && current ? current.anchor : { row: 0, day },
       focus: { row: filteredDrivers.length - 1, day },
@@ -186,6 +220,7 @@ export default function EscalaPage() {
 
   function selectAllCells() {
     if (!filteredDrivers.length) return;
+    setTimeSelection(null);
     setSelection({
       anchor: { row: 0, day: 1 },
       focus: { row: filteredDrivers.length - 1, day: daysInMonth },
@@ -201,6 +236,83 @@ export default function EscalaPage() {
         day >= selectionBounds.startDay &&
         day <= selectionBounds.endDay
     );
+  }
+
+  function focusTimeLater(row: number) {
+    const driverId = filteredDrivers[row]?.id;
+    if (!driverId) return;
+    window.setTimeout(() => timeInputRefs.current[driverId]?.focus(), 0);
+  }
+
+  function selectTime(row: number, extend = false) {
+    setSelection(null);
+    setTimeSelection((current) => ({
+      anchor: extend && current ? current.anchor : row,
+      focus: row,
+    }));
+  }
+
+  function selectAllTimes() {
+    if (!filteredDrivers.length) return;
+    setSelection(null);
+    setTimeSelection({ anchor: 0, focus: filteredDrivers.length - 1 });
+    focusTimeLater(0);
+  }
+
+  function isTimeSelected(row: number) {
+    return Boolean(timeSelectionBounds && row >= timeSelectionBounds.startRow && row <= timeSelectionBounds.endRow);
+  }
+
+  function updateScheduleTime(driverId: string, value: string) {
+    setScheduleTimes((current) => ({ ...current, [driverId]: value.slice(0, 8) }));
+    setTimeChanges((current) => ({ ...current, [driverId]: value.slice(0, 8) }));
+    setSuccess(null);
+  }
+
+  function handleTimePaste(event: ClipboardEvent<HTMLInputElement>, row: number) {
+    event.preventDefault();
+    const bounds = isTimeSelected(row) && timeSelectionBounds
+      ? timeSelectionBounds
+      : { startRow: row, endRow: row };
+    try {
+      const pasted = parseScheduleTimeClipboard(
+        event.clipboardData.getData("text/plain"),
+        filteredDrivers.map((driver) => driver.id),
+        bounds.startRow,
+        bounds.endRow
+      );
+      if (!pasted.length) return;
+      setScheduleTimes((current) => ({
+        ...current,
+        ...Object.fromEntries(pasted.map((change) => [change.driver_id, change.shift_time])),
+      }));
+      setTimeChanges((current) => ({
+        ...current,
+        ...Object.fromEntries(pasted.map((change) => [change.driver_id, change.shift_time])),
+      }));
+      const lastRow = filteredDrivers.findIndex((driver) => driver.id === pasted[pasted.length - 1].driver_id);
+      setTimeSelection({ anchor: bounds.startRow, focus: lastRow });
+      setError(null);
+      setSuccess(`${pasted.length} horário(s) colado(s). Clique em 'Salvar' para persistir.`);
+      focusTimeLater(lastRow);
+    } catch (reason) {
+      setError((reason as Error).message);
+    }
+  }
+
+  function handleTimeKeyDown(event: KeyboardEvent<HTMLInputElement>, row: number) {
+    if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "a") {
+      event.preventDefault();
+      selectAllTimes();
+    } else if (event.key === "Escape") {
+      setTimeSelection(null);
+    } else if (event.key === "ArrowDown" || event.key === "Enter") {
+      event.preventDefault();
+      focusTimeLater(Math.min(filteredDrivers.length - 1, row + 1));
+    } else if (event.key === "ArrowUp") {
+      event.preventDefault();
+      focusTimeLater(Math.max(0, row - 1));
+    }
   }
 
   function updateCell(driverId: string, day: number, rawValue: string) {
@@ -290,7 +402,38 @@ export default function EscalaPage() {
   }
 
   async function handleSave() {
-    const pending = Object.values(changes);
+    const pendingByCell = new Map(Object.entries(changes));
+    const normalizedTimes = new Map<string, string>();
+    for (const [driverId, rawTime] of Object.entries(timeChanges)) {
+      const normalized = normalizeScheduleTime(rawTime);
+      if (!normalized) {
+        const driver = drivers.find((item) => item.id === driverId);
+        setError(`Horário inválido para ${driver?.name || "o condutor"}. Use HH:MM.`);
+        return;
+      }
+      normalizedTimes.set(driverId, normalized);
+    }
+
+    Object.values(changes).forEach((change) => {
+      const normalized = normalizeScheduleTime(scheduleTimes[change.driver_id] || "");
+      pendingByCell.set(cellKey(change.driver_id, change.day_of_month), {
+        ...change,
+        shift_time: normalized ? `${normalized}:00` : undefined,
+      });
+    });
+    normalizedTimes.forEach((normalized, driverId) => {
+      for (let day = 1; day <= daysInMonth; day++) {
+        const key = cellKey(driverId, day);
+        const scaleCode = values[key] || "";
+        if (!scaleCode) continue;
+        pendingByCell.set(key, {
+          ...(pendingByCell.get(key) || { driver_id: driverId, day_of_month: day, scale_code: scaleCode }),
+          shift_time: `${normalized}:00`,
+        });
+      }
+    });
+
+    const pending = [...pendingByCell.values()];
     if (!pending.length) return;
 
     setSaving(true);
@@ -299,7 +442,9 @@ export default function EscalaPage() {
     try {
       await saveMonthlySchedule(month, year, region, pending, source);
       setChanges({});
-      setSuccess(`${pending.length} ${pending.length === 1 ? "célula salva" : "células salvas"} com sucesso.`);
+      setTimeChanges({});
+      setScheduleTimes((current) => ({ ...current, ...Object.fromEntries(normalizedTimes) }));
+      setSuccess("Alterações da escala e dos horários salvas com sucesso.");
     } catch (reason) {
       setError((reason as Error).message);
     } finally {
@@ -355,13 +500,13 @@ export default function EscalaPage() {
   async function handleExport() {
     setError(null);
     try {
-      await exportScheduleToExcel(month, year, region, filteredDrivers, values);
+      await exportScheduleToExcel(month, year, region, filteredDrivers, values, scheduleTimes);
     } catch (reason) {
       setError(`Erro ao exportar arquivo: ${(reason as Error).message}`);
     }
   }
 
-  const pendingCount = Object.keys(changes).length;
+  const pendingCount = Object.keys(changes).length + Object.keys(timeChanges).length;
 
   return (
     <div className="excel-shell flex-1 flex flex-col min-h-screen">
@@ -588,7 +733,19 @@ export default function EscalaPage() {
                       <th className="sticky left-[294px] z-40 bg-[#107c41] text-white p-1 text-center font-bold text-xs border-r border-[#4e9d72]">
                         <span className="tracking-wide">TURNO</span>
                       </th>
-                      <th className="sticky left-[364px] z-40 bg-[#107c41] text-white p-1 text-center font-bold text-xs border-r border-[#4e9d72] shadow-[2px_0_4px_-1px_rgba(0,0,0,0.15)]">
+                      <th
+                        className={`sticky left-[364px] z-40 bg-[#107c41] text-white p-1 text-center font-bold text-xs border-r border-[#4e9d72] shadow-[2px_0_4px_-1px_rgba(0,0,0,0.15)] cursor-pointer ${
+                          timeSelectionBounds?.startRow === 0 && timeSelectionBounds.endRow === filteredDrivers.length - 1
+                            ? "excel-schedule-axis-selected"
+                            : ""
+                        }`}
+                        onMouseDown={(event) => {
+                          event.preventDefault();
+                          selectionModeRef.current = "times";
+                          selectAllTimes();
+                        }}
+                        title="Selecionar todos os horários"
+                      >
                         <span className="tracking-wide">HORÁRIO</span>
                       </th>
                       {days.map((day) => {
@@ -665,8 +822,45 @@ export default function EscalaPage() {
                             {driver.default_shift || "—"}
                           </span>
                         </td>
-                        <td className="sticky left-[364px] z-20 bg-white group-hover:bg-[#e2f0d9] px-2 py-1 text-center border-r border-b border-slate-300 shadow-[2px_0_4px_-1px_rgba(0,0,0,0.08)] font-mono font-bold text-slate-800">
-                          {driver.default_start_time?.slice(0, 5) || "—"}
+                        <td
+                          className={`sticky left-[364px] z-20 bg-white group-hover:bg-[#e2f0d9] p-0 text-center border-r border-b border-slate-300 shadow-[2px_0_4px_-1px_rgba(0,0,0,0.08)] font-mono font-bold text-slate-800 ${
+                            isTimeSelected(row) ? "excel-schedule-selected" : ""
+                          } ${timeChanges[driver.id] !== undefined ? "is-dirty" : ""}`}
+                          onMouseDown={(event) => {
+                            event.preventDefault();
+                            selectionModeRef.current = "times";
+                            selectTime(row, event.shiftKey);
+                            focusTimeLater(row);
+                          }}
+                          onMouseEnter={() => {
+                            if (selectionModeRef.current !== "times") return;
+                            setTimeSelection((current) => current ? { ...current, focus: row } : current);
+                          }}
+                          onMouseUp={() => {
+                            selectionModeRef.current = null;
+                          }}
+                        >
+                          <input
+                            ref={(node) => {
+                              timeInputRefs.current[driver.id] = node;
+                            }}
+                            aria-label={`Horário da escala de ${driver.name}`}
+                            inputMode="numeric"
+                            maxLength={8}
+                            value={scheduleTimes[driver.id] || ""}
+                            onChange={(event) => updateScheduleTime(driver.id, event.target.value)}
+                            onPaste={(event) => handleTimePaste(event, row)}
+                            onKeyDown={(event) => handleTimeKeyDown(event, row)}
+                            onBlur={(event) => {
+                              const normalized = normalizeScheduleTime(event.currentTarget.value);
+                              if (normalized && normalized !== event.currentTarget.value) {
+                                updateScheduleTime(driver.id, normalized);
+                              }
+                            }}
+                            onFocus={(event) => event.currentTarget.select()}
+                            placeholder="HH:MM"
+                            className="h-7 w-full border-0 bg-transparent text-center font-mono font-bold text-xs focus:bg-white focus:text-slate-900 focus:outline-none focus:ring-2 focus:ring-[#107c41]"
+                          />
                         </td>
                         {days.map((day) => {
                           const key = cellKey(driver.id, day);

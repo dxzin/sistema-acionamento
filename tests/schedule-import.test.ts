@@ -1,7 +1,13 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import ExcelJS from "exceljs";
-import { normalizeScaleCode, parseScheduleClipboard, parseScheduleFile } from "../src/lib/services/schedule-service";
+import {
+  normalizeScaleCode,
+  normalizeScheduleTime,
+  parseScheduleClipboard,
+  parseScheduleFile,
+  parseScheduleTimeClipboard,
+} from "../src/lib/services/schedule-service";
 import type { Driver } from "../src/types/database";
 
 const driver: Driver = {
@@ -76,6 +82,27 @@ test("repete um único valor em todas as células selecionadas", () => {
       { driver_id: "d1", day_of_month: 2, scale_code: "SATD" },
       { driver_id: "d2", day_of_month: 1, scale_code: "SATD" },
       { driver_id: "d2", day_of_month: 2, scale_code: "SATD" },
+    ]
+  );
+});
+
+test("normaliza e cola horários em várias linhas da escala", () => {
+  assert.equal(normalizeScheduleTime("4:00"), "04:00");
+  assert.equal(normalizeScheduleTime("12:30:00"), "12:30");
+  assert.equal(normalizeScheduleTime("25:00"), null);
+  assert.deepEqual(
+    parseScheduleTimeClipboard("20:00", ["d1", "d2", "d3"], 0, 2),
+    [
+      { driver_id: "d1", shift_time: "20:00" },
+      { driver_id: "d2", shift_time: "20:00" },
+      { driver_id: "d3", shift_time: "20:00" },
+    ]
+  );
+  assert.deepEqual(
+    parseScheduleTimeClipboard("04:00\n12:00", ["d1", "d2"], 0),
+    [
+      { driver_id: "d1", shift_time: "04:00" },
+      { driver_id: "d2", shift_time: "12:00" },
     ]
   );
 });

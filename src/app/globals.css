@@ -121,7 +121,7 @@ body {
 .excel-schedule-grid td.is-dirty input { background: #fff8e1; }
 .excel-schedule-grid input { width: 100%; height: 100%; border: 0; background: transparent; text-align: center; font-size: 11px; font-weight: inherit; color: inherit; }
 .excel-schedule-grid input:focus { background: #fff !important; color: #111 !important; outline: 2px solid var(--excel-selection); outline-offset: -2px; }
-.excel-schedule-grid td.excel-schedule-selected { position: relative; box-shadow: inset 0 0 0 2px var(--excel-selection); }
+.excel-schedule-grid td.excel-schedule-selected { box-shadow: inset 0 0 0 2px var(--excel-selection); }
 .excel-schedule-grid td.excel-schedule-selected input { background: rgba(16, 124, 65, 0.08); }
 .excel-schedule-grid .excel-schedule-axis-selected { color: #fff !important; background: #0b5a30 !important; box-shadow: inset 0 0 0 2px #ffe082; }
 .excel-driver-cell { background: #fff; padding-left: 8px !important; padding-right: 8px !important; font-family: "Segoe UI", Calibri, sans-serif; }
