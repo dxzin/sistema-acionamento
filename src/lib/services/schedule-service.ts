@@ -9,6 +9,7 @@ export interface ScheduleCellChange {
   driver_id: string;
   day_of_month: number;
   scale_code: string;
+  shift_letter?: string | null;
   shift_time?: string | null;
 }
 
@@ -42,7 +43,9 @@ export function normalizeScaleCode(value: string) {
 }
 
 export function normalizeScheduleTime(value: string): string | null {
-  const match = value.trim().match(/^(\d{1,2})(?::(\d{2}))?(?::\d{2})?$/);
+  const normalizedValue = value.trim().toUpperCase();
+  if (normalizedValue === "VF") return "VF";
+  const match = normalizedValue.match(/^(\d{1,2})(?::(\d{2}))?(?::\d{2})?$/);
   if (!match) return null;
   const hours = Number(match[1]);
   const minutes = Number(match[2] || "00");
@@ -67,7 +70,7 @@ export function parseScheduleTimeClipboard(
     const driverId = driverIds[startRow + offset];
     if (!driverId) return [];
     const shiftTime = normalizeScheduleTime(rawValue);
-    if (!shiftTime) throw new Error(`Horário inválido: “${rawValue.trim() || "vazio"}”. Use HH:MM.`);
+    if (!shiftTime) throw new Error(`Horário inválido: “${rawValue.trim() || "vazio"}”. Use HH:MM ou VF.`);
     return [{ driver_id: driverId, shift_time: shiftTime }];
   });
 }

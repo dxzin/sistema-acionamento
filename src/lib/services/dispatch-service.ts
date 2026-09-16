@@ -357,8 +357,9 @@ class DispatchService {
                   const continuity = resolveDayContinuity(d.id, prevDisp);
                   const awaitingPreviousExit = isAwaitingPreviousExit(prevDisp);
                   const scaleCode = (schedEntry?.scale_code || "").trim().toUpperCase();
+                  const isClosedTrip = (schedEntry?.shift_letter || "").trim().toUpperCase() === "VF";
                   if (isDispatchExcludedScaleCode(scaleCode)) return [];
-                  const firstDayForecast = !prevDisp
+                  const firstDayForecast = !prevDisp && !isClosedTrip
                     ? resolveFirstDayForecast(scaleCode, schedEntry?.shift_time || d.default_start_time)
                     : null;
                   const baseOrigin = !prevDisp && scaleCode === "1"
@@ -370,7 +371,7 @@ class DispatchService {
                     scale_day_status: scaleCode || null,
                     forecast_start_time: awaitingPreviousExit
                       ? null
-                      : continuity.forecastStartTime || firstDayForecast || schedEntry?.shift_time || d.default_start_time || null,
+                      : continuity.forecastStartTime || (isClosedTrip ? null : firstDayForecast || schedEntry?.shift_time || d.default_start_time || null),
                     forecast_source: awaitingPreviousExit || continuity.forecastStartTime ? "CONTINUITY" : "SCHEDULE",
                     // O status é uma decisão do operador e começa vazio.
                     dispatch_status: "",
@@ -441,7 +442,14 @@ class DispatchService {
         created_at: "",
         updated_at: "",
       };
-      const driver = currentScheduleEntry?.shift_time
+      const isClosedTrip = currentScheduleEntry?.shift_letter?.trim().toUpperCase() === "VF";
+      const driver = isClosedTrip
+        ? {
+            ...driverCatalogEntry,
+            default_shift: "VF",
+            default_start_time: "VF",
+          }
+        : currentScheduleEntry?.shift_time
         ? {
             ...driverCatalogEntry,
             default_shift: currentScheduleEntry.shift_letter || driverCatalogEntry.default_shift,

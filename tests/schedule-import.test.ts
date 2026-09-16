@@ -89,6 +89,7 @@ test("repete um único valor em todas as células selecionadas", () => {
 test("normaliza e cola horários em várias linhas da escala", () => {
   assert.equal(normalizeScheduleTime("4:00"), "04:00");
   assert.equal(normalizeScheduleTime("12:30:00"), "12:30");
+  assert.equal(normalizeScheduleTime(" vf "), "VF");
   assert.equal(normalizeScheduleTime("25:00"), null);
   assert.deepEqual(
     parseScheduleTimeClipboard("20:00", ["d1", "d2", "d3"], 0, 2),
@@ -103,6 +104,13 @@ test("normaliza e cola horários em várias linhas da escala", () => {
     [
       { driver_id: "d1", shift_time: "04:00" },
       { driver_id: "d2", shift_time: "12:00" },
+    ]
+  );
+  assert.deepEqual(
+    parseScheduleTimeClipboard("VF", ["d1", "d2"], 0, 1),
+    [
+      { driver_id: "d1", shift_time: "VF" },
+      { driver_id: "d2", shift_time: "VF" },
     ]
   );
 });

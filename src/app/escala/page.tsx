@@ -132,7 +132,9 @@ export default function EscalaPage() {
         );
         const entryTimeByDriver = new Map<string, string>();
         catalog.entries.forEach((entry) => {
-          if (entry.shift_time && !entryTimeByDriver.has(entry.driver_id)) {
+          if (entry.shift_letter?.trim().toUpperCase() === "VF") {
+            entryTimeByDriver.set(entry.driver_id, "VF");
+          } else if (entry.shift_time && !entryTimeByDriver.has(entry.driver_id)) {
             entryTimeByDriver.set(entry.driver_id, entry.shift_time.slice(0, 5));
           }
         });
@@ -264,8 +266,9 @@ export default function EscalaPage() {
   }
 
   function updateScheduleTime(driverId: string, value: string) {
-    setScheduleTimes((current) => ({ ...current, [driverId]: value.slice(0, 8) }));
-    setTimeChanges((current) => ({ ...current, [driverId]: value.slice(0, 8) }));
+    const nextValue = value.toUpperCase().slice(0, 8);
+    setScheduleTimes((current) => ({ ...current, [driverId]: nextValue }));
+    setTimeChanges((current) => ({ ...current, [driverId]: nextValue }));
     setSuccess(null);
   }
 
@@ -408,7 +411,7 @@ export default function EscalaPage() {
       const normalized = normalizeScheduleTime(rawTime);
       if (!normalized) {
         const driver = drivers.find((item) => item.id === driverId);
-        setError(`Horário inválido para ${driver?.name || "o condutor"}. Use HH:MM.`);
+        setError(`Horário inválido para ${driver?.name || "o condutor"}. Use HH:MM ou VF.`);
         return;
       }
       normalizedTimes.set(driverId, normalized);
@@ -418,7 +421,10 @@ export default function EscalaPage() {
       const normalized = normalizeScheduleTime(scheduleTimes[change.driver_id] || "");
       pendingByCell.set(cellKey(change.driver_id, change.day_of_month), {
         ...change,
-        shift_time: normalized ? `${normalized}:00` : undefined,
+        shift_letter: normalized === "VF"
+          ? "VF"
+          : drivers.find((driver) => driver.id === change.driver_id)?.default_shift || null,
+        shift_time: normalized === "VF" ? null : normalized ? `${normalized}:00` : undefined,
       });
     });
     normalizedTimes.forEach((normalized, driverId) => {
@@ -428,7 +434,10 @@ export default function EscalaPage() {
         if (!scaleCode) continue;
         pendingByCell.set(key, {
           ...(pendingByCell.get(key) || { driver_id: driverId, day_of_month: day, scale_code: scaleCode }),
-          shift_time: `${normalized}:00`,
+          shift_letter: normalized === "VF"
+            ? "VF"
+            : drivers.find((driver) => driver.id === driverId)?.default_shift || null,
+          shift_time: normalized === "VF" ? null : `${normalized}:00`,
         });
       }
     });
@@ -858,7 +867,7 @@ export default function EscalaPage() {
                               }
                             }}
                             onFocus={(event) => event.currentTarget.select()}
-                            placeholder="HH:MM"
+                            placeholder="HH:MM/VF"
                             className="h-7 w-full border-0 bg-transparent text-center font-mono font-bold text-xs focus:bg-white focus:text-slate-900 focus:outline-none focus:ring-2 focus:ring-[#107c41]"
                           />
                         </td>
