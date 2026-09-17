@@ -10,6 +10,7 @@ import {
   History,
   Settings,
   Users,
+  Database,
 } from "lucide-react";
 import { useAuth } from "@/lib/auth-context";
 
@@ -35,6 +36,12 @@ export function Sidebar() {
       href: "/condutores",
       icon: Users,
       description: "Cadastro e bases",
+    },
+    {
+      name: "Consulta Sighra",
+      href: "/sighra",
+      icon: Database,
+      description: "Macros e fim de jornada",
     },
     {
       name: "Histórico",

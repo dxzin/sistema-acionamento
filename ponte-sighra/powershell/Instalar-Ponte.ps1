@@ -25,14 +25,7 @@ $config = [ordered]@{
 }
 $config | ConvertTo-Json | Set-Content -LiteralPath $configPath -Encoding UTF8
 # DPAPI protege os segredos; restringir tambem a leitura do arquivo de configuracao.
-$acl = New-Object Security.AccessControl.FileSecurity
-$acl.SetAccessRuleProtection($true, $false)
-foreach ($sid in @($config.OwnerSid, 'S-1-5-18', 'S-1-5-32-544')) {
-    $identity = New-Object Security.Principal.SecurityIdentifier($sid)
-    $rule = New-Object Security.AccessControl.FileSystemAccessRule($identity, 'FullControl', 'Allow')
-    $acl.AddAccessRule($rule)
-}
-Set-Acl -LiteralPath $configPath -AclObject $acl
+Protect-SighraConfig $configPath $config.OwnerSid
 Write-Host 'Configuracao salva. Segredos protegidos para esta conta neste computador.'
 if ($RegistrarTarefa) {
     $account = [Security.Principal.WindowsIdentity]::GetCurrent().Name

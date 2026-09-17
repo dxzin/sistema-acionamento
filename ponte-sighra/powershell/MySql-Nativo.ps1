@@ -1,4 +1,15 @@
 # Usa exclusivamente a biblioteca que ja existe no PC do Sighra.
+function Protect-SighraConfig([string]$Path, [string]$OwnerSid) {
+    $acl = New-Object Security.AccessControl.FileSecurity
+    # Somente DACL: nao alterar dono, grupo ou auditoria (SACL), nem exigir SeSecurityPrivilege.
+    $acl.SetSecurityDescriptorSddlForm(
+        "D:P(A;;FA;;;${OwnerSid})(A;;FA;;;SY)(A;;FA;;;BA)",
+        [Security.AccessControl.AccessControlSections]::Access
+    )
+    # API .NET aplica SIDs diretamente, sem resolucao de nomes pelo provedor Set-Acl.
+    [IO.File]::SetAccessControl([IO.Path]::GetFullPath($Path), $acl)
+}
+
 function Assert-SighraLibrary {
     $dll = 'C:\SIGhRA_Monitor\libmysql.dll'
     if (-not (Test-Path -LiteralPath $dll -PathType Leaf)) { throw 'Biblioteca existente nao encontrada: C:\SIGhRA_Monitor\libmysql.dll. Nao instale nada; confira o caminho usado no script anterior.' }
@@ -73,6 +84,53 @@ function Test-SighraConnection($Config, [Security.SecureString]$Password) {
     } finally {
         if ($passwordPtr -ne [IntPtr]::Zero) { [Runtime.InteropServices.Marshal]::ZeroFreeGlobalAllocAnsi($passwordPtr) }
         if ($result -ne [IntPtr]::Zero) { [SighraBridgeNative]::mysql_free_result($result) }
+        if ($connection -ne [IntPtr]::Zero) { [SighraBridgeNative]::mysql_close($connection) }
+    }
+}
+
+function Read-SighraMacros([IntPtr]$Connection, [string]$Sql) {
+    $result = [IntPtr]::Zero
+    try {
+        if ([SighraBridgeNative]::mysql_query($Connection, $Sql) -ne 0) { throw 'Consulta das macros falhou.' }
+        $result = [SighraBridgeNative]::mysql_store_result($Connection)
+        if ($result -eq [IntPtr]::Zero) { throw 'Resultado das macros indisponivel.' }
+        while ($true) {
+            $row = [SighraBridgeNative]::mysql_fetch_row($result)
+            if ($row -eq [IntPtr]::Zero) { break }
+            $values = @()
+            for ($i = 0; $i -lt 5; $i++) {
+                $ptr = [Runtime.InteropServices.Marshal]::ReadIntPtr($row, $i * [IntPtr]::Size)
+                $values += $(if ($ptr -eq [IntPtr]::Zero) { $null } else { [Runtime.InteropServices.Marshal]::PtrToStringAnsi($ptr) })
+            }
+            @{ login = $values[0].Trim(); name = $values[1].Trim(); gps_at = $values[2]; inserted_at = $values[3]; vehicle = $values[4] }
+        }
+    } finally { if ($result -ne [IntPtr]::Zero) { [SighraBridgeNative]::mysql_free_result($result) } }
+}
+
+function Get-SighraDriverMacros($Config, [Security.SecureString]$Password, $Job) {
+    # Somente duas consultas fixas. Nenhum SQL recebido do sistema e executado.
+    if ($Job.login -notmatch '^[0-9]{1,20}$' -or $Job.since_date -notmatch '^20[0-9]{2}-[0-9]{2}-[0-9]{2}$') { throw 'Pedido invalido.' }
+    $parsedDate = [DateTime]::MinValue
+    if (-not [DateTime]::TryParseExact($Job.since_date, 'yyyy-MM-dd', [Globalization.CultureInfo]::InvariantCulture, [Globalization.DateTimeStyles]::None, [ref]$parsedDate)) { throw 'Periodo invalido.' }
+    $connection = [IntPtr]::Zero
+    $passwordPtr = [IntPtr]::Zero
+    try {
+        $connection = [SighraBridgeNative]::mysql_init([IntPtr]::Zero)
+        if ($connection -eq [IntPtr]::Zero) { throw 'Conexao indisponivel.' }
+        foreach ($option in @(0, 11, 12)) {
+            [uint32]$timeout = 10
+            if ([SighraBridgeNative]::mysql_options($connection, $option, [ref]$timeout) -ne 0) { throw 'Timeout indisponivel.' }
+        }
+        $passwordPtr = [Runtime.InteropServices.Marshal]::SecureStringToGlobalAllocAnsi($Password)
+        $connected = [SighraBridgeNative]::mysql_real_connect($connection, $Config.Host, $Config.User, $passwordPtr, $Config.Database, [uint32]$Config.Port, [IntPtr]::Zero, 0)
+        if ($connected -eq [IntPtr]::Zero) { throw 'Conexao indisponivel.' }
+        $columns = "CAST(lmac_login AS CHAR), lmac_nome, DATE_FORMAT(lmac_data_gps, '%Y-%m-%d %H:%i:%s'), DATE_FORMAT(lmac_data_ins, '%Y-%m-%d %H:%i:%s'), CAST(lmac_cvei_id AS CHAR)"
+        $filter = "lmac_login = '$($Job.login)' AND lmac_data_gps IS NOT NULL"
+        $macros = @(Read-SighraMacros $connection "SELECT $columns FROM log_macro WHERE $filter ORDER BY lmac_data_gps DESC, lmac_data_ins DESC LIMIT 10")
+        $ends = @(Read-SighraMacros $connection "SELECT $columns FROM log_macro WHERE $filter AND TRIM(lmac_nome) IN ('FIM DE JORNADA', 'FIM DE JORNADA GA') AND lmac_data_gps >= '$($Job.since_date)' ORDER BY lmac_data_gps DESC, lmac_data_ins DESC LIMIT 1")
+        return @{ macros = $macros; last_end = $(if ($ends.Count) { $ends[0] } else { $null }) }
+    } finally {
+        if ($passwordPtr -ne [IntPtr]::Zero) { [Runtime.InteropServices.Marshal]::ZeroFreeGlobalAllocAnsi($passwordPtr) }
         if ($connection -ne [IntPtr]::Zero) { [SighraBridgeNative]::mysql_close($connection) }
     }
 }

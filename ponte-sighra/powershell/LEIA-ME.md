@@ -2,7 +2,20 @@
 
 Usa Windows PowerShell e exclusivamente `C:\SIGhRA_Monitor\libmysql.dll`, que ja existe no PC. Nao instala Node.js, ODBC, DLLs ou outros programas. `Instalar-Ponte.ps1` apenas configura a ponte; o nome foi mantido para compatibilidade.
 
-Esta etapa testa o banco com `SELECT 1` e envia um sinal HTTPS ao sistema. Nao importa jornadas ou posicoes.
+Esta versao testa o banco, envia sinais e atende consultas da aba Consulta Sighra. Executa apenas SQL fixo de leitura para obter as ultimas 10 macros e o ultimo fim de jornada nos ultimos 30 dias. Nao envia mensagens completas de macros nem preenche jornadas automaticamente.
+
+## Atualizar uma ponte ja configurada
+
+Pare a ponte com Ctrl+C (ou pare a tarefa). Substitua `Iniciar-Ponte.ps1` e `MySql-Nativo.ps1` por estes arquivos, mantendo `config.local.json`. Nao e necessario executar o configurador novamente ou informar senha/chave. Se os novos arquivos tiverem marca de download, revise e use Unblock-File somente nesses arquivos. Reinicie no mesmo PowerShell de 32 bits que funcionou anteriormente:
+
+```powershell
+cd C:\PonteSighra
+.\Iniciar-Ponte.ps1
+```
+
+No sistema, abra Consulta Sighra, cole o login numerico e consulte. A ponte busca pedidos a cada cinco segundos e envia sinais a cada 30 segundos. Pedidos expiram apos tres minutos, com no maximo duas tentativas. Se o envio de resultado falhar, a ponte tenta novamente antes de receber outro pedido. A tela informa que e necessario atualizar a ponte se ela ainda estiver na versao anterior.
+
+O botao Conferir preenchimento mostra a entrada e a saida atuais da folha. Preencher saida usa o horario GPS com segundos descartados, recalcula jornada e proxima previsao, registra a alteracao no historico do usuario e bloqueia conflitos ou folhas fechadas. Nenhuma linha e criada automaticamente. Escolha o dia da macro ou o anterior para jornadas que cruzaram a meia-noite. O ultimo fim historico nao confirma encerramento da jornada atual.
 
 Copie os quatro arquivos desta pasta para `C:\PonteSighra`, sem alterar a pasta do Sighra. Abra o mesmo PowerShell que funcionou com o script anterior:
 
@@ -46,7 +59,7 @@ Se a politica corporativa bloquear scripts, trate com o TI. Nao altere a politic
 
 ## Sistema online: ainda pendente
 
-Publicar a integracao, aplicar a migracao `20260917020000_sighra_bridge.sql` no Supabase e definir `SIGHRA_BRIDGE_TOKEN` no servidor. Copiar os scripts sozinho nao habilita o sistema online.
+Publicar a integracao, aplicar as migracoes `20260917020000_sighra_bridge.sql` e `20260917030000_sighra_queries.sql` no Supabase e definir `SIGHRA_BRIDGE_TOKEN` no servidor. Para uma instalacao existente, manter a mesma chave. Copiar os scripts sozinho nao habilita o sistema online.
 
 A chave deve ter pelo menos 32 caracteres aleatorios e ser a mesma no servidor e na ponte. Nao usar a senha do banco como chave. Gerar a chave em PowerShell no computador de quem configura o servidor:
 

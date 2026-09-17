@@ -42,6 +42,9 @@ using System.Runtime.InteropServices;
 public static class SighraBridgeNative {
     public static string Failure = "";
     public static int Closes, Frees;
+    public static bool MacroMode, Empty;
+    private static int rowCount;
+    private static IntPtr[] fields;
     private static IntPtr row, value;
     public static IntPtr mysql_init(IntPtr p) { return new IntPtr(1); }
     public static int mysql_options(IntPtr p, int o, ref uint v) { return 0; }
@@ -50,11 +53,24 @@ public static class SighraBridgeNative {
         return Failure == "connect" ? IntPtr.Zero : p;
     }
     public static int mysql_query(IntPtr p, string q) {
-        if (q != "SELECT 1 AS connection_ok") throw new Exception("Unexpected SQL");
+        if (MacroMode) {
+            if (!q.StartsWith("SELECT CAST(lmac_login AS CHAR)") || q.Contains("lmac_msg") || !q.Contains("LIMIT ")) throw new Exception("Unexpected macro SQL");
+            rowCount = 0;
+        } else if (q != "SELECT 1 AS connection_ok") throw new Exception("Unexpected SQL");
         return Failure == "query" ? 1 : 0;
     }
     public static IntPtr mysql_store_result(IntPtr p) { return Failure == "result" ? IntPtr.Zero : new IntPtr(2); }
     public static IntPtr mysql_fetch_row(IntPtr p) {
+        if (MacroMode) {
+            if (Empty || rowCount++ > 0) return IntPtr.Zero;
+            string[] values = { "30049", "FIM DE JORNADA GA", "2026-09-16 12:20:33", null, "220842" };
+            fields = new IntPtr[5]; row = Marshal.AllocHGlobal(IntPtr.Size * 5);
+            for (int i=0; i<5; i++) {
+                fields[i] = values[i] == null ? IntPtr.Zero : Marshal.StringToHGlobalAnsi(values[i]);
+                Marshal.WriteIntPtr(row, i * IntPtr.Size, fields[i]);
+            }
+            return row;
+        }
         if (Failure == "row") return IntPtr.Zero;
         value = Marshal.StringToHGlobalAnsi("1"); row = Marshal.AllocHGlobal(IntPtr.Size);
         Marshal.WriteIntPtr(row, value); return row;
@@ -63,11 +79,18 @@ public static class SighraBridgeNative {
         Frees++;
         if (row != IntPtr.Zero) { Marshal.FreeHGlobal(row); row = IntPtr.Zero; }
         if (value != IntPtr.Zero) { Marshal.FreeHGlobal(value); value = IntPtr.Zero; }
+        if (fields != null) { foreach (IntPtr field in fields) if (field != IntPtr.Zero) Marshal.FreeHGlobal(field); fields = null; }
     }
     public static void mysql_close(IntPtr p) { Closes++; }
 }
 '@
     . (Join-Path $folder 'MySql-Nativo.ps1')
+    Protect-SighraConfig $configPath $config.OwnerSid
+    $acl = [IO.File]::GetAccessControl($configPath)
+    $rules = $acl.GetAccessRules($true, $true, [Security.Principal.SecurityIdentifier])
+    if (-not $acl.AreAccessRulesProtected -or $rules.Count -ne 3 -or $acl.GetOwner([Security.Principal.SecurityIdentifier]).Value -ne $config.OwnerSid) {
+        throw 'Permissoes do arquivo de configuracao incorretas.'
+    }
     $password = ConvertTo-SecureString 'test-only' -AsPlainText -Force
     foreach ($failure in @('', 'connect', 'query', 'result', 'row')) {
         [SighraBridgeNative]::Failure = $failure
@@ -78,6 +101,19 @@ public static class SighraBridgeNative {
         $expectedFrees = if ($failure -in @('', 'row')) { 1 } else { 0 }
         if ([SighraBridgeNative]::Frees -ne $expectedFrees) { throw 'Falha na limpeza do resultado nativo.' }
     }
+    [SighraBridgeNative]::Failure = ''
+    [SighraBridgeNative]::MacroMode = $true
+    [SighraBridgeNative]::Closes = 0
+    [SighraBridgeNative]::Frees = 0
+    $job = [pscustomobject]@{ login = '30049'; since_date = '2026-08-18' }
+    $result = Get-SighraDriverMacros ([pscustomobject]$config) $password $job
+    if ($result.macros.Count -ne 1 -or $result.last_end.gps_at -ne '2026-09-16 12:20:33' -or $null -ne $result.last_end.inserted_at -or [SighraBridgeNative]::Closes -ne 1 -or [SighraBridgeNative]::Frees -ne 2) { throw 'Resultado ou limpeza das macros incorretos.' }
+    [SighraBridgeNative]::Empty = $true
+    $empty = Get-SighraDriverMacros ([pscustomobject]$config) $password $job
+    if ($empty.macros.Count -ne 0 -or $null -ne $empty.last_end) { throw 'Consulta vazia incorreta.' }
+    $rejected = $false
+    try { Get-SighraDriverMacros ([pscustomobject]$config) $password ([pscustomobject]@{ login = '30049 OR 1=1'; since_date = '2026-08-18' }) | Out-Null } catch { $rejected = $true }
+    if (-not $rejected) { throw 'Login indevido aceito na ponte.' }
     Add-Type -AssemblyName System.Net.Http
     $handler = New-Object Net.Http.HttpClientHandler
     $handler.AllowAutoRedirect = $false

@@ -42,8 +42,25 @@ function Write-PonteLog([string]$Message) {
     }
     Add-Content -LiteralPath $logPath -Value $line -Encoding UTF8
 }
+function Invoke-SighraHttp([string]$Method, [string]$Path, $Body) {
+    $request = New-Object Net.Http.HttpRequestMessage([Net.Http.HttpMethod]::new($Method), ([Uri]::new($uri, $Path)))
+    $response = $null
+    try {
+        if ($null -ne $Body) { $request.Content = New-Object Net.Http.StringContent(($Body | ConvertTo-Json -Depth 8 -Compress), [Text.Encoding]::UTF8, 'application/json') }
+        $response = $client.SendAsync($request).GetAwaiter().GetResult()
+        if ([int]$response.StatusCode -eq 409) { return @{ expired = $true } }
+        if (-not $response.IsSuccessStatusCode) { throw 'Sistema recusou a consulta.' }
+        return ($response.Content.ReadAsStringAsync().GetAwaiter().GetResult() | ConvertFrom-Json)
+    } finally {
+        if ($response) { $response.Dispose() }
+        $request.Dispose()
+    }
+}
+$nextHeartbeat = [DateTime]::MinValue
+$pendingAnswer = $null
 try {
     do {
+      if ((Get-Date) -ge $nextHeartbeat) {
         $databaseOk = $false
         try {
             $databaseOk = Test-SighraConnection $config $password
@@ -53,7 +70,7 @@ try {
         $response = $null
         $delivered = $false
         try {
-            $payload = @{ database_ok = [bool]$databaseOk } | ConvertTo-Json -Compress
+            $payload = @{ database_ok = [bool]$databaseOk; query_enabled = $true } | ConvertTo-Json -Compress
             $content = New-Object Net.Http.StringContent($payload, [Text.Encoding]::UTF8, 'application/json')
             $response = $client.PostAsync($endpoint, $content).GetAwaiter().GetResult()
             $delivered = $response.IsSuccessStatusCode
@@ -64,10 +81,31 @@ try {
             if ($response) { $response.Dispose() }
             if ($content) { $content.Dispose() }
         }
+        $nextHeartbeat = (Get-Date).AddSeconds(30)
+      }
+      if ($databaseOk) {
+        try {
+            if ($null -eq $pendingAnswer) {
+                $queue = Invoke-SighraHttp 'POST' '/api/integracoes/sighra/tarefas' $null
+                if ($queue.job) {
+                    Write-PonteLog ('Consultando macros do login ' + $queue.job.login)
+                    $pendingAnswer = @{ id = $queue.job.id; lease_token = $queue.job.lease_token }
+                    try { $pendingAnswer['result'] = Get-SighraDriverMacros $config $password $queue.job }
+                    catch { $pendingAnswer['error'] = $true; Write-PonteLog 'Nao foi possivel consultar as macros no Sighra.' }
+                }
+            }
+            if ($null -ne $pendingAnswer) {
+                $answer = Invoke-SighraHttp 'PATCH' '/api/integracoes/sighra/tarefas' $pendingAnswer
+                if ($answer.expired) { Write-PonteLog 'Pedido expirou; faca uma nova consulta no sistema.' }
+                else { Write-PonteLog 'Resultado das macros recebido pelo sistema.' }
+                $pendingAnswer = $null
+            }
+        } catch { Write-PonteLog 'Fila de consultas indisponivel; nova tentativa em alguns segundos.' }
+      }
         if ($UmaVez) {
             if (-not $delivered -or -not $databaseOk) { throw 'Teste incompleto: consulte ponte.log.' }
             break
         }
-        Start-Sleep -Seconds 30
+        Start-Sleep -Seconds 5
     } while ($true)
 } finally { $client.Dispose(); $handler.Dispose() }
