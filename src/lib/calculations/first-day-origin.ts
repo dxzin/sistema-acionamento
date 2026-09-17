@@ -36,6 +36,6 @@ export function resolveFirstDayForecast(
   scaleCode: string | null | undefined,
   shiftTime: string | null | undefined
 ) {
-  if (normalize(scaleCode) !== "1" || !shiftTime?.trim()) return null;
-  return minutesToTime(timeToMinutes(shiftTime) - 240);
+  if (normalize(scaleCode) !== "1" || !shiftTime?.trim() || !/^([01]\d|2[0-3]):[0-5]\d(?::[0-5]\d)?$/.test(shiftTime.trim())) return null;
+  return minutesToTime((timeToMinutes(shiftTime.trim()) - 240 + 1440) % 1440);
 }

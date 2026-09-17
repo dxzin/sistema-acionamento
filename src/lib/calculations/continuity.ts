@@ -1,4 +1,14 @@
 import { Dispatch } from "@/types/database";
+import { resolveFirstDayForecast } from "./first-day-origin";
+
+export function resolvePreviousAbono(previous: Pick<Dispatch, "dispatch_status"> | null | undefined, shiftTime: string | null | undefined, isClosedTrip = false) {
+  const wasAbonado = previous?.dispatch_status.trim().toLocaleUpperCase("pt-BR") === "ABONADO";
+  return {
+    wasAbonado,
+    forecastStartTime: wasAbonado && !isClosedTrip ? resolveFirstDayForecast("1", shiftTime) : null,
+    abonoReason: wasAbonado ? "Abonado ontem" : null,
+  };
+}
 
 export function isAwaitingPreviousExit(
   previousDayDispatch?: Pick<Dispatch, "dispatch_status" | "exit_time"> | null

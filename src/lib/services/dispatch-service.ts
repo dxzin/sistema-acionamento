@@ -3,7 +3,7 @@ import { Base, DailySheet, Dispatch, Driver, Location, OperatorPresence, SheetSt
 import { DispatchRowModel } from "@/types/domain";
 import { calculateJornada } from "../calculations/jornada";
 import { calculateNextForecast } from "../calculations/interjornada";
-import { isAwaitingPreviousExit, resolveDayContinuity } from "../calculations/continuity";
+import { isAwaitingPreviousExit, resolveDayContinuity, resolvePreviousAbono } from "../calculations/continuity";
 import { resolveFirstDayBaseOrigin, resolveFirstDayForecast } from "../calculations/first-day-origin";
 import { canCreateDailySheet } from "../dates/operational-date";
 import {
@@ -356,6 +356,7 @@ class DispatchService {
                   const awaitingPreviousExit = isAwaitingPreviousExit(prevDisp);
                   const scaleCode = (schedEntry?.scale_code || "").trim().toUpperCase();
                   const isClosedTrip = (schedEntry?.shift_letter || "").trim().toUpperCase() === "VF";
+                  const previousAbono = resolvePreviousAbono(prevDisp, schedEntry?.shift_time || d.default_start_time, isClosedTrip);
                   if (isDispatchExcludedScaleCode(scaleCode)) return [];
                   const firstDayForecast = !prevDisp && !isClosedTrip
                     ? resolveFirstDayForecast(scaleCode, schedEntry?.shift_time || d.default_start_time)
@@ -367,13 +368,13 @@ class DispatchService {
                     daily_sheet_id: targetSheet.id,
                     driver_id: d.id,
                     scale_day_status: scaleCode || null,
-                    forecast_start_time: awaitingPreviousExit
+                    forecast_start_time: previousAbono.wasAbonado ? previousAbono.forecastStartTime : awaitingPreviousExit
                       ? null
                       : continuity.forecastStartTime || (isClosedTrip ? null : firstDayForecast || schedEntry?.shift_time || d.default_start_time || null),
-                    forecast_source: awaitingPreviousExit || continuity.forecastStartTime ? "CONTINUITY" : "SCHEDULE",
+                    forecast_source: previousAbono.wasAbonado ? "SCHEDULE" : awaitingPreviousExit || continuity.forecastStartTime ? "CONTINUITY" : "SCHEDULE",
                     // O status é uma decisão do operador e começa vazio.
                     dispatch_status: "",
-                    abono_reason: null,
+                    abono_reason: previousAbono.abonoReason,
                     origin_location_id: continuity.originLocationId || baseOrigin,
                     origin_source: continuity.originLocationId ? "CONTINUITY" : baseOrigin ? "BASE" : "SCHEDULE",
                   }];

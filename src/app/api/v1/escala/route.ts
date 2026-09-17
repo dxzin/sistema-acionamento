@@ -85,6 +85,7 @@ export async function GET(request: NextRequest) {
           horario_escala: entry.shift_time ?? driver.default_start_time ?? null,
           inicio_previsto: dispatch?.forecast_start_time ?? null, inicio_jornada: dispatch?.entry_time ?? null,
           fim_jornada: dispatch?.exit_time ?? null, situacao_acionamento: dispatch?.dispatch_status ?? null,
+          motivo_abono: dispatch?.abono_reason ?? null,
           origem: locations.get(dispatch?.origin_location_id ?? "") ?? null,
           destino: locations.get(dispatch?.destination_location_id ?? "") ?? null,
           destino_final: locations.get(dispatch?.final_destination_location_id ?? "") ?? null,

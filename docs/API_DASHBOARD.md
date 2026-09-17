@@ -48,6 +48,7 @@ e `dados`. Cada linha em `dados` contém:
 - `inicio_jornada`, `fim_jornada`: valores registrados; entrada pode conter sequência
   como 1° quando ainda não existe horário real.
 - `situacao_acionamento`, `origem`, `destino`, `destino_final`.
+- `motivo_abono`: motivo registrado, incluindo “Abonado ontem” para controle de D-1.
 - `disponibilidade_prevista_apos_descanso`: instante ISO 8601 em UTC calculado com
   entrada e saída reais e descanso configurado na base; considera a virada da meia-noite.
   É uma previsão após descanso, não confirmação de que o condutor está disponível
