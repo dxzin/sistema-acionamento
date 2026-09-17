@@ -1,5 +1,7 @@
 # Ponte Sighra sem instalar programas
 
+Para o PC da torre que fica ligado 24 horas, siga [TUTORIAL-TORRE.md](TUTORIAL-TORRE.md). O script `Registrar-Torre.ps1` registra e inicia a tarefa usando a configuracao existente, sem pedir os segredos novamente. Em um PC novo, configure primeiro nessa maquina; os segredos do outro PC nao sao reutilizaveis.
+
 Usa Windows PowerShell e exclusivamente `C:\SIGhRA_Monitor\libmysql.dll`, que ja existe no PC. Nao instala Node.js, ODBC, DLLs ou outros programas. `Instalar-Ponte.ps1` apenas configura a ponte; o nome foi mantido para compatibilidade.
 
 Esta versao testa o banco, envia sinais e atende consultas da aba Consulta Sighra. Executa apenas SQL fixo de leitura para obter as ultimas 10 macros e o ultimo fim de jornada nos ultimos 30 dias. Nao envia mensagens completas de macros nem preenche jornadas automaticamente.
