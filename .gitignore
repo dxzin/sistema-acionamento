@@ -15,6 +15,8 @@ referencias/*.xls
 
 # Logs, caches, and editor files
 *.log
+ponte-sighra/powershell/config.local.json
+ponte-sighra/powershell/*.anterior
 *.tsbuildinfo
 supabase/.temp/
 backups/
