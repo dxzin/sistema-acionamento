@@ -255,7 +255,7 @@ function ExcelColumnFilter({ label, options, selected, onChange }: ExcelColumnFi
   const rootRef = useRef<HTMLDivElement>(null);
   const active = selected.length > 0;
   const visibleOptions = options.filter((option) =>
-    option.toLocaleLowerCase("pt-BR").includes(search.trim().toLocaleLowerCase("pt-BR"))
+    (option || "Vazio").toLocaleLowerCase("pt-BR").includes(search.trim().toLocaleLowerCase("pt-BR"))
   );
 
   useEffect(() => {
@@ -349,7 +349,7 @@ function ExcelColumnFilter({ label, options, selected, onChange }: ExcelColumnFi
                   onChange={() => toggleValue(option)}
                   className="accent-[#217346]"
                 />
-                <span className="truncate" title={option}>{option}</span>
+                <span className="truncate" title={option || "Vazio"}>{option || "Vazio"}</span>
               </label>
             )) : (
               <div className="px-2 py-3 text-center text-[10px] text-slate-500">Nenhum valor encontrado</div>
@@ -621,7 +621,10 @@ export function DispatchGrid({
     `excel-status-${status.toLowerCase().replaceAll(" ", "-").replace("ã", "a")}`;
 
   const filterOptions = useMemo(() => Object.fromEntries(
-    FILTER_COLUMNS.map((key) => [key, Array.from(new Set(dispatches.map((row) => getColumnValue(row, key)).filter(Boolean)))
+    FILTER_COLUMNS.map((key) => [key, Array.from(new Set([
+      ...(key === "status" ? [""] : []),
+      ...dispatches.map((row) => getColumnValue(row, key)).filter(Boolean),
+    ]))
       .sort((a, b) => a.localeCompare(b, "pt-BR", { numeric: true }))])
   ) as Record<ColumnFilterKey, string[]>, [dispatches]);
 

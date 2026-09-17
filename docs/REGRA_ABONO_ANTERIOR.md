@@ -6,7 +6,9 @@ Sem saída, a previsão de D fica vazia; com saída, usa a previsão do próximo
 registrada em D-1. Para todos os demais status (inclusive vazio ou sem registro
 anterior), D usa turno menos quatro horas. VF na escala, sem horário concreto,
 continua sem previsão pela escala; pode receber a previsão pela continuidade.
-O filtro de status “Vazio” mostra registros com status vazio ou apenas espaços.
+Na própria planilha, o filtro abaixo do cabeçalho Status contém “Vazio”, que
+mostra registros com status vazio ou apenas espaços. A opção não fica no seletor
+Todos os Status da barra superior.
 
 Quando o acionamento de D-1 tem status ABONADO, a previsão automática de D é
 o horário do turno de D menos quatro horas, independentemente do código numérico
