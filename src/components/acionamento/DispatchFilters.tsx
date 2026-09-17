@@ -81,6 +81,7 @@ export function DispatchFilters({
           className="bg-slate-900 border border-slate-700 rounded px-2.5 py-1.5 text-slate-200 text-xs focus:outline-none focus:border-emerald-500 cursor-pointer"
         >
           <option value="">Todos os Status</option>
+          <option value="__EMPTY__">Vazio</option>
           <option value="ACIONADO">ACIONADO</option>
           <option value="ABONADO">ABONADO</option>
           <option value="APOIO">APOIO</option>

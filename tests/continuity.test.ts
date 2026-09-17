@@ -1,6 +1,28 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { isAwaitingPreviousExit, resolveDayContinuity, shouldRefreshContinuityOrigin } from "../src/lib/calculations/continuity";
+import { isAwaitingPreviousExit, resolveDayContinuity, shouldRefreshContinuityOrigin, resolveAutomaticForecast, matchesDispatchStatus } from "../src/lib/calculations/continuity";
+
+test("status de trabalho seguem a continuidade e aguardam saída", () => {
+  for (const status of ["ACIONADO", "APOIO", "TROCA", "BALDEIO", "VIAGEM FECHADA", " apoio "]) {
+    assert.equal(resolveAutomaticForecast(previousDispatch({ dispatch_status: status, exit_time: null, next_day_forecast_time: "10:00:00" }), "04:00"), null);
+    assert.equal(resolveAutomaticForecast(previousDispatch({ dispatch_status: status, exit_time: "18:00", next_day_forecast_time: "05:10:00" }), "04:00", true), "05:10:00");
+  }
+});
+
+test("demais status ignoram previsão anterior e usam turno menos quatro horas", () => {
+  for (const status of ["", "ABONADO", "FALTA", "ATESTADO", "AFASTADO", "BATE E VOLTA"]) {
+    assert.equal(resolveAutomaticForecast(previousDispatch({ dispatch_status: status, next_day_forecast_time: "10:00:00" }), "04:00"), "00:00:00");
+  }
+  assert.equal(resolveAutomaticForecast(null, "12:00"), "08:00:00");
+  assert.equal(resolveAutomaticForecast(null, "VF", true), null);
+});
+
+test("filtro Vazio inclui somente status ainda não preenchidos", () => {
+  for (const status of ["", "  ", null, undefined]) assert.equal(matchesDispatchStatus(status, "__EMPTY__"), true);
+  assert.equal(matchesDispatchStatus("APOIO", "__EMPTY__"), false);
+  assert.equal(matchesDispatchStatus("", ""), true);
+  assert.equal(matchesDispatchStatus(" apoio ", "APOIO"), true);
+});
 import type { Dispatch } from "../src/types/database";
 
 function previousDispatch(values: Partial<Dispatch>): Dispatch {

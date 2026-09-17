@@ -1,6 +1,20 @@
 import { Dispatch } from "@/types/database";
 import { resolveFirstDayForecast } from "./first-day-origin";
 
+export function usesWorkingContinuity(status: string | null | undefined) {
+  return ["ACIONADO", "APOIO", "TROCA", "BALDEIO", "VIAGEM FECHADA"].includes((status || "").trim().toLocaleUpperCase("pt-BR"));
+}
+
+export function resolveAutomaticForecast(previous: Dispatch | null | undefined, shiftTime: string | null | undefined, isClosedTrip = false) {
+  if (!usesWorkingContinuity(previous?.dispatch_status)) return isClosedTrip ? null : resolveFirstDayForecast("1", shiftTime);
+  return isAwaitingPreviousExit(previous) ? null : previous?.next_day_forecast_time || null;
+}
+
+export function matchesDispatchStatus(status: string | null | undefined, filter: string) {
+  const normalized = (status || "").trim().toLocaleUpperCase("pt-BR");
+  return !filter || (filter === "__EMPTY__" ? normalized === "" : normalized === filter);
+}
+
 export function resolvePreviousAbono(previous: Pick<Dispatch, "dispatch_status"> | null | undefined, shiftTime: string | null | undefined, isClosedTrip = false) {
   const wasAbonado = previous?.dispatch_status.trim().toLocaleUpperCase("pt-BR") === "ABONADO";
   return {
@@ -15,7 +29,7 @@ export function isAwaitingPreviousExit(
 ) {
   return Boolean(
     previousDayDispatch &&
-    previousDayDispatch.dispatch_status.trim().toLocaleUpperCase("pt-BR") === "ACIONADO" &&
+    usesWorkingContinuity(previousDayDispatch.dispatch_status) &&
     !previousDayDispatch.exit_time
   );
 }

@@ -1,5 +1,13 @@
 # Previsão após abono no dia anterior
 
+Regra ampliada em `20260917010000_working_status_forecast.sql`: ACIONADO,
+APOIO, TROCA, BALDEIO e VIAGEM FECHADA em D-1 usam a continuidade da jornada.
+Sem saída, a previsão de D fica vazia; com saída, usa a previsão do próximo dia
+registrada em D-1. Para todos os demais status (inclusive vazio ou sem registro
+anterior), D usa turno menos quatro horas. VF na escala, sem horário concreto,
+continua sem previsão pela escala; pode receber a previsão pela continuidade.
+O filtro de status “Vazio” mostra registros com status vazio ou apenas espaços.
+
 Quando o acionamento de D-1 tem status ABONADO, a previsão automática de D é
 o horário do turno de D menos quatro horas, independentemente do código numérico
 da escala. Exemplos: 04h → 00h, 12h → 08h, 20h → 16h, 02h → 22h.

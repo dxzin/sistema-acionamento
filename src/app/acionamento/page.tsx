@@ -13,6 +13,7 @@ import { useAuth } from "@/lib/auth-context";
 import { DispatchRowModel, DispatchFilterOptions, DispatchSummaryKPIs } from "@/types/domain";
 import { DailySheet, Location, OperatorPresence } from "@/types/database";
 import { currentDateInBrasilia } from "@/lib/dates/operational-date";
+import { matchesDispatchStatus } from "@/lib/calculations/continuity";
 import { OperationalAlerts } from "@/components/acionamento/OperationalAlerts";
 import { summarizeOperationalAlerts } from "@/lib/calculations/operational-alerts";
 import { BellRing, Clock3, X } from "lucide-react";
@@ -640,7 +641,7 @@ function AcionamentoContent() {
       }
 
       // Filtro por status
-      if (filters.statusFilter && item.dispatch_status !== filters.statusFilter) {
+      if (!matchesDispatchStatus(item.dispatch_status, filters.statusFilter)) {
         return false;
       }
 
