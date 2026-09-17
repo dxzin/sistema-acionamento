@@ -91,7 +91,11 @@ try {
                     Write-PonteLog ('Consultando macros do login ' + $queue.job.login)
                     $pendingAnswer = @{ id = $queue.job.id; lease_token = $queue.job.lease_token }
                     try { $pendingAnswer['result'] = Get-SighraDriverMacros $config $password $queue.job }
-                    catch { $pendingAnswer['error'] = $true; Write-PonteLog 'Nao foi possivel consultar as macros no Sighra.' }
+                    catch {
+                        $pendingAnswer['error'] = $true
+                        Write-PonteLog 'Nao foi possivel consultar as macros no Sighra.'
+                        Write-Host ('Detalhe local: ' + $_.Exception.Message) -ForegroundColor Yellow
+                    }
                 }
             }
             if ($null -ne $pendingAnswer) {

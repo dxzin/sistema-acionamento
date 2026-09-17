@@ -48,6 +48,10 @@ public static class SighraBridgeNative {
     [DllImport(Dll, CallingConvention = CallingConvention.Cdecl, CharSet = CharSet.Ansi)]
     public static extern int mysql_query(IntPtr mysql, string query);
     [DllImport(Dll, CallingConvention = CallingConvention.Cdecl)]
+    public static extern IntPtr mysql_error(IntPtr mysql);
+    [DllImport(Dll, CallingConvention = CallingConvention.Cdecl)]
+    public static extern uint mysql_errno(IntPtr mysql);
+    [DllImport(Dll, CallingConvention = CallingConvention.Cdecl)]
     public static extern IntPtr mysql_store_result(IntPtr mysql);
     [DllImport(Dll, CallingConvention = CallingConvention.Cdecl)]
     public static extern IntPtr mysql_fetch_row(IntPtr result);
@@ -91,7 +95,12 @@ function Test-SighraConnection($Config, [Security.SecureString]$Password) {
 function Read-SighraMacros([IntPtr]$Connection, [string]$Sql) {
     $result = [IntPtr]::Zero
     try {
-        if ([SighraBridgeNative]::mysql_query($Connection, $Sql) -ne 0) { throw 'Consulta das macros falhou.' }
+        if ([SighraBridgeNative]::mysql_query($Connection, $Sql) -ne 0) {
+            $number = [SighraBridgeNative]::mysql_errno($Connection)
+            $detail = [Runtime.InteropServices.Marshal]::PtrToStringAnsi([SighraBridgeNative]::mysql_error($Connection))
+            # Somente erro SQL local; nunca transmitir SQL, senha ou mensagem da macro.
+            throw ('Consulta das macros falhou. MySQL ' + $number + ': ' + $detail)
+        }
         $result = [SighraBridgeNative]::mysql_store_result($Connection)
         if ($result -eq [IntPtr]::Zero) { throw 'Resultado das macros indisponivel.' }
         while ($true) {
@@ -126,8 +135,8 @@ function Get-SighraDriverMacros($Config, [Security.SecureString]$Password, $Job)
         if ($connected -eq [IntPtr]::Zero) { throw 'Conexao indisponivel.' }
         $columns = "CAST(lmac_login AS CHAR), lmac_nome, DATE_FORMAT(lmac_data_gps, '%Y-%m-%d %H:%i:%s'), DATE_FORMAT(lmac_data_ins, '%Y-%m-%d %H:%i:%s'), CAST(lmac_cvei_id AS CHAR)"
         $filter = "lmac_login = '$($Job.login)' AND lmac_data_gps IS NOT NULL"
-        $macros = @(Read-SighraMacros $connection "SELECT $columns FROM log_macro WHERE $filter ORDER BY lmac_data_gps DESC, lmac_data_ins DESC LIMIT 10")
-        $ends = @(Read-SighraMacros $connection "SELECT $columns FROM log_macro WHERE $filter AND TRIM(lmac_nome) IN ('FIM DE JORNADA', 'FIM DE JORNADA GA') AND lmac_data_gps >= '$($Job.since_date)' ORDER BY lmac_data_gps DESC, lmac_data_ins DESC LIMIT 1")
+        $macros = @(Read-SighraMacros $connection "SELECT $columns FROM log_macro WHERE $filter ORDER BY lmac_data_gps DESC LIMIT 10")
+        $ends = @(Read-SighraMacros $connection "SELECT $columns FROM log_macro WHERE $filter AND TRIM(lmac_nome) IN ('FIM DE JORNADA', 'FIM DE JORNADA GA') AND lmac_data_gps >= '$($Job.since_date)' ORDER BY lmac_data_gps DESC LIMIT 1")
         return @{ macros = $macros; last_end = $(if ($ends.Count) { $ends[0] } else { $null }) }
     } finally {
         if ($passwordPtr -ne [IntPtr]::Zero) { [Runtime.InteropServices.Marshal]::ZeroFreeGlobalAllocAnsi($passwordPtr) }

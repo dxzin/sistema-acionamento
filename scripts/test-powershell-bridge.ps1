@@ -54,12 +54,16 @@ public static class SighraBridgeNative {
     }
     public static int mysql_query(IntPtr p, string q) {
         if (MacroMode) {
-            if (!q.StartsWith("SELECT CAST(lmac_login AS CHAR)") || q.Contains("lmac_msg") || !q.Contains("LIMIT ")) throw new Exception("Unexpected macro SQL");
+            if (!q.StartsWith("SELECT CAST(lmac_login AS CHAR)") || q.Contains("lmac_msg") || !q.Contains("LIMIT ") || q.Contains("DESC, lmac_data_ins")) throw new Exception("Unexpected macro SQL");
             rowCount = 0;
         } else if (q != "SELECT 1 AS connection_ok") throw new Exception("Unexpected SQL");
         return Failure == "query" ? 1 : 0;
     }
     public static IntPtr mysql_store_result(IntPtr p) { return Failure == "result" ? IntPtr.Zero : new IntPtr(2); }
+    public static uint mysql_errno(IntPtr p) { return 2013; }
+    public static IntPtr mysql_error(IntPtr p) {
+        value = Marshal.StringToHGlobalAnsi("Lost connection to MySQL server during query"); return value;
+    }
     public static IntPtr mysql_fetch_row(IntPtr p) {
         if (MacroMode) {
             if (Empty || rowCount++ > 0) return IntPtr.Zero;
@@ -81,7 +85,10 @@ public static class SighraBridgeNative {
         if (value != IntPtr.Zero) { Marshal.FreeHGlobal(value); value = IntPtr.Zero; }
         if (fields != null) { foreach (IntPtr field in fields) if (field != IntPtr.Zero) Marshal.FreeHGlobal(field); fields = null; }
     }
-    public static void mysql_close(IntPtr p) { Closes++; }
+    public static void mysql_close(IntPtr p) {
+        Closes++;
+        if (value != IntPtr.Zero) { Marshal.FreeHGlobal(value); value = IntPtr.Zero; }
+    }
 }
 '@
     . (Join-Path $folder 'MySql-Nativo.ps1')
@@ -111,6 +118,13 @@ public static class SighraBridgeNative {
     [SighraBridgeNative]::Empty = $true
     $empty = Get-SighraDriverMacros ([pscustomobject]$config) $password $job
     if ($empty.macros.Count -ne 0 -or $null -ne $empty.last_end) { throw 'Consulta vazia incorreta.' }
+    [SighraBridgeNative]::Failure = 'query'
+    [SighraBridgeNative]::Closes = 0
+    $diagnosed = $false
+    try { Get-SighraDriverMacros ([pscustomobject]$config) $password $job | Out-Null }
+    catch { $diagnosed = $_.Exception.Message -like '*MySQL 2013: Lost connection*' }
+    if (-not $diagnosed -or [SighraBridgeNative]::Closes -ne 1) { throw 'Erro SQL sem diagnostico ou conexao nao liberada.' }
+    [SighraBridgeNative]::Failure = ''
     $rejected = $false
     try { Get-SighraDriverMacros ([pscustomobject]$config) $password ([pscustomobject]@{ login = '30049 OR 1=1'; since_date = '2026-08-18' }) | Out-Null } catch { $rejected = $true }
     if (-not $rejected) { throw 'Login indevido aceito na ponte.' }
