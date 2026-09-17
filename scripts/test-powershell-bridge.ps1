@@ -54,7 +54,7 @@ public static class SighraBridgeNative {
     }
     public static int mysql_query(IntPtr p, string q) {
         if (MacroMode) {
-            if (!q.StartsWith("SELECT CAST(lmac_login AS CHAR)") || q.Contains("lmac_msg") || !q.Contains("LIMIT ") || q.Contains("DESC, lmac_data_ins")) throw new Exception("Unexpected macro SQL");
+            if (!q.StartsWith("SELECT CAST(m.lmac_login AS CHAR)") || q.Contains("lmac_msg") || !q.Contains("LIMIT ") || q.Contains("DESC, lmac_data_ins") || !q.Contains("v.cvei_id = m.lmac_cvei_id") || !q.Contains("p.cpnt_id = m.lmac_cpnt_id") || !q.Contains("r.crua_id = m.lmac_crua_id")) throw new Exception("Unexpected macro SQL");
             rowCount = 0;
         } else if (q != "SELECT 1 AS connection_ok") throw new Exception("Unexpected SQL");
         return Failure == "query" ? 1 : 0;
@@ -67,9 +67,9 @@ public static class SighraBridgeNative {
     public static IntPtr mysql_fetch_row(IntPtr p) {
         if (MacroMode) {
             if (Empty || rowCount++ > 0) return IntPtr.Zero;
-            string[] values = { "30049", "FIM DE JORNADA GA", "2026-09-16 12:20:33", null, "220842" };
-            fields = new IntPtr[5]; row = Marshal.AllocHGlobal(IntPtr.Size * 5);
-            for (int i=0; i<5; i++) {
+            string[] values = { "30049", "FIM DE JORNADA GA", "2026-09-16 12:20:33", null, "220842", "ABC1D23", "Garagem", "Sao Paulo", "SP", null, "-23.55", "-46.63" };
+            fields = new IntPtr[12]; row = Marshal.AllocHGlobal(IntPtr.Size * 12);
+            for (int i=0; i<12; i++) {
                 fields[i] = values[i] == null ? IntPtr.Zero : Marshal.StringToHGlobalAnsi(values[i]);
                 Marshal.WriteIntPtr(row, i * IntPtr.Size, fields[i]);
             }
@@ -115,6 +115,7 @@ public static class SighraBridgeNative {
     $job = [pscustomobject]@{ login = '30049'; since_date = '2026-08-18' }
     $result = Get-SighraDriverMacros ([pscustomobject]$config) $password $job
     if ($result.macros.Count -ne 1 -or $result.last_end.gps_at -ne '2026-09-16 12:20:33' -or $null -ne $result.last_end.inserted_at -or [SighraBridgeNative]::Closes -ne 1 -or [SighraBridgeNative]::Frees -ne 2) { throw 'Resultado ou limpeza das macros incorretos.' }
+    if ($result.macros[0].plate -ne 'ABC1D23' -or $result.macros[0].point -ne 'Garagem' -or $null -ne $result.macros[0].street -or $result.macros[0].latitude -ne -23.55 -or $result.macros[0].longitude -ne -46.63) { throw 'Placa ou local da macro incorretos.' }
     [SighraBridgeNative]::Empty = $true
     $empty = Get-SighraDriverMacros ([pscustomobject]$config) $password $job
     if ($empty.macros.Count -ne 0 -or $null -ne $empty.last_end) { throw 'Consulta vazia incorreta.' }

@@ -3,11 +3,20 @@ import { FormEvent, useEffect, useState } from "react";
 import { Header } from "@/components/layout/Header";
 import { Sidebar } from "@/components/layout/Sidebar";
 import type { SighraResult } from "@/lib/sighra/queries";
+import { macroLocation, macroMapUrl } from "@/lib/sighra/queries";
+import type { SighraMacro } from "@/lib/sighra/queries";
 
 type Job = { id: string; login: string; status: string; created_at: string; since_date: string; result: SighraResult | null; error: string | null };
 type Preview = { condutor: string; data: string; regiao: string; entrada: string | null; saida_atual: string | null; saida_sighra: string; updated_at: string };
 const formatDate = (value: string) => `${value.slice(8, 10)}/${value.slice(5, 7)}/${value.slice(0, 4)}`;
 const formatTimestamp = (value: string) => `${formatDate(value)} ${value.slice(11)}`;
+function MacroPlace({ macro }: { macro: SighraMacro }) {
+  const location = macroLocation(macro), map = macroMapUrl(macro);
+  return <div className="space-y-1">
+    <div>{location || "Local não cadastrado"}</div>
+    {map && <a href={map} target="_blank" rel="noopener noreferrer" className="text-[#107c41] underline whitespace-nowrap">Ver no mapa</a>}
+  </div>;
+}
 
 async function responseJson(response: Response) {
   const data = await response.json();
@@ -110,6 +119,7 @@ export default function SighraPage() {
             <h2 className="font-semibold">Último fim de jornada · login {job.login}</h2>
             {end ? <>
               <p className="text-lg font-semibold">{formatDate(end.gps_at)} às {end.gps_at.slice(11, 16)} <span className="text-xs font-normal">· {end.name}</span></p>
+              <div className="text-xs space-y-1"><p>Placa: {end.plate || "Não informada"} · ID do veículo: {end.vehicle || "—"}</p><MacroPlace macro={end} /></div>
               <p className="text-xs">Horário do GPS, com segundos descartados para o preenchimento. Esse evento não confirma que a jornada atual já terminou.</p>
               <div className="flex flex-wrap items-end gap-2 pt-2">
                 <label className="text-xs">Dia da folha<input type="date" value={date} onChange={e => { setDate(e.target.value); setPreview(null); setSuccess(""); }} className="block border border-slate-400 px-2 py-1 mt-1" /></label>
@@ -128,10 +138,13 @@ export default function SighraPage() {
           <section className="border border-slate-300 bg-white text-slate-900 overflow-auto">
             <h2 className="font-semibold text-sm p-3">Últimas 10 macros · login {job.login}</h2>
             <table className="w-full text-xs border-collapse">
-              <thead className="bg-[#107c41] text-white"><tr>{["Macro", "Horário GPS", "Recebida no Sighra", "ID do veículo"].map(label => <th key={label} className="text-left border border-emerald-700 p-2">{label}</th>)}</tr></thead>
+              <thead className="bg-[#107c41] text-white"><tr>{["Macro", "Horário GPS", "Recebida no Sighra", "Placa", "Local da macro", "ID do veículo"].map(label => <th key={label} className="text-left border border-emerald-700 p-2">{label}</th>)}</tr></thead>
               <tbody>{job.result?.macros.map((row, i) => <tr key={i} className={i % 2 ? "bg-slate-50" : ""}>
                 <td className="border border-slate-200 p-2">{row.name}</td><td className="border border-slate-200 p-2 font-mono whitespace-nowrap">{formatTimestamp(row.gps_at)}</td>
-                <td className="border border-slate-200 p-2 font-mono whitespace-nowrap">{row.inserted_at ? formatTimestamp(row.inserted_at) : "—"}</td><td className="border border-slate-200 p-2">{row.vehicle || "—"}</td>
+                <td className="border border-slate-200 p-2 font-mono whitespace-nowrap">{row.inserted_at ? formatTimestamp(row.inserted_at) : "—"}</td>
+                <td className="border border-slate-200 p-2 whitespace-nowrap">{row.plate || "—"}</td>
+                <td className="border border-slate-200 p-2 min-w-48"><MacroPlace macro={row} /></td>
+                <td className="border border-slate-200 p-2">{row.vehicle || "—"}</td>
               </tr>)}</tbody>
             </table>
             {!job.result?.macros.length && <p className="p-3 text-sm">Nenhuma macro encontrada para esse login.</p>}

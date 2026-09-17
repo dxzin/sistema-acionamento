@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { exitTime, jobView, parseResult, validDate, validLogin } from "../src/lib/sighra/queries";
+import { exitTime, jobView, macroLocation, macroMapUrl, parseResult, validDate, validLogin } from "../src/lib/sighra/queries";
 import { POST, PATCH } from "../src/app/api/integracoes/sighra/tarefas/route";
 
 const end = { login: "30049", name: "FIM DE JORNADA GA", gps_at: "2026-09-16 12:20:33", inserted_at: "2026-09-16 12:20:46", vehicle: "220842" };
@@ -29,6 +29,19 @@ test("pedido pendente expira sem inferir que o motorista continua em jornada", (
   const job = { id: "test", login: "30049", status: "running", created_at: "2026-09-17", since_date: "2026-08-18", expires_at: "2000-01-01", result: null, error: null };
   assert.equal(jobView(job).status, "expired");
   assert.equal(jobView({ ...job, status: "completed" }).status, "completed");
+});
+test("placa e local seguem o veiculo e as coordenadas da macro com suporte a ponte anterior", () => {
+  const event = { ...end, plate: "ABC1D23", point: "Garagem", city: "São Paulo", state: "SP", street: "Rua A", latitude: -23.55, longitude: -46.63 };
+  const result = parseResult({ macros: [event], last_end: event }, "30049", "2026-08-18");
+  assert.equal(result.macros[0].plate, "ABC1D23");
+  assert.equal(macroLocation(result.macros[0]), "Garagem · Rua A · São Paulo / SP");
+  assert.equal(macroMapUrl(result.macros[0]), "https://www.google.com/maps?q=-23.55,-46.63");
+  assert.equal(macroMapUrl({ ...event, latitude: 0, longitude: 0 }), null);
+  assert.equal(macroMapUrl(end), null);
+  assert.equal(parseResult({ macros: [end], last_end: null }, "30049", "2026-08-18").macros[0].plate, null);
+  for (const changed of [{ latitude: 91 }, { longitude: 181 }, { latitude: "-23.55" }, { point: "x".repeat(256) }]) {
+    assert.throws(() => parseResult({ macros: [{ ...event, ...changed }], last_end: null }, "30049", "2026-08-18"));
+  }
 });
 test("endpoints da fila bloqueiam chamada sem chave antes de acessar dados", async () => {
   const request = () => new Request("http://localhost/api/integracoes/sighra/tarefas", { method: "POST" });

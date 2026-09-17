@@ -57,7 +57,7 @@ Unregister-ScheduledTask -TaskName 'Ponte Sighra' -Confirm:$false
 
 Se a politica corporativa bloquear scripts, trate com o TI. Nao altere a politica global nem use bypass. Se os arquivos estiverem marcados como baixados da internet, revise os arquivos e, somente se permitido, use `Unblock-File` nos scripts desta pasta.
 
-## Sistema online: ainda pendente
+## Configuracao do sistema online
 
 Publicar a integracao, aplicar as migracoes `20260917020000_sighra_bridge.sql` e `20260917030000_sighra_queries.sql` no Supabase e definir `SIGHRA_BRIDGE_TOKEN` no servidor. Para uma instalacao existente, manter a mesma chave. Copiar os scripts sozinho nao habilita o sistema online.
 
@@ -72,3 +72,9 @@ $rng.Dispose()
 ```
 
 Nao colocar a senha do banco no sistema online nem abrir a porta 3306 na internet. A DLL real e o banco precisam ser validados no PC da empresa; os testes locais usam uma simulacao da API nativa.
+
+## Placa e local das macros
+
+A ponte consulta `cad_veiculo.cvei_placa` pelo `lmac_cvei_id` de cada macro. Consulta o ponto, cidade e UF em `cad_ponto` pelo `lmac_cpnt_id`, e a rua em `cad_ruas` pelo `lmac_crua_id`. As coordenadas sao `lmac_latitude` e `lmac_longitude` do evento. Cadastros ausentes nao removem a macro; a tela exibe o mapa quando ha coordenadas validas. A placa e os nomes refletem os cadastros consultados, e a posicao corresponde ao evento.
+
+Em uma ponte ja configurada, preservar `config.local.json`, parar com Ctrl+C, substituir `MySql-Nativo.ps1` e iniciar novamente no PowerShell de 32 bits. Nao executar o configurador novamente. Fazer uma nova consulta no sistema para receber os campos adicionais.

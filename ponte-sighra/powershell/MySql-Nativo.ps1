@@ -107,11 +107,17 @@ function Read-SighraMacros([IntPtr]$Connection, [string]$Sql) {
             $row = [SighraBridgeNative]::mysql_fetch_row($result)
             if ($row -eq [IntPtr]::Zero) { break }
             $values = @()
-            for ($i = 0; $i -lt 5; $i++) {
+            for ($i = 0; $i -lt 12; $i++) {
                 $ptr = [Runtime.InteropServices.Marshal]::ReadIntPtr($row, $i * [IntPtr]::Size)
                 $values += $(if ($ptr -eq [IntPtr]::Zero) { $null } else { [Runtime.InteropServices.Marshal]::PtrToStringAnsi($ptr) })
             }
-            @{ login = $values[0].Trim(); name = $values[1].Trim(); gps_at = $values[2]; inserted_at = $values[3]; vehicle = $values[4] }
+            $latitude = $null
+            $longitude = $null
+            if ($null -ne $values[10]) { $latitude = [double]::Parse($values[10], [Globalization.CultureInfo]::InvariantCulture) }
+            if ($null -ne $values[11]) { $longitude = [double]::Parse($values[11], [Globalization.CultureInfo]::InvariantCulture) }
+            if ($latitude -eq 0 -and $longitude -eq 0) { $latitude = $null; $longitude = $null }
+            @{ login = $values[0].Trim(); name = $values[1].Trim(); gps_at = $values[2]; inserted_at = $values[3]; vehicle = $values[4];
+               plate = $values[5]; point = $values[6]; city = $values[7]; state = $values[8]; street = $values[9]; latitude = $latitude; longitude = $longitude }
         }
     } finally { if ($result -ne [IntPtr]::Zero) { [SighraBridgeNative]::mysql_free_result($result) } }
 }
@@ -133,10 +139,13 @@ function Get-SighraDriverMacros($Config, [Security.SecureString]$Password, $Job)
         $passwordPtr = [Runtime.InteropServices.Marshal]::SecureStringToGlobalAllocAnsi($Password)
         $connected = [SighraBridgeNative]::mysql_real_connect($connection, $Config.Host, $Config.User, $passwordPtr, $Config.Database, [uint32]$Config.Port, [IntPtr]::Zero, 0)
         if ($connected -eq [IntPtr]::Zero) { throw 'Conexao indisponivel.' }
-        $columns = "CAST(lmac_login AS CHAR), lmac_nome, DATE_FORMAT(lmac_data_gps, '%Y-%m-%d %H:%i:%s'), DATE_FORMAT(lmac_data_ins, '%Y-%m-%d %H:%i:%s'), CAST(lmac_cvei_id AS CHAR)"
+        $columns = "CAST(m.lmac_login AS CHAR), m.lmac_nome, DATE_FORMAT(m.lmac_data_gps, '%Y-%m-%d %H:%i:%s'), DATE_FORMAT(m.lmac_data_ins, '%Y-%m-%d %H:%i:%s'), CAST(m.lmac_cvei_id AS CHAR), v.cvei_placa, p.cpnt_descricao, p.cpnt_cidade, p.cpnt_uf, r.crua_nome, m.lmac_latitude, m.lmac_longitude"
+        $joins = "LEFT JOIN cad_veiculo v ON v.cvei_id = m.lmac_cvei_id LEFT JOIN cad_ponto p ON p.cpnt_id = m.lmac_cpnt_id LEFT JOIN cad_ruas r ON r.crua_id = m.lmac_crua_id"
+        $eventColumns = 'lmac_login, lmac_nome, lmac_data_gps, lmac_data_ins, lmac_cvei_id, lmac_cpnt_id, lmac_crua_id, lmac_latitude, lmac_longitude'
         $filter = "lmac_login = '$($Job.login)' AND lmac_data_gps IS NOT NULL"
-        $macros = @(Read-SighraMacros $connection "SELECT $columns FROM log_macro WHERE $filter ORDER BY lmac_data_gps DESC LIMIT 10")
-        $ends = @(Read-SighraMacros $connection "SELECT $columns FROM log_macro WHERE $filter AND TRIM(lmac_nome) IN ('FIM DE JORNADA', 'FIM DE JORNADA GA') AND lmac_data_gps >= '$($Job.since_date)' ORDER BY lmac_data_gps DESC LIMIT 1")
+        # Limitar as macros antes dos joins evita ordenar toda a tabela com os cadastros.
+        $macros = @(Read-SighraMacros $connection "SELECT $columns FROM (SELECT $eventColumns FROM log_macro WHERE $filter ORDER BY lmac_data_gps DESC LIMIT 10) m $joins ORDER BY m.lmac_data_gps DESC")
+        $ends = @(Read-SighraMacros $connection "SELECT $columns FROM (SELECT $eventColumns FROM log_macro WHERE $filter AND TRIM(lmac_nome) IN ('FIM DE JORNADA', 'FIM DE JORNADA GA') AND lmac_data_gps >= '$($Job.since_date)' ORDER BY lmac_data_gps DESC LIMIT 1) m $joins ORDER BY m.lmac_data_gps DESC")
         return @{ macros = $macros; last_end = $(if ($ends.Count) { $ends[0] } else { $null }) }
     } finally {
         if ($passwordPtr -ne [IntPtr]::Zero) { [Runtime.InteropServices.Marshal]::ZeroFreeGlobalAllocAnsi($passwordPtr) }
