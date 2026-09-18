@@ -4,6 +4,7 @@ import React, { useEffect, useState } from "react";
 import { useAuth } from "@/lib/auth-context";
 import { Clock, LogOut, Moon, Shield, Sun, Truck } from "lucide-react";
 import { SighraBridgeStatus } from "./SighraBridgeStatus";
+import { SupabaseUsage } from "./SupabaseUsage";
 
 type ThemePreference = "light" | "dark" | "auto";
 
@@ -69,6 +70,7 @@ export function Header() {
 
       <div className="flex items-center space-x-4">
         {user && <SighraBridgeStatus />}
+        {(user?.role === "admin" || user?.role === "supervisor") && <SupabaseUsage compact />}
         <label className="excel-theme-control flex h-7 items-center gap-1 border border-white/25 bg-black/10 px-1.5 text-[10px] font-bold text-white" title="Tema do sistema">
           {darkMode ? <Moon className="h-3.5 w-3.5" /> : <Sun className="h-3.5 w-3.5" />}
           <select

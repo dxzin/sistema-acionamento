@@ -7,6 +7,7 @@ import { Settings, Sliders, MapPin, Database, Loader2, ShieldAlert } from "lucid
 import { dispatchService } from "@/lib/services/dispatch-service";
 import { Base, Location } from "@/types/database";
 import { useAuth } from "@/lib/auth-context";
+import { SupabaseUsage } from "@/components/layout/SupabaseUsage";
 
 export default function AdminPage() {
   const { user, isLoading: authLoading } = useAuth();
@@ -57,6 +58,7 @@ export default function AdminPage() {
             </p>
           </div>
 
+          <SupabaseUsage />
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {/* Parâmetros de Interjornada */}
             <div className="bg-white border border-[#a6a6a6] rounded p-4 shadow-xs">
