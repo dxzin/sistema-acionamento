@@ -3,7 +3,8 @@
 import React, { createContext, useContext, useEffect, useState } from "react";
 import { Profile, UserRole } from "@/types/database";
 import { createClient } from "./supabase/client";
-import { useRouter } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
+import { canAccessPage } from "./access-control";
 
 interface AuthContextType {
   user: Profile | null;
@@ -17,8 +18,14 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const router = useRouter();
+  const pathname = usePathname();
   const [user, setUser] = useState<Profile | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const restrictedPage = pathname !== "/login" && !canAccessPage(user?.role, pathname);
+
+  useEffect(() => {
+    if (!isLoading && user && restrictedPage) router.replace("/acionamento");
+  }, [isLoading, user, restrictedPage, router]);
 
   useEffect(() => {
     const initAuth = async () => {
@@ -153,7 +160,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         isAuthenticated: !!user,
       }}
     >
-      {children}
+      {restrictedPage ? null : children}
     </AuthContext.Provider>
   );
 }

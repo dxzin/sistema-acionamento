@@ -13,6 +13,7 @@ import {
   Database,
 } from "lucide-react";
 import { useAuth } from "@/lib/auth-context";
+import { canAccessPage } from "@/lib/access-control";
 
 export function Sidebar() {
   const pathname = usePathname();
@@ -70,7 +71,7 @@ export function Sidebar() {
           Planilhas do arquivo
         </div>
         <nav className="space-y-0.5">
-          {navigation.filter((item) => item.href !== "/admin" || user?.role === "admin" || user?.role === "supervisor").map((item) => {
+          {navigation.filter((item) => canAccessPage(user?.role, item.href)).map((item) => {
             const isActive = pathname === item.href || (item.href === "/acionamento" && pathname === "/");
             const Icon = item.icon;
             return (

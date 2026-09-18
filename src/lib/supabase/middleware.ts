@@ -1,5 +1,6 @@
 import { createServerClient, type CookieOptions } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
+import { canAccessPage } from "@/lib/access-control";
 
 export async function updateSession(request: NextRequest) {
   let supabaseResponse = NextResponse.next({
@@ -54,16 +55,19 @@ export async function updateSession(request: NextRequest) {
     return NextResponse.redirect(url);
   }
 
-  if (user && request.nextUrl.pathname.startsWith("/admin")) {
+  if (user && !isAuthPage && !request.nextUrl.pathname.startsWith("/api/") && !request.nextUrl.pathname.startsWith("/_next/") && !canAccessPage("operator", request.nextUrl.pathname)) {
     const { data: profile } = await supabase
       .from("profiles")
       .select("role")
       .eq("id", user.id)
       .maybeSingle();
-    if (!profile || !["admin", "supervisor"].includes(profile.role)) {
+    if (!canAccessPage(profile?.role, request.nextUrl.pathname)) {
       const url = request.nextUrl.clone();
       url.pathname = "/acionamento";
-      return NextResponse.redirect(url);
+      url.search = "";
+      const response = NextResponse.redirect(url);
+      supabaseResponse.cookies.getAll().forEach((cookie) => response.cookies.set(cookie));
+      return response;
     }
   }
 
