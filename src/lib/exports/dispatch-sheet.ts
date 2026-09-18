@@ -13,7 +13,7 @@ const STATUS_STYLES: Record<string, { fill: string; font: string }> = {
   ABONADO: { fill: "FFFFC7CE", font: "FF9C0006" },
   APOIO: { fill: "FFFFEB9C", font: "FF9C5700" },
   BALDEIO: { fill: "FFBF9000", font: "FF1F1F1F" },
-  TROCA: { fill: "FFBF9000", font: "FF1F1F1F" },
+  TROCA: { fill: "FFFFFF00", font: "FF000000" },
   FALTA: { fill: "FFFF0000", font: "FFFFFFFF" },
 };
 

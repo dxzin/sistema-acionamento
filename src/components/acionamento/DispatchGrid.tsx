@@ -598,8 +598,9 @@ export function DispatchGrid({
       case "APOIO":
         return "bg-[#FFEB9C] text-[#9C5700] border-[#FFD966]";
       case "BALDEIO":
-      case "TROCA":
         return "bg-[#BF9000] text-[#1F1F1F] border-[#806000]";
+      case "TROCA":
+        return "bg-[#FFFF00] text-[#000000] border-[#BFBF00]";
       case "FALTA":
         return "bg-[#FF0000] text-[#FFFFFF] font-extrabold border-[#CC0000]";
       case "ATESTADO":

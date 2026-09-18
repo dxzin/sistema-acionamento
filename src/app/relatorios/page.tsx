@@ -17,7 +17,8 @@ function statusTone(status: string) {
   if (status === "ACIONADO") return "excel-report-status-acionado";
   if (status === "ABONADO") return "excel-report-status-abonado";
   if (status === "APOIO") return "excel-report-status-apoio";
-  if (status === "BALDEIO" || status.includes("TROCA")) return "excel-report-status-baldeio";
+  if (status.includes("TROCA")) return "excel-report-status-troca";
+  if (status === "BALDEIO") return "excel-report-status-baldeio";
   if (status === "SEM STATUS") return "excel-report-status-empty";
   return "excel-report-status-other";
 }

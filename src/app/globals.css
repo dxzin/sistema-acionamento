@@ -383,7 +383,7 @@ body {
 .excel-grid .excel-status-acionado { color: #006100 !important; background: #c6efce !important; border-color: #a9d08e !important; }
 .excel-grid .excel-status-abonado { color: #9c0006 !important; background: #ffc7ce !important; border-color: #f4b084 !important; }
 .excel-grid .excel-status-apoio { color: #9c5700 !important; background: #ffeb9c !important; border-color: #ffd966 !important; }
-.excel-grid .excel-status-troca { color: #1f1f1f !important; background: #bf9000 !important; border-color: #806000 !important; }
+.excel-grid .excel-status-troca { color: #000 !important; background: #ffff00 !important; border-color: #bfbf00 !important; }
 .excel-grid .excel-status-baldeio { color: #1f1f1f !important; background: #bf9000 !important; border-color: #806000 !important; }
 .excel-grid .excel-status-falta { color: #fff !important; background: #f00 !important; border-color: #c00 !important; }
 .excel-grid .excel-status-atestado { color: #1f497d !important; background: #b8cce4 !important; border-color: #8db4e2 !important; }
@@ -433,6 +433,7 @@ input:focus-visible, select:focus-visible, button:focus-visible, a:focus-visible
 .excel-report-status-abonado { border-color: #f4b084; background: #ffc7ce; color: #9c0006; }
 .excel-report-status-apoio { border-color: #ffd966; background: #ffeb9c; color: #9c5700; }
 .excel-report-status-baldeio { border-color: #806000; background: #bf9000; color: #1f1f1f; }
+.excel-report-status-troca { border-color: #bfbf00; background: #ffff00; color: #000; }
 .excel-report-status-empty { border-color: #cbd5e1; background: #f1f5f9; color: #64748b; }
 .excel-report-status-other { border-color: #b8cce4; background: #dce6f1; color: #1f497d; }
 .excel-report-empty { padding: 35px 8px; text-align: center; color: #64748b; font-size: 11px; }
