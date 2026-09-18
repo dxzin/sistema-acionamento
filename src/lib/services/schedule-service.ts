@@ -1,7 +1,8 @@
-import { INITIAL_BASES, INITIAL_DRIVERS } from "@/lib/mock-data";
+import { INITIAL_BASES } from "@/lib/mock-data";
 import { createClient } from "@/lib/supabase/client";
 import { Driver, MonthlyScheduleEntry } from "@/types/database";
 import ExcelJS from "exceljs";
+import { getDemoDrivers } from "./driver-service";
 
 export const SCALE_CODES = ["1", "2", "3", "4", "5", "6", "F", "FE", "AT", "AF", "SATD", "DES", "DESL"] as const;
 
@@ -141,7 +142,7 @@ function storageKey(month: number, year: number, region: string) {
 function demoDriversForRegion(region: string) {
   const baseCodes = new Set(REGION_BASE_CODES[region] || []);
   const baseIds = new Set(INITIAL_BASES.filter((base) => baseCodes.has(base.code)).map((base) => base.id));
-  return INITIAL_DRIVERS.filter((driver) => driver.is_active && baseIds.has(driver.base_id));
+  return getDemoDrivers().filter((driver) => driver.is_active && baseIds.has(driver.base_id));
 }
 
 function createDemoEntries(month: number, year: number, region: string, drivers: Driver[]): MonthlyScheduleEntry[] {

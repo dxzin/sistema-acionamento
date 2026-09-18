@@ -4,7 +4,7 @@ import React, { FormEvent, useEffect, useMemo, useState } from "react";
 import { Header } from "@/components/layout/Header";
 import { Sidebar } from "@/components/layout/Sidebar";
 import { useAuth } from "@/lib/auth-context";
-import { createDriver, DriverCatalog, DriverFormData, loadDriverCatalog, updateDriver } from "@/lib/services/driver-service";
+import { createDriver, DriverCatalog, DriverFormData, loadDriverCatalog, updateDriver, SCALE_LETTERS } from "@/lib/services/driver-service";
 import { Base, Driver } from "@/types/database";
 import {
   AlertCircle,
@@ -32,27 +32,8 @@ const EMPTY_FORM: DriverFormData = {
   is_active: true,
 };
 
-const SHIFT_TIMES: Record<string, string> = {
-  A: "04:00",
-  B: "12:00",
-  C: "20:00",
-};
-
-function getShiftBadge(shift?: string | null, timeStr?: string | null) {
+function getShiftBadge(shift?: string | null) {
   const s = (shift || "").toUpperCase().trim();
-  const t = (timeStr || "").trim();
-
-  // O horário cadastrado define a cor. A letra do turno serve apenas como
-  // fallback quando o registro ainda não possui um horário reconhecido.
-  if (t.startsWith("04:")) {
-    return "bg-[#FFF2CC] text-[#7F4B00] border border-[#FDE68A] font-bold px-2 py-0.5 rounded text-[11px] whitespace-nowrap shadow-xs";
-  }
-  if (t.startsWith("12:")) {
-    return "bg-[#DDEBF7] text-[#0369A1] border border-[#BAE6FD] font-bold px-2 py-0.5 rounded text-[11px] whitespace-nowrap shadow-xs";
-  }
-  if (t.startsWith("20:")) {
-    return "bg-[#EDE7F6] text-[#5B2C6F] border border-[#DDD6FE] font-bold px-2 py-0.5 rounded text-[11px] whitespace-nowrap shadow-xs";
-  }
   if (s === "A") return "bg-[#FFF2CC] text-[#7F4B00] border border-[#FDE68A] font-bold px-2 py-0.5 rounded text-[11px] whitespace-nowrap shadow-xs";
   if (s === "B") return "bg-[#DDEBF7] text-[#0369A1] border border-[#BAE6FD] font-bold px-2 py-0.5 rounded text-[11px] whitespace-nowrap shadow-xs";
   if (s === "C") return "bg-[#EDE7F6] text-[#5B2C6F] border border-[#DDD6FE] font-bold px-2 py-0.5 rounded text-[11px] whitespace-nowrap shadow-xs";
@@ -613,7 +594,7 @@ export default function CondutoresPage() {
 
                         {/* Turno */}
                         <td className="px-2 py-1 text-center border-r border-b border-slate-300">
-                          <span className={getShiftBadge(driver.default_shift, driver.default_start_time)}>
+                          <span className={getShiftBadge(driver.default_shift)}>
                             {driver.default_shift || "—"}
                           </span>
                         </td>
@@ -749,22 +730,16 @@ export default function CondutoresPage() {
               </label>
 
               <label className="space-y-1">
-                <span className="font-bold text-slate-800">Turno Padrão</span>
+                <span className="font-bold text-slate-800">Letra da Escala</span>
                 <select
                   value={form.default_shift}
                   onChange={(event) => {
                     const shift = event.target.value;
-                    setForm({
-                      ...form,
-                      default_shift: shift,
-                      default_start_time: SHIFT_TIMES[shift] || "12:00",
-                    });
+                    setForm({ ...form, default_shift: shift });
                   }}
                   className="w-full rounded border border-slate-400 bg-white px-3 py-1.5 text-xs text-slate-900 font-semibold focus:border-[#107c41] focus:outline-none"
                 >
-                  <option value="A">A — Manhã (04:00)</option>
-                  <option value="B">B — Tarde (12:00)</option>
-                  <option value="C">C — Noite (20:00)</option>
+                  {SCALE_LETTERS.map((letter) => <option key={letter} value={letter}>{letter}</option>)}
                 </select>
               </label>
 

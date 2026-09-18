@@ -2,6 +2,8 @@ import { createClient } from "@/lib/supabase/client";
 import { INITIAL_BASES, INITIAL_DRIVERS } from "@/lib/mock-data";
 import { Base, Driver } from "@/types/database";
 
+export const SCALE_LETTERS = ["A", "B", "C", "D", "E", "F", "G"] as const;
+
 export interface DriverFormData {
   name: string;
   login_matricula: string;
@@ -25,7 +27,7 @@ function hasSupabaseConfig() {
   return Boolean(url && key && !url.includes("your-project") && !url.includes("placeholder"));
 }
 
-function getDemoDrivers(): Driver[] {
+export function getDemoDrivers(): Driver[] {
   if (typeof window === "undefined") return INITIAL_DRIVERS;
   const stored = window.localStorage.getItem(STORAGE_KEY);
   if (!stored) return INITIAL_DRIVERS;
@@ -95,5 +97,54 @@ export async function updateDriver(id: string, input: DriverFormData, source: Dr
   const { data, error } = await createClient().from("drivers").update(input).eq("id", id).select().maybeSingle();
   if (error) throw driverMutationError(error);
   if (!data) throw new Error("Somente supervisores e administradores podem alterar cadastros de condutores.");
+  await syncDriverSchedule(id, input.default_shift, input.default_start_time);
+  return data as Driver;
+}
+
+async function syncDriverSchedule(id: string, shift: string, time?: string) {
+  const supabase = createClient();
+  const today = new Date();
+  const year = today.getFullYear();
+  const month = today.getMonth() + 1;
+  const { data: schedules, error: schedulesError } = await supabase.from("monthly_schedules").select("id").or(`year.gt.${year},and(year.eq.${year},month.gte.${month})`);
+  if (schedulesError) throw new Error(`Cadastro salvo, mas não foi possível sincronizar a escala: ${schedulesError.message}`);
+  if (!schedules?.length) return;
+  const { error } = await supabase.from("monthly_schedule_entries")
+    .update({ shift_letter: shift, ...(time ? { shift_time: time } : {}) })
+    .eq("driver_id", id).in("schedule_id", schedules.map((schedule) => schedule.id))
+    .or("shift_letter.is.null,shift_letter.neq.VF");
+  if (error) throw new Error(`Cadastro salvo, mas não foi possível sincronizar a escala: ${error.message}`);
+}
+
+export async function updateDriverScheduleTime(id: string, time: string, source: DriverCatalog["source"]): Promise<Driver> {
+  if (!/^([01]\d|2[0-3]):[0-5]\d$/.test(time)) throw new Error("Horário inválido. Use HH:MM.");
+  if (source === "demo") {
+    const driver = getDemoDrivers().find((item) => item.id === id);
+    if (!driver) throw new Error("Condutor não encontrado.");
+    const updated = { ...driver, default_start_time: `${time}:00`, updated_at: new Date().toISOString() };
+    saveDemoDrivers(getDemoDrivers().map((item) => item.id === id ? updated : item));
+    return updated;
+  }
+  const { data, error } = await createClient().from("drivers").update({ default_start_time: `${time}:00` }).eq("id", id).select().maybeSingle();
+  if (error) throw driverMutationError(error);
+  if (!data) throw new Error("Somente supervisores e administradores podem alterar o horário do cadastro.");
+  await syncDriverSchedule(id, data.default_shift, `${time}:00`);
+  return data as Driver;
+}
+
+export async function updateDriverShift(id: string, shift: string, source: DriverCatalog["source"]): Promise<Driver> {
+  const normalized = shift.trim().toUpperCase();
+  if (!SCALE_LETTERS.some((letter) => letter === normalized)) throw new Error("Selecione uma letra de escala de A a G.");
+  if (source === "demo") {
+    const driver = getDemoDrivers().find((item) => item.id === id);
+    if (!driver) throw new Error("Condutor não encontrado.");
+    const updated = { ...driver, default_shift: normalized, updated_at: new Date().toISOString() };
+    saveDemoDrivers(getDemoDrivers().map((item) => item.id === id ? updated : item));
+    return updated;
+  }
+  const { data, error } = await createClient().from("drivers").update({ default_shift: normalized }).eq("id", id).select().maybeSingle();
+  if (error) throw driverMutationError(error);
+  if (!data) throw new Error("Somente supervisores e administradores podem alterar o turno.");
+  await syncDriverSchedule(id, normalized);
   return data as Driver;
 }

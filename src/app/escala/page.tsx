@@ -16,6 +16,8 @@ import {
   ScheduleCellChange,
 } from "@/lib/services/schedule-service";
 import { Driver } from "@/types/database";
+import { useAuth } from "@/lib/auth-context";
+import { updateDriverShift, updateDriverScheduleTime, SCALE_LETTERS } from "@/lib/services/driver-service";
 import {
   AlertCircle,
   CalendarDays,
@@ -73,6 +75,8 @@ function getCodeCellClass(code: string, dirty: boolean) {
 }
 
 export default function EscalaPage() {
+  const { user } = useAuth();
+  const [savingShift, setSavingShift] = useState<string | null>(null);
   const today = new Date();
   const [month, setMonth] = useState(today.getMonth() + 1);
   const [year, setYear] = useState(today.getFullYear());
@@ -97,6 +101,23 @@ export default function EscalaPage() {
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
   const daysInMonth = new Date(year, month, 0).getDate();
+  const canManageShifts = source === "demo" || user?.role === "admin" || user?.role === "supervisor";
+
+  async function changeShift(driverId: string, shift: string) {
+    if (!canManageShifts || savingShift) return;
+    setSavingShift(driverId);
+    setError(null);
+    setSuccess(null);
+    try {
+      const updated = await updateDriverShift(driverId, shift, source);
+      setDrivers((current) => current.map((driver) => driver.id === updated.id ? updated : driver));
+      setSuccess("Turno salvo na Escala Mensal e no cadastro de Condutores.");
+    } catch (reason) {
+      setError((reason as Error).message);
+    } finally {
+      setSavingShift(null);
+    }
+  }
   const days = useMemo(() => Array.from({ length: daysInMonth }, (_, index) => index + 1), [daysInMonth]);
 
   useEffect(() => {
@@ -443,13 +464,18 @@ export default function EscalaPage() {
     });
 
     const pending = [...pendingByCell.values()];
-    if (!pending.length) return;
+    if (!pending.length && !normalizedTimes.size) return;
 
     setSaving(true);
     setError(null);
     setSuccess(null);
     try {
-      await saveMonthlySchedule(month, year, region, pending, source);
+      for (const [driverId, time] of normalizedTimes) {
+        if (time === "VF") continue;
+        const updated = await updateDriverScheduleTime(driverId, time, source);
+        setDrivers((current) => current.map((driver) => driver.id === driverId ? updated : driver));
+      }
+      if (pending.length) await saveMonthlySchedule(month, year, region, pending, source);
       setChanges({});
       setTimeChanges({});
       setScheduleTimes((current) => ({ ...current, ...Object.fromEntries(normalizedTimes) }));
@@ -827,9 +853,20 @@ export default function EscalaPage() {
                           </div>
                         </td>
                         <td className="sticky left-[294px] z-20 bg-white group-hover:bg-[#e2f0d9] p-1 text-center border-r border-b border-slate-300">
-                          <span className={getShiftBadge(driver.default_shift)}>
+                          {canManageShifts ? <select
+                            aria-label={`Turno de ${driver.name}`}
+                            value={driver.default_shift || ""}
+                            disabled={savingShift !== null || loading || saving}
+                            onChange={(event) => void changeShift(driver.id, event.target.value)}
+                            title="Salva o turno também no cadastro de Condutores"
+                            className={getShiftBadge(driver.default_shift)}
+                          >
+                            <option value="" disabled>—</option>
+                            {driver.default_shift && !SCALE_LETTERS.some((letter) => letter === driver.default_shift) && <option value={driver.default_shift}>{driver.default_shift}</option>}
+                            {SCALE_LETTERS.map((letter) => <option key={letter} value={letter}>{letter}</option>)}
+                          </select> : <span className={getShiftBadge(driver.default_shift)}>
                             {driver.default_shift || "—"}
-                          </span>
+                          </span>}
                         </td>
                         <td
                           className={`sticky left-[364px] z-20 bg-white group-hover:bg-[#e2f0d9] p-0 text-center border-r border-b border-slate-300 shadow-[2px_0_4px_-1px_rgba(0,0,0,0.08)] font-mono font-bold text-slate-800 ${
