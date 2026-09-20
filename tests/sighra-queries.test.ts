@@ -43,6 +43,13 @@ test("placa e local seguem o veiculo e as coordenadas da macro com suporte a pon
     assert.throws(() => parseResult({ macros: [{ ...event, ...changed }], last_end: null }, "30049", "2026-08-18"));
   }
 });
+test("sequência de jornada preserva IDs e ordem cronológica", () => {
+  const start = { ...end, id: "macro-start", name: "INÍCIO DE JORNADA", gps_at: "2026-09-16 04:30:00" };
+  const finish = { ...end, id: "macro-end", gps_at: "2026-09-17 00:20:00" };
+  const result = parseResult({ macros: [], last_end: finish, journey_events: [finish, start] }, "30049", "2026-08-18");
+  assert.deepEqual(result.journey_events?.map(item => item.id), ["macro-start", "macro-end"]);
+  assert.throws(() => parseResult({ macros: [], last_end: null, journey_events: Array(41).fill(start) }, "30049", "2026-08-18"));
+});
 test("endpoints da fila bloqueiam chamada sem chave antes de acessar dados", async () => {
   const request = () => new Request("http://localhost/api/integracoes/sighra/tarefas", { method: "POST" });
   assert.equal((await POST(request())).status, 401);

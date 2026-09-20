@@ -35,4 +35,4 @@ function Harness() {
     locations={[]} saveState={{ status: "idle" }} />
     <pre id="writes">{JSON.stringify(writes)}</pre></>;
 }
-createRoot(document.getElementById("root")!).render(location.pathname === "/page" ? <AcionamentoPage /> : <Harness />);
+createRoot(document.getElementById("root")!).render(["/page", "/journey"].includes(location.pathname) ? <AcionamentoPage /> : <Harness />);

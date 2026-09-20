@@ -12,6 +12,8 @@ export default defineConfig([
   },
   globalIgnores([
     ".next/**",
+    ".next-sighra-test/**",
+    ".next-optimized-local*/**",
     "out/**",
     "build/**",
     "next-env.d.ts",

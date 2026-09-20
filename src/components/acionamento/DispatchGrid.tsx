@@ -1,11 +1,12 @@
 "use client";
 
-import React, { useEffect, useState, useMemo, useRef } from "react";
+import React, { startTransition, useEffect, useState, useMemo, useRef } from "react";
 import { DispatchRowModel } from "@/types/domain";
 import { DispatchStatus, CargoStatus } from "@/types/database";
 import { normalizeClockTime } from "@/lib/calculations/jornada";
+import { isJourneyEligible } from "@/lib/sighra/journey";
 import { captureGridSelection, DispatchGridSelection, gridSelectionBounds, resolveGridSelectionRows } from "@/lib/editing/dispatch-grid-selection";
-import { ArrowUpDown, Bell, BellRing, Check, ChevronDown, Columns3, Copy, Clock, Eye, EyeOff, Maximize2, Minimize2, Minus, Plus, Search, Trash2, Volume2, VolumeX, X } from "lucide-react";
+import { ArrowUpDown, Bell, BellRing, Check, ChevronDown, Columns3, Copy, Clock, Eye, EyeOff, Loader2, Maximize2, Minimize2, Minus, Plus, RefreshCw, Search, Trash2, Volume2, VolumeX, X } from "lucide-react";
 
 interface DispatchGridProps {
   dispatches: DispatchRowModel[];
@@ -26,6 +27,9 @@ interface DispatchGridProps {
   reminderVolume?: number;
   onReminderVolumeChange?: (volume: number) => void;
   onPreviewReminderSound?: () => void;
+  journeyPilotEnabled?: boolean;
+  journeyRequestingId?: string | null;
+  onRequestJourney?: (dispatchId: string) => void;
 }
 
 interface GridHistoryChange {
@@ -123,7 +127,7 @@ function EditableLocationCell({ value, options, label, onCommit, onDraftChange }
           const next = event.target.value.toUpperCase();
           editedRef.current = true;
           setDraft(next);
-          onDraftChange(next);
+          startTransition(() => onDraftChange(next));
         }}
         onBlur={() => {
           commit();
@@ -219,7 +223,7 @@ function EditableTextCell({ value, placeholder, className, onCommit, onDraftChan
       onChange={(event) => {
         editedRef.current = true;
         setDraft(event.target.value);
-        onDraftChange(event.target.value);
+        startTransition(() => onDraftChange(event.target.value));
       }}
       onBlur={commit}
       onKeyDown={(event) => {
@@ -410,7 +414,7 @@ function EditableStatusCell({ value, listId, className, onCommit, onDraftChange 
         const next = event.target.value.toUpperCase();
         editedRef.current = true;
         setDraft(next);
-        onDraftChange(next);
+        startTransition(() => onDraftChange(next));
       }}
       onBlur={commit}
       onKeyDown={(event) => {
@@ -448,6 +452,9 @@ export function DispatchGrid({
   reminderVolume = 65,
   onReminderVolumeChange,
   onPreviewReminderSound,
+  journeyPilotEnabled = false,
+  journeyRequestingId = null,
+  onRequestJourney,
 }: DispatchGridProps) {
   const [copiedCell, setCopiedCell] = useState<string | null>(null);
   const [sortField, setSortField] = useState<SortField>("schedule_time");
@@ -1727,6 +1734,21 @@ export function DispatchGrid({
                           {rowEditors[0]}{rowEditors.length > 1 ? ` +${rowEditors.length - 1}` : ""}
                         </span>
                       )}
+                      {journeyPilotEnabled && isJourneyEligible(row.dispatch_status) && (
+                        <button
+                          type="button"
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            onRequestJourney?.(row.id);
+                          }}
+                          disabled={Boolean(journeyRequestingId) || readOnly}
+                          className="shrink-0 border border-[#70ad8f] bg-[#e2f0d9] p-0.5 text-[#185c37] hover:bg-[#c6e0b4] disabled:cursor-not-allowed disabled:opacity-50"
+                          title={`Buscar jornada SIGhRa de ${row.driver.name}`}
+                          aria-label={`Buscar jornada SIGhRa de ${row.driver.name}`}
+                        >
+                          {journeyRequestingId === row.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5" />}
+                        </button>
+                      )}
                       <button
                         type="button"
                         onClick={(event) => {
@@ -1896,7 +1918,7 @@ export function DispatchGrid({
                       onChange={(e) => {
                         const value = e.target.value.toUpperCase();
                         setFleetDrafts((prev) => ({ ...prev, [row.id]: value }));
-                        onDraftRow(row.id, { fleet_code: value });
+                        startTransition(() => onDraftRow(row.id, { fleet_code: value }));
                       }}
                       onBlur={(e) => {
                         const value = e.target.value.trim().toUpperCase();

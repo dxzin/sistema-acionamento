@@ -7,7 +7,7 @@ import { Sidebar } from "@/components/layout/Sidebar";
 import { DispatchStatsBar } from "@/components/acionamento/DispatchStatsBar";
 import { DispatchFilters } from "@/components/acionamento/DispatchFilters";
 import { DispatchGrid } from "@/components/acionamento/DispatchGrid";
-import { dispatchService } from "@/lib/services/dispatch-service";
+import { dispatchService, SessionExpiredError } from "@/lib/services/dispatch-service";
 import { createClient } from "@/lib/supabase/client";
 import { useAuth } from "@/lib/auth-context";
 import { DispatchRowModel, DispatchFilterOptions, DispatchSummaryKPIs } from "@/types/domain";
@@ -15,6 +15,7 @@ import { DailySheet, Location, OperatorPresence } from "@/types/database";
 import { currentDateInBrasilia } from "@/lib/dates/operational-date";
 import { matchesDispatchStatus } from "@/lib/calculations/continuity";
 import { OperationalAlerts } from "@/components/acionamento/OperationalAlerts";
+import { JourneyPilotDialog } from "@/components/acionamento/JourneyPilotDialog";
 import { summarizeOperationalAlerts } from "@/lib/calculations/operational-alerts";
 import { BellRing, Clock3, X } from "lucide-react";
 import {
@@ -37,16 +38,30 @@ import {
   resolveDispatchSnapshotSuccess,
   stageDispatchChanges,
 } from "@/lib/editing/dispatch-edit-state";
+import {
+  buildJourneyPreview,
+  isJourneyEligible,
+  resolveJourneyForRecord,
+  resolveJourneyRecord,
+  snapshotJourneyRecord,
+  type JourneyPreview,
+  type JourneyRecordSnapshot,
+} from "@/lib/sighra/journey";
+import { JOURNEY_FEATURE } from "@/lib/sighra/journey-config";
+import { createJourneyProvider, type JourneyProviderResult } from "@/lib/sighra/journey-provider";
+import { recordJourneyAudit } from "@/lib/sighra/journey-audit";
 
 type CellSaveStatus = "pending" | "saving" | "saved" | "error";
+type JourneyDialogState = { requested: JourneyRecordSnapshot; result: JourneyProviderResult; preview: JourneyPreview };
 
 function AcionamentoContent() {
-  const { user } = useAuth();
+  const { user, logout } = useAuth();
   const router = useRouter();
   const searchParams = useSearchParams();
   const [dispatches, setDispatches] = useState<DispatchRowModel[]>([]);
   const [locations, setLocations] = useState<Location[]>([]);
   const [dailySheet, setDailySheet] = useState<DailySheet | null>(null);
+  const [dailySheets, setDailySheets] = useState<DailySheet[]>([]);
   const [changingSheetStatus, setChangingSheetStatus] = useState(false);
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -73,6 +88,13 @@ function AcionamentoContent() {
   const [reminderVolume, setReminderVolume] = useState(DEFAULT_REMINDER_VOLUME);
   const [reminderVolumeReady, setReminderVolumeReady] = useState(false);
   const [reminderNow, setReminderNow] = useState(() => Date.now());
+  const journeyProvider = useMemo(() => createJourneyProvider(), []);
+  const [journeyRequestingId, setJourneyRequestingId] = useState<string | null>(null);
+  const [journeyDialog, setJourneyDialog] = useState<JourneyDialogState | null>(null);
+  const [journeySaving, setJourneySaving] = useState(false);
+  const [journeyError, setJourneyError] = useState<string | null>(null);
+  const journeyRequestRef = useRef(0);
+  const journeyAbortRef = useRef<AbortController | null>(null);
 
   // Filtros
   const [filters, setFilters] = useState<DispatchFilterOptions>({
@@ -87,6 +109,8 @@ function AcionamentoContent() {
   useEffect(() => {
     dispatchesRef.current = dispatches;
   }, [dispatches]);
+
+  useEffect(() => () => journeyAbortRef.current?.abort(), []);
 
   useEffect(() => {
     if (!Object.values(cellSaveStates).some((state) => state.status === "saved")) return;
@@ -257,11 +281,12 @@ function AcionamentoContent() {
     setLoadError(null);
     try {
       const dispatchesData = await dispatchService.getDispatchesForSheet(filters.date, filters.region);
-      const [locs, sheet, syncToken] = await Promise.all([
+      const [locs, sheets, syncToken] = await Promise.all([
         dispatchService.getLocations(),
-        dispatchService.getDailySheet(filters.date, filters.region),
+        dispatchService.getDailySheets(filters.date, filters.region),
         dispatchService.getDailySheetSyncToken(filters.date, filters.region),
       ]);
+      const sheet = filters.region === "ALL" ? null : sheets[0] || null;
 
       // Uma resposta de uma data/região antiga nunca pode sobrescrever a
       // consulta mais recente quando o operador navega rapidamente.
@@ -274,6 +299,7 @@ function AcionamentoContent() {
         setDispatches((current) => mergeServerDispatches(dispatchesData, current, nextPending, editingDispatchIdRef.current));
         setLocations(locs);
         setDailySheet(sheet);
+        setDailySheets(sheets);
         syncTokenRef.current = syncToken;
       }
     } catch (error) {
@@ -282,6 +308,7 @@ function AcionamentoContent() {
         if (foreground && !hasPendingDispatchEdits(pendingEditsRef.current)) {
           setDispatches([]);
           setDailySheet(null);
+          setDailySheets([]);
         }
         setLoadError(error instanceof Error ? error.message : "Não foi possível carregar a folha diária.");
       }
@@ -292,6 +319,8 @@ function AcionamentoContent() {
       }
     }
   }, [filters.date, filters.region]);
+
+  const selectedSheetsOpen = dailySheets.length > 0 && dailySheets.every((sheet) => sheet.status === "OPEN");
 
   useEffect(() => {
     loadData();
@@ -333,9 +362,20 @@ function AcionamentoContent() {
   }, [reminderVolume, reminderVolumeReady, user?.id]);
 
   useEffect(() => {
-    const interval = window.setInterval(() => setReminderNow(Date.now()), 1000);
-    return () => window.clearInterval(interval);
-  }, []);
+    const now = Date.now();
+    const nextReminderAt = reminders
+      .map((reminder) => Date.parse(reminder.scheduledAt))
+      .filter((timestamp) => Number.isFinite(timestamp) && timestamp > now)
+      .sort((a, b) => a - b)[0];
+    if (!nextReminderAt) return;
+    // Atualiza somente quando o próximo lembrete vence. A grade possui mais de
+    // mil controles e não deve ser renderizada novamente a cada segundo.
+    const timer = window.setTimeout(
+      () => setReminderNow(Date.now()),
+      Math.min(nextReminderAt - now + 50, 2_147_000_000)
+    );
+    return () => window.clearTimeout(timer);
+  }, [reminders, reminderNow]);
 
   const unlockReminderSound = useCallback(() => {
     try {
@@ -433,8 +473,22 @@ function AcionamentoContent() {
         const presence = await dispatchService.touchAndGetOperatorPresence(
           filters.date, filters.region, activeDispatchId, user.name, user.email
         );
-        if (active) setOnlineOperators(presence);
+        if (active) setOnlineOperators((current) => {
+          const unchanged = current.length === presence.length && current.every((operator, index) => {
+            const next = presence[index];
+            return next && operator.user_id === next.user_id && operator.display_name === next.display_name &&
+              operator.email === next.email && operator.active_dispatch_id === next.active_dispatch_id;
+          });
+          return unchanged ? current : presence;
+        });
       } catch (error) {
+        if (error instanceof SessionExpiredError) {
+          if (active) {
+            setOnlineOperators([]);
+            void logout();
+          }
+          return;
+        }
         console.warn("Presença dos operadores temporariamente indisponível:", error);
       } finally {
         running = false;
@@ -446,7 +500,7 @@ function AcionamentoContent() {
       active = false;
       window.clearInterval(interval);
     };
-  }, [activeDispatchId, filters.date, filters.region, user]);
+  }, [activeDispatchId, filters.date, filters.region, logout, user]);
 
   useEffect(() => {
     const userId = user?.id;
@@ -549,23 +603,6 @@ function AcionamentoContent() {
     return () => window.clearInterval(interval);
   }, [filters.date, filters.region, loadData, syncStatus]);
 
-  // Recalcular periodicamente as jornadas em andamento (tempo real a cada 10s)
-  useEffect(() => {
-    const interval = setInterval(() => {
-      setDispatches((prev) =>
-        prev.map((item) => {
-          if (item.entry_time && !item.exit_time) {
-            return {
-              ...item,
-            };
-          }
-          return item;
-        })
-      );
-    }, 10000);
-    return () => clearInterval(interval);
-  }, []);
-
   const handleFilterChange = async (newFilters: Partial<DispatchFilterOptions>) => {
     const changesSheet = (newFilters.date && newFilters.date !== filters.date) ||
       (newFilters.region && newFilters.region !== filters.region);
@@ -584,23 +621,23 @@ function AcionamentoContent() {
     }
   };
 
-  const handleUpdateRow = async (id: string, updates: Partial<DispatchRowModel>) => {
-    if (dailySheet?.status !== "OPEN") {
+  const handleUpdateRow = useCallback(async (id: string, updates: Partial<DispatchRowModel>) => {
+    if (!selectedSheetsOpen) {
       throw new Error("Esta folha está fechada e disponível somente para consulta.");
     }
     stageLocalEdits(id, updates);
     const saved = await flushPendingEdits();
     if (!saved) throw new Error("A alteração continua pendente e não foi confirmada pelo banco.");
-  };
+  }, [flushPendingEdits, selectedSheetsOpen, stageLocalEdits]);
 
-  const handleUpdateBatch = async (updatesByRow: Map<string, Partial<DispatchRowModel>>) => {
-    if (dailySheet?.status !== "OPEN") {
+  const handleUpdateBatch = useCallback(async (updatesByRow: Map<string, Partial<DispatchRowModel>>) => {
+    if (!selectedSheetsOpen) {
       throw new Error("Esta folha está fechada e disponível somente para consulta.");
     }
     for (const [id, updates] of updatesByRow) stageLocalEdits(id, updates);
     const saved = await flushPendingEdits();
     if (!saved) throw new Error("Parte da seleção continua pendente e não foi confirmada pelo banco.");
-  };
+  }, [flushPendingEdits, selectedSheetsOpen, stageLocalEdits]);
 
   const handleManualRefresh = async () => {
     const pendingHasError = Object.values(pendingEditsRef.current).some((row) =>
@@ -610,6 +647,124 @@ function AcionamentoContent() {
     if (hasPendingDispatchEdits(pendingEditsRef.current) && !(await flushPendingEdits())) return;
     await loadData(true);
   };
+
+  const auditJourney = useCallback((
+    record: JourneyRecordSnapshot,
+    outcome: Parameters<typeof recordJourneyAudit>[0]["outcome"],
+    result?: JourneyProviderResult,
+    preview?: JourneyPreview,
+    reason?: string
+  ) => {
+    const pair = preview?.resolution.status === "safe" ? preview.resolution.pair : null;
+    return recordJourneyAudit({
+      recordId: record.recordId,
+      login: record.login,
+      operationalDate: record.operationalDate,
+      shift: record.shift,
+      status: record.status,
+      requestedAt: result?.requestedAt || new Date().toISOString(),
+      outcome,
+      result: preview?.resolution.status || null,
+      startTimestamp: pair?.start.occurredAt || null,
+      endTimestamp: pair?.end?.occurredAt || null,
+      startMacroId: pair?.start.id || null,
+      endMacroId: pair?.end?.id || null,
+      queryId: result?.queryId || null,
+      reason: reason || (preview?.resolution.status !== "safe" ? preview?.resolution.reasons.join(" ") : null),
+    }, journeyProvider.kind);
+  }, [journeyProvider]);
+
+  const requestJourney = useCallback(async (recordId: string) => {
+    const initialRow = dispatchesRef.current.find((row) => row.id === recordId);
+    if (!initialRow || !isJourneyEligible(initialRow.dispatch_status)) return;
+    if (!initialRow.driver.login_matricula?.trim()) {
+      setSaveState({ status: "error", message: "O condutor não possui login para consulta SIGhRa." });
+      return;
+    }
+    if (hasPendingDispatchEdits(pendingEditsRef.current) && !(await flushPendingEdits())) return;
+    const currentRow = dispatchesRef.current.find((row) => row.id === recordId);
+    if (!currentRow || !isJourneyEligible(currentRow.dispatch_status)) return;
+    const requested = snapshotJourneyRecord(currentRow, filters.date);
+    const requestNumber = ++journeyRequestRef.current;
+    journeyAbortRef.current?.abort();
+    const controller = new AbortController();
+    journeyAbortRef.current = controller;
+    setJourneyRequestingId(recordId);
+    setJourneyDialog(null);
+    setJourneyError(null);
+    void auditJourney(requested, "requested");
+    try {
+      const result = await journeyProvider.fetchJourneyEvents(requested, controller.signal);
+      if (requestNumber !== journeyRequestRef.current || controller.signal.aborted) return;
+      const resolved = resolveJourneyRecord(dispatchesRef.current, requested, filters.date);
+      if (!resolved.row) {
+        const preview = buildJourneyPreview(requested, {
+          status: "ambiguous", pair: null,
+          message: "Jornada não identificada com segurança. Necessária conferência manual.",
+          reasons: [resolved.reason || "Registro incompatível."],
+        });
+        setJourneyDialog({ requested, result, preview });
+        void auditJourney(requested, "blocked", result, preview, resolved.reason || undefined);
+        return;
+      }
+      const freshRecord = snapshotJourneyRecord(resolved.row, requested.operationalDate);
+      const preview = buildJourneyPreview(freshRecord, resolveJourneyForRecord(result.events, freshRecord));
+      setJourneyDialog({ requested, result, preview });
+      void auditJourney(freshRecord, preview.resolution.status === "safe" ? "preview" : "blocked", result, preview);
+    } catch (error) {
+      if (controller.signal.aborted) return;
+      const message = error instanceof Error ? error.message : "Não foi possível consultar a jornada.";
+      const result: JourneyProviderResult = { provider: journeyProvider.kind, requestedAt: new Date().toISOString(), queryId: "", events: [] };
+      const preview = buildJourneyPreview(requested, {
+        status: "ambiguous", pair: null,
+        message: "Jornada não identificada com segurança. Necessária conferência manual.",
+        reasons: [message],
+      });
+      setJourneyDialog({ requested, result, preview });
+      setJourneyError(message);
+      void auditJourney(requested, "failed", result, preview, message);
+    } finally {
+      if (requestNumber === journeyRequestRef.current) setJourneyRequestingId(null);
+    }
+  }, [auditJourney, filters.date, flushPendingEdits, journeyProvider]);
+
+  const cancelJourney = useCallback(() => {
+    if (journeyDialog) void auditJourney(journeyDialog.preview.record, "canceled", journeyDialog.result, journeyDialog.preview);
+    setJourneyDialog(null);
+    setJourneyError(null);
+  }, [auditJourney, journeyDialog]);
+
+  const applyJourney = useCallback(async () => {
+    if (!journeyDialog || journeySaving) return;
+    const resolved = resolveJourneyRecord(dispatchesRef.current, journeyDialog.requested, filters.date);
+    if (!resolved.row) {
+      setJourneyError(resolved.reason || "O registro original não pode mais ser alterado.");
+      return;
+    }
+    const freshRecord = snapshotJourneyRecord(resolved.row, journeyDialog.requested.operationalDate);
+    const preview = buildJourneyPreview(freshRecord, resolveJourneyForRecord(journeyDialog.result.events, freshRecord));
+    setJourneyDialog((current) => current ? { ...current, preview } : current);
+    if (!preview.canApply) {
+      setJourneyError(preview.conflicts.length
+        ? "A aplicação foi bloqueada porque existe valor manual divergente."
+        : "A jornada não possui alteração segura para aplicar.");
+      void auditJourney(freshRecord, "blocked", journeyDialog.result, preview, "Revalidação anterior à gravação bloqueou a aplicação.");
+      return;
+    }
+    setJourneySaving(true);
+    setJourneyError(null);
+    try {
+      await handleUpdateRow(freshRecord.recordId, preview.changes);
+      await auditJourney(freshRecord, "applied", journeyDialog.result, preview);
+      setJourneyDialog(null);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Não foi possível aplicar a jornada.";
+      setJourneyError(message);
+      void auditJourney(freshRecord, "failed", journeyDialog.result, preview, message);
+    } finally {
+      setJourneySaving(false);
+    }
+  }, [auditJourney, filters.date, handleUpdateRow, journeyDialog, journeySaving]);
 
   const handleToggleSheetStatus = async () => {
     if (!dailySheet || changingSheetStatus) return;
@@ -748,7 +903,7 @@ function AcionamentoContent() {
             onFilterChange={handleFilterChange}
             onRefresh={handleManualRefresh}
             isLoading={isLoading}
-            sheetStatus={dailySheet?.status || null}
+            sheetStatus={filters.region === "ALL" ? null : dailySheet?.status || null}
             onToggleSheetStatus={handleToggleSheetStatus}
             isChangingSheetStatus={changingSheetStatus}
             onlineOperators={onlineOperators}
@@ -770,14 +925,14 @@ function AcionamentoContent() {
           <DispatchGrid
             key={filters.region}
             dispatches={filteredDispatches}
-            showCity={filters.region === "UBJP"}
+            showCity={filters.region !== "SP"}
             onDraftRow={stageLocalEdits}
             onUpdateRow={handleUpdateRow}
             onUpdateBatch={handleUpdateBatch}
             locations={locations}
             saveState={saveState}
             cellSaveStates={cellSaveStates}
-            readOnly={dailySheet?.status !== "OPEN"}
+            readOnly={!selectedSheetsOpen}
             activeEditors={activeEditors}
             onActiveRowChange={setActiveDispatchId}
             onEditingRowChange={(id) => {
@@ -790,7 +945,21 @@ function AcionamentoContent() {
             reminderVolume={reminderVolume}
             onReminderVolumeChange={setReminderVolume}
             onPreviewReminderSound={previewReminderSound}
+            journeyPilotEnabled={JOURNEY_FEATURE.pilotEnabled}
+            journeyRequestingId={journeyRequestingId}
+            onRequestJourney={(id) => { void requestJourney(id); }}
           />
+          {journeyDialog && (
+            <JourneyPilotDialog
+              preview={journeyDialog.preview}
+              provider={journeyDialog.result.provider}
+              saving={journeySaving}
+              error={journeyError}
+              onApply={() => { void applyJourney(); }}
+              onCancel={cancelJourney}
+              onForceSearch={() => { const id = journeyDialog.requested.recordId; setJourneyDialog(null); void requestJourney(id); }}
+            />
+          )}
           {dueReminders.length > 0 && (
             <section className="dispatch-reminder-alert" role="alert" aria-live="assertive">
               <div className="dispatch-reminder-alert-icon"><BellRing aria-hidden="true" /></div>

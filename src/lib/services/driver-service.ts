@@ -20,6 +20,15 @@ export interface DriverCatalog {
 }
 
 const STORAGE_KEY = "sistema_acionamento_drivers";
+let atomicDriverMutationAvailable: boolean | null = null;
+
+type DriverChanges = Partial<DriverFormData>;
+
+type ScheduleEntrySnapshot = {
+  id: string;
+  shift_letter: string | null;
+  shift_time: string | null;
+};
 
 function hasSupabaseConfig() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -50,6 +59,93 @@ function driverMutationError(error: { code?: string; message: string }) {
     return new Error("Somente supervisores e administradores podem alterar cadastros de condutores.");
   }
   return new Error(error.message);
+}
+
+async function updateDriverAndFutureSchedule(
+  id: string,
+  changes: DriverChanges,
+  syncShift: boolean,
+  syncTime: boolean,
+): Promise<Driver> {
+  const supabase = createClient();
+
+  if (atomicDriverMutationAvailable !== false) {
+    const { data, error } = await supabase.rpc("update_driver_and_future_schedule", {
+      p_driver_id: id,
+      p_changes: changes,
+      p_sync_shift: syncShift,
+      p_sync_time: syncTime,
+    }).single();
+
+    if (!error && data) {
+      atomicDriverMutationAvailable = true;
+      return data as Driver;
+    }
+    if (error?.code !== "PGRST202") throw driverMutationError(error || { message: "O banco não confirmou a alteração do condutor." });
+    atomicDriverMutationAvailable = false;
+  }
+
+  // Compatibilidade enquanto a migration da função atômica ainda não foi aplicada.
+  // Mantém uma cópia dos valores para desfazer a primeira escrita caso a segunda falhe.
+  const { data: previous, error: previousError } = await supabase.from("drivers").select("*").eq("id", id).maybeSingle();
+  if (previousError) throw driverMutationError(previousError);
+  if (!previous) throw new Error("Condutor não encontrado ou sem permissão para alteração.");
+
+  const today = new Date();
+  const year = today.getFullYear();
+  const month = today.getMonth() + 1;
+  const { data: schedules, error: schedulesError } = await supabase
+    .from("monthly_schedules")
+    .select("id")
+    .or(`year.gt.${year},and(year.eq.${year},month.gte.${month})`);
+  if (schedulesError) throw new Error(`Não foi possível preparar a sincronização da escala: ${schedulesError.message}`);
+
+  const scheduleIds = (schedules || []).map((schedule) => schedule.id);
+  let entrySnapshots: ScheduleEntrySnapshot[] = [];
+  if (scheduleIds.length && (syncShift || syncTime)) {
+    const { data: entries, error: entriesError } = await supabase
+      .from("monthly_schedule_entries")
+      .select("id,shift_letter,shift_time")
+      .eq("driver_id", id)
+      .in("schedule_id", scheduleIds)
+      .or("shift_letter.is.null,shift_letter.neq.VF");
+    if (entriesError) throw new Error(`Não foi possível preparar a sincronização da escala: ${entriesError.message}`);
+    entrySnapshots = (entries || []) as ScheduleEntrySnapshot[];
+  }
+
+  const { data: updated, error: driverError } = await supabase.from("drivers").update(changes).eq("id", id).select().maybeSingle();
+  if (driverError) throw driverMutationError(driverError);
+  if (!updated) throw new Error("Somente supervisores e administradores podem alterar cadastros de condutores.");
+
+  if (!entrySnapshots.length) return updated as Driver;
+
+  const scheduleChanges = {
+    ...(syncShift ? { shift_letter: updated.default_shift } : {}),
+    ...(syncTime ? { shift_time: updated.default_start_time } : {}),
+  };
+  const { error: syncError } = await supabase
+    .from("monthly_schedule_entries")
+    .update(scheduleChanges)
+    .in("id", entrySnapshots.map((entry) => entry.id));
+  if (!syncError) return updated as Driver;
+
+  const previousDriver = previous as Driver;
+  const { error: rollbackDriverError } = await supabase.from("drivers").update({
+    name: previousDriver.name,
+    login_matricula: previousDriver.login_matricula,
+    base_id: previousDriver.base_id,
+    default_shift: previousDriver.default_shift,
+    default_start_time: previousDriver.default_start_time,
+    is_active: previousDriver.is_active,
+  }).eq("id", id);
+  const rollbackEntries = await Promise.all(entrySnapshots.map((entry) => supabase
+    .from("monthly_schedule_entries")
+    .update({ shift_letter: entry.shift_letter, shift_time: entry.shift_time })
+    .eq("id", entry.id)));
+  const rollbackFailed = Boolean(rollbackDriverError || rollbackEntries.some((result) => result.error));
+  throw new Error(rollbackFailed
+    ? `A sincronização da escala falhou e o banco não confirmou a reversão. Recarregue os dados antes de continuar: ${syncError.message}`
+    : `A alteração não foi concluída e foi desfeita: ${syncError.message}`);
 }
 
 export async function loadDriverCatalog(): Promise<DriverCatalog> {
@@ -94,26 +190,7 @@ export async function updateDriver(id: string, input: DriverFormData, source: Dr
     return updated;
   }
 
-  const { data, error } = await createClient().from("drivers").update(input).eq("id", id).select().maybeSingle();
-  if (error) throw driverMutationError(error);
-  if (!data) throw new Error("Somente supervisores e administradores podem alterar cadastros de condutores.");
-  await syncDriverSchedule(id, input.default_shift, input.default_start_time);
-  return data as Driver;
-}
-
-async function syncDriverSchedule(id: string, shift: string, time?: string) {
-  const supabase = createClient();
-  const today = new Date();
-  const year = today.getFullYear();
-  const month = today.getMonth() + 1;
-  const { data: schedules, error: schedulesError } = await supabase.from("monthly_schedules").select("id").or(`year.gt.${year},and(year.eq.${year},month.gte.${month})`);
-  if (schedulesError) throw new Error(`Cadastro salvo, mas não foi possível sincronizar a escala: ${schedulesError.message}`);
-  if (!schedules?.length) return;
-  const { error } = await supabase.from("monthly_schedule_entries")
-    .update({ shift_letter: shift, ...(time ? { shift_time: time } : {}) })
-    .eq("driver_id", id).in("schedule_id", schedules.map((schedule) => schedule.id))
-    .or("shift_letter.is.null,shift_letter.neq.VF");
-  if (error) throw new Error(`Cadastro salvo, mas não foi possível sincronizar a escala: ${error.message}`);
+  return updateDriverAndFutureSchedule(id, input, true, true);
 }
 
 export async function updateDriverScheduleTime(id: string, time: string, source: DriverCatalog["source"]): Promise<Driver> {
@@ -125,11 +202,7 @@ export async function updateDriverScheduleTime(id: string, time: string, source:
     saveDemoDrivers(getDemoDrivers().map((item) => item.id === id ? updated : item));
     return updated;
   }
-  const { data, error } = await createClient().from("drivers").update({ default_start_time: `${time}:00` }).eq("id", id).select().maybeSingle();
-  if (error) throw driverMutationError(error);
-  if (!data) throw new Error("Somente supervisores e administradores podem alterar o horário do cadastro.");
-  await syncDriverSchedule(id, data.default_shift, `${time}:00`);
-  return data as Driver;
+  return updateDriverAndFutureSchedule(id, { default_start_time: `${time}:00` }, false, true);
 }
 
 export async function updateDriverShift(id: string, shift: string, source: DriverCatalog["source"]): Promise<Driver> {
@@ -142,9 +215,5 @@ export async function updateDriverShift(id: string, shift: string, source: Drive
     saveDemoDrivers(getDemoDrivers().map((item) => item.id === id ? updated : item));
     return updated;
   }
-  const { data, error } = await createClient().from("drivers").update({ default_shift: normalized }).eq("id", id).select().maybeSingle();
-  if (error) throw driverMutationError(error);
-  if (!data) throw new Error("Somente supervisores e administradores podem alterar o turno.");
-  await syncDriverSchedule(id, normalized);
-  return data as Driver;
+  return updateDriverAndFutureSchedule(id, { default_shift: normalized }, true, false);
 }

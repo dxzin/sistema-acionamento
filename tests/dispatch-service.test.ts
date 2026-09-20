@@ -2,9 +2,17 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   dispatchService,
+  isExpiredJwtError,
   isDispatchExcludedScaleCode,
   isDriverActiveForDispatch,
+  regionsForDispatchSelection,
 } from "../src/lib/services/dispatch-service";
+
+test("reconhece expiração de JWT sem confundir erros operacionais", () => {
+  assert.equal(isExpiredJwtError({ message: "JWT expired" }), true);
+  assert.equal(isExpiredJwtError({ message: "token expirado" }), true);
+  assert.equal(isExpiredJwtError({ message: "DAILY_SHEET_CLOSED" }), false);
+});
 
 test("F, FE, AF, DES e DESL não entram no acionamento", () => {
   for (const code of ["F", "FE", "AF", "DES", "DESL", " af ", " des ", " desl "]) {
@@ -20,6 +28,12 @@ test("condutor inativo não entra no acionamento", () => {
   assert.equal(isDriverActiveForDispatch({ is_active: true }), true);
   assert.equal(isDriverActiveForDispatch({ is_active: false }), false);
   assert.equal(isDriverActiveForDispatch(undefined), false);
+});
+
+test("Todas as Operações consulta conjuntamente São Paulo e Minas Gerais", () => {
+  assert.deepEqual(regionsForDispatchSelection("ALL"), ["SP", "UBJP"]);
+  assert.deepEqual(regionsForDispatchSelection("SP"), ["SP"]);
+  assert.deepEqual(regionsForDispatchSelection("UBJP"), ["UBJP"]);
 });
 
 test("local digitado livremente é resolvido e marcado como manual", async () => {

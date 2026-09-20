@@ -7,7 +7,6 @@ import { macroLocation, macroMapUrl } from "@/lib/sighra/queries";
 import type { SighraMacro } from "@/lib/sighra/queries";
 
 type Job = { id: string; login: string; status: string; created_at: string; since_date: string; result: SighraResult | null; error: string | null };
-type Preview = { condutor: string; data: string; regiao: string; entrada: string | null; saida_atual: string | null; saida_sighra: string; updated_at: string };
 const formatDate = (value: string) => `${value.slice(8, 10)}/${value.slice(5, 7)}/${value.slice(0, 4)}`;
 const formatTimestamp = (value: string) => `${formatDate(value)} ${value.slice(11)}`;
 function MacroPlace({ macro }: { macro: SighraMacro }) {
@@ -29,11 +28,6 @@ export default function SighraPage() {
   const [job, setJob] = useState<Job | null>(null);
   const [requesting, setRequesting] = useState(false);
   const [error, setError] = useState("");
-  const [date, setDate] = useState("");
-  const [region, setRegion] = useState("SP");
-  const [preview, setPreview] = useState<Preview | null>(null);
-  const [saving, setSaving] = useState(false);
-  const [success, setSuccess] = useState("");
   const waiting = job?.status === "queued" || job?.status === "running";
   const jobId = job?.id, jobStatus = job?.status, jobCreatedAt = job?.created_at;
 
@@ -51,7 +45,7 @@ export default function SighraPage() {
         const data: Job = await responseJson(await fetch(`/api/integracoes/sighra/consultas?id=${jobId}`, { cache: "no-store", signal: controller.signal }));
         if (controller.signal.aborted) return;
         setJob(data);
-        if (data.status === "completed") { setDate(data.result?.last_end?.gps_at.slice(0, 10) ?? ""); setError(""); }
+        if (data.status === "completed") setError("");
         if (data.status === "failed" || data.status === "expired") setError(data.error || "A consulta falhou.");
         if (["queued", "running"].includes(data.status)) timer = setTimeout(() => { void poll(); }, 2000);
       } catch (e) {
@@ -64,7 +58,7 @@ export default function SighraPage() {
 
   async function consult(event: FormEvent) {
     event.preventDefault();
-    setRequesting(true); setError(""); setSuccess(""); setPreview(null); setJob(null); setDate("");
+    setRequesting(true); setError(""); setJob(null);
     try {
       const data = await responseJson(await fetch("/api/integracoes/sighra/consultas", {
         method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ login: login.trim() }),
@@ -72,25 +66,6 @@ export default function SighraPage() {
       setJob(data);
     } catch (e) { setError((e as Error).message); }
     finally { setRequesting(false); }
-  }
-  async function checkSheet() {
-    if (!job) return;
-    setSaving(true); setError(""); setSuccess(""); setPreview(null);
-    try {
-      setPreview(await responseJson(await fetch(`/api/integracoes/sighra/preenchimento?${new URLSearchParams({ consulta: job.id, data: date, regiao: region })}`, { cache: "no-store" })));
-    } catch (e) { setError((e as Error).message); }
-    finally { setSaving(false); }
-  }
-  async function applyExit() {
-    if (!job || !preview) return;
-    setSaving(true); setError("");
-    try {
-      await responseJson(await fetch("/api/integracoes/sighra/preenchimento", { method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ consulta: job.id, data: preview.data, regiao: preview.regiao, updated_at: preview.updated_at }) }));
-      setSuccess(`Saída ${preview.saida_sighra.slice(0, 5)} salva para ${preview.condutor} em ${formatDate(preview.data)} (${preview.regiao}).`);
-      setPreview(null);
-    } catch (e) { setError((e as Error).message); setPreview(null); }
-    finally { setSaving(false); }
   }
   const end = job?.result?.last_end;
   return <div className="excel-shell flex-1 flex flex-col min-h-screen">
@@ -113,27 +88,18 @@ export default function SighraPage() {
           {job?.status === "running" ? "A ponte está consultando o Sighra…" : "Aguardando a ponte receber o pedido…"} A resposta aparecerá aqui automaticamente.
         </p>}
         {error && <p role="alert" className="border border-red-300 bg-red-50 text-red-900 p-3 text-sm">{error}</p>}
-        {success && <p role="status" className="border border-green-300 bg-green-50 text-green-900 p-3 text-sm">{success}</p>}
+        <p className="border border-emerald-300 bg-emerald-50 p-3 text-xs text-emerald-900">
+          Esta tela é somente para consulta. No modo piloto, o preenchimento seguro fica na planilha de Acionamento, na ação SIGhRa do condutor elegível.
+        </p>
         {job?.status === "completed" && <>
           <section className="border border-slate-300 bg-white text-slate-900 p-3 text-sm space-y-2">
             <h2 className="font-semibold">Último fim de jornada · login {job.login}</h2>
             {end ? <>
               <p className="text-lg font-semibold">{formatDate(end.gps_at)} às {end.gps_at.slice(11, 16)} <span className="text-xs font-normal">· {end.name}</span></p>
               <div className="text-xs space-y-1"><p>Placa: {end.plate || "Não informada"} · ID do veículo: {end.vehicle || "—"}</p><MacroPlace macro={end} /></div>
-              <p className="text-xs">Horário do GPS, com segundos descartados para o preenchimento. Esse evento não confirma que a jornada atual já terminou.</p>
-              <div className="flex flex-wrap items-end gap-2 pt-2">
-                <label className="text-xs">Dia da folha<input type="date" value={date} onChange={e => { setDate(e.target.value); setPreview(null); setSuccess(""); }} className="block border border-slate-400 px-2 py-1 mt-1" /></label>
-                <label className="text-xs">Região<select value={region} onChange={e => { setRegion(e.target.value); setPreview(null); setSuccess(""); }} className="block border border-slate-400 px-2 py-1 mt-1"><option>SP</option><option>UBJP</option><option>MS</option></select></label>
-                <button disabled={saving || !date} onClick={() => { void checkSheet(); }} className="border border-[#107c41] text-[#107c41] px-3 py-1 disabled:opacity-50">Conferir preenchimento</button>
-              </div>
-              {preview && <div className="border border-slate-300 bg-slate-50 p-3 space-y-2">
-                <p>{preview.condutor} · {formatDate(preview.data)} · {preview.regiao}</p>
-                <p>Entrada: {preview.entrada?.slice(0, 5) || "Vazia"}. Saída atual: {preview.saida_atual?.slice(0, 5) || "Vazia"} → <strong>{preview.saida_sighra.slice(0, 5)}</strong>.</p>
-                <p className="text-xs">Ao preencher, a jornada e a próxima previsão serão recalculadas e a alteração ficará no histórico.</p>
-                <button disabled={saving} onClick={() => { void applyExit(); }} className="bg-[#107c41] text-white px-3 py-1 disabled:opacity-50">{saving ? "Salvando…" : "Preencher saída"}</button>
-              </div>}
+              <p className="text-xs">Horário do GPS. Esse evento isolado não é usado para preencher a planilha e não confirma qual início ele encerrou.</p>
             </> : <p>Nenhum fim de jornada encontrado desde {formatDate(job.since_date)}. Isso não confirma que a jornada está aberta.</p>}
-            <p className="text-xs text-slate-600">Busca separada das últimas 10 macros: FIM DE JORNADA e FIM DE JORNADA GA, nos últimos 30 dias.</p>
+            <p className="text-xs text-slate-600">Consulta informativa das macros. O piloto da planilha usa a sequência completa de início e fim.</p>
           </section>
           <section className="border border-slate-300 bg-white text-slate-900 overflow-auto">
             <h2 className="font-semibold text-sm p-3">Últimas 10 macros · login {job.login}</h2>

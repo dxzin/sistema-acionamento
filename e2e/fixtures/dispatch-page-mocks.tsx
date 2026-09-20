@@ -2,11 +2,14 @@ import React from "react";
 import type { DispatchRowModel } from "../../src/types/domain";
 import type { DispatchFilterOptions } from "../../src/types/domain";
 
-let rows = [{ id: "joao", driver_id: "joao", daily_sheet_id: "local-sheet", dispatch_status: "",
+const journeyPage = location.pathname === "/journey";
+const manualConflict = new URLSearchParams(location.search).get("conflict") === "1";
+let rows = [{ id: "joao", driver_id: "joao", daily_sheet_id: "local-sheet", dispatch_status: journeyPage ? "ACIONADO" : "",
+  exit_time: manualConflict ? "09:20:00" : null,
   observations: "original", updated_at: "2026-09-19T10:00:00Z",
   driver: { id: "joao", name: "JOÃO", login_matricula: "1", default_start_time: "04:00:00" },
   base: { id: "base-ub", code: "UB", name: "UB" },
-}, { id: "gabriel", driver_id: "gabriel", daily_sheet_id: "local-sheet", dispatch_status: "",
+}, { id: "gabriel", driver_id: "gabriel", daily_sheet_id: "local-sheet", dispatch_status: journeyPage ? "BALDEIO" : "",
   observations: "original", updated_at: "2026-09-19T10:00:00Z",
   driver: { id: "gabriel", name: "GABRIEL", login_matricula: "2", default_start_time: "12:00:00" },
   base: { id: "base-lz", code: "LZ", name: "LZ" },
@@ -20,6 +23,7 @@ Object.assign(window, { pageFixture: {
   readIsWaiting: () => Boolean(releaseRead),
   releaseRead: () => { releaseRead?.(); releaseRead = undefined; },
   writes: () => writes,
+  reorder: () => { rows = [...rows].reverse(); token++; },
 } });
 
 export const dispatchService = {
@@ -33,6 +37,7 @@ export const dispatchService = {
   },
   getLocations: async () => [],
   getDailySheet: async () => ({ id: "local-sheet", status: "OPEN" }),
+  getDailySheets: async () => ([{ id: "local-sheet", status: "OPEN" }]),
   getDailySheetSyncToken: async () => String(token),
   touchAndGetOperatorPresence: async () => [],
   clearOperatorPresence: async () => undefined,
@@ -45,10 +50,11 @@ export const dispatchService = {
     return rows.filter(row => updates.some(item => item.id === row.id));
   },
 };
+export class SessionExpiredError extends Error {}
 const user = { id: "local-user", name: "Teste local", email: "local@example.test", role: "operator" };
 const params = new URLSearchParams();
 const router = { replace: () => undefined, push: () => undefined };
-export const useAuth = () => ({ user });
+export const useAuth = () => ({ user, logout: async () => undefined });
 export const useRouter = () => router;
 export const useSearchParams = () => params;
 export const Header = () => null;

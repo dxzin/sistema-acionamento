@@ -1,6 +1,7 @@
 import { createClient as createAdminClient } from "@supabase/supabase-js";
 import { createClient } from "@/lib/supabase/server";
 import { validDashboardToken } from "@/lib/api/schedule-dashboard";
+import { getLocalBridgeStatus, localBridgeTestEnabled, localBridgeToken, touchLocalBridge } from "@/lib/sighra/local-bridge";
 
 export const runtime = "nodejs";
 
@@ -15,7 +16,7 @@ function database() {
 }
 
 export async function POST(request: Request) {
-  const secret = process.env.SIGHRA_BRIDGE_TOKEN;
+  const secret = localBridgeTestEnabled() ? localBridgeToken() : process.env.SIGHRA_BRIDGE_TOKEN;
   if (!secret || secret.length < 32) return json({ erro: "Ponte não configurada." }, 503);
   if (!validDashboardToken(request.headers.get("authorization"), secret)) return json({ erro: "Credencial inválida." }, 401);
   let body;
@@ -24,8 +25,12 @@ export async function POST(request: Request) {
     if (raw.length > 1024) return json({ erro: "Mensagem muito grande." }, 413);
     body = JSON.parse(raw);
   } catch { return json({ erro: "Mensagem inválida." }, 400); }
-  if (!body || typeof body.database_ok !== "boolean" || (body.query_enabled !== undefined && typeof body.query_enabled !== "boolean") || Object.keys(body).some(key => !["database_ok", "query_enabled"].includes(key))) {
+  if (!body || typeof body.database_ok !== "boolean" || (body.query_enabled !== undefined && typeof body.query_enabled !== "boolean") || (body.simulation !== undefined && typeof body.simulation !== "boolean") || Object.keys(body).some(key => !["database_ok", "query_enabled", "simulation"].includes(key))) {
     return json({ erro: "Informe database_ok." }, 400);
+  }
+  if (localBridgeTestEnabled()) {
+    const status = touchLocalBridge(body.database_ok, body.query_enabled === true, body.simulation === true);
+    return json({ recebido_em: status.lastSeenAt, ambiente: status.simulation ? "simulacao-local" : "notebook-teste" });
   }
   const db = database();
   if (!db) return json({ erro: "Serviço não configurado." }, 503);
@@ -37,10 +42,25 @@ export async function POST(request: Request) {
   return json({ recebido_em: now });
 }
 
-export async function GET() {
+function localStatusResponse() {
+  const data = getLocalBridgeStatus();
+  if (!localBridgeToken()) return json({ status: "nao_configurada" });
+  const online = data.lastSeenAt && Date.now() - Date.parse(data.lastSeenAt) < 120_000;
+  return json({ status: !online ? "offline" : data.databaseOk ? "online" : "sem_banco",
+    ultimo_sinal: data.lastSeenAt, ultimo_acesso_banco: data.lastDatabaseOkAt, query_enabled: data.queryEnabled,
+    ambiente: data.simulation ? "simulacao-local" : "notebook-teste", simulation: data.simulation });
+}
+
+export async function GET(request: Request) {
+  if (localBridgeTestEnabled() && validDashboardToken(request.headers.get("authorization"), localBridgeToken() || "")) {
+    return localStatusResponse();
+  }
   const session = await createClient();
   const { data: { user }, error: authError } = await session.auth.getUser();
   if (authError || !user) return json({ erro: "Faça login." }, 401);
+  if (localBridgeTestEnabled()) {
+    return localStatusResponse();
+  }
   if (!process.env.SIGHRA_BRIDGE_TOKEN) return json({ status: "nao_configurada" });
   const db = database();
   if (!db) return json({ erro: "Serviço não configurado." }, 503);

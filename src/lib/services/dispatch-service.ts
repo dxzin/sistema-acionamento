@@ -22,6 +22,22 @@ const REGION_BASES: Record<string, string[]> = {
 };
 
 const DISPATCH_EXCLUDED_SCALE_CODES = new Set(["F", "FE", "AF", "DES", "DESL"]);
+const COMBINED_OPERATION_REGIONS = ["SP", "UBJP"] as const;
+
+export function regionsForDispatchSelection(region: string): readonly string[] {
+  return region === "ALL" ? COMBINED_OPERATION_REGIONS : [region];
+}
+
+export function isExpiredJwtError(error: { message?: string } | null | undefined): boolean {
+  return /(?:jwt|token).*(?:expired|expirado)|(?:expired|expirado).*(?:jwt|token)/i.test(error?.message || "");
+}
+
+export class SessionExpiredError extends Error {
+  constructor() {
+    super("Sua sessão expirou. Entre novamente para continuar.");
+    this.name = "SessionExpiredError";
+  }
+}
 
 export function isDispatchExcludedScaleCode(scaleCode: string | null | undefined): boolean {
   return DISPATCH_EXCLUDED_SCALE_CODES.has(String(scaleCode || "").trim().toUpperCase());
@@ -39,6 +55,23 @@ class DispatchService {
   private localBases: Base[] = [...INITIAL_BASES];
   private catalogLoadedAt = { bases: 0, locations: 0, vehicles: 0, drivers: 0 };
   private readonly catalogTtlMs = 30_000;
+
+  private async authenticatedQuery<T>(
+    operation: () => PromiseLike<{ data: T | null; error: { message: string } | null }>
+  ): Promise<T | null> {
+    let result = await operation();
+    if (isExpiredJwtError(result.error)) {
+      const supabase = createClient();
+      const { data: refreshed, error: refreshError } = await supabase.auth.refreshSession();
+      if (refreshError || !refreshed.session) throw new SessionExpiredError();
+      result = await operation();
+    }
+    if (result.error) {
+      if (isExpiredJwtError(result.error)) throw new SessionExpiredError();
+      throw new Error(result.error.message);
+    }
+    return result.data;
+  }
 
   private catalogIsFresh(key: "bases" | "locations" | "vehicles" | "drivers"): boolean {
     return Date.now() - this.catalogLoadedAt[key] < this.catalogTtlMs;
@@ -129,28 +162,45 @@ class DispatchService {
   }
 
   async getDailySheet(date: string, region: string = "SP"): Promise<DailySheet | null> {
+    if (region === "ALL") return null;
     if (!this.isSupabaseConfigured()) return null;
-    const normalizedRegion = region === "ALL" ? "SP" : region;
     const supabase = createClient();
     const { data, error } = await supabase
       .from("daily_sheets")
       .select("*")
       .eq("date", date)
-      .eq("region", normalizedRegion)
+      .eq("region", region)
       .maybeSingle();
     if (error) throw new Error(error.message);
     return data;
   }
 
+  async getDailySheets(date: string, region: string = "SP"): Promise<DailySheet[]> {
+    if (!this.isSupabaseConfigured()) return [];
+    const supabase = createClient();
+    const { data, error } = await supabase
+      .from("daily_sheets")
+      .select("*")
+      .eq("date", date)
+      .in("region", [...regionsForDispatchSelection(region)])
+      .order("region");
+    if (error) throw new Error(error.message);
+    return (data || []) as DailySheet[];
+  }
+
   async getDailySheetSyncToken(date: string, region: string = "SP"): Promise<string | null> {
     if (!this.isSupabaseConfigured()) return null;
-    const normalizedRegion = region === "ALL" ? "SP" : region;
+    if (region === "ALL") {
+      const tokens = await Promise.all(COMBINED_OPERATION_REGIONS.map((selectedRegion) =>
+        this.getDailySheetSyncToken(date, selectedRegion)
+      ));
+      return tokens.some((token) => token !== null) ? tokens.map((token) => token || "").join("|") : null;
+    }
     const supabase = createClient();
-    const { data, error } = await supabase.rpc("get_daily_sheet_sync_token", {
+    const data = await this.authenticatedQuery<string>(() => supabase.rpc("get_daily_sheet_sync_token", {
       p_date: date,
-      p_region: normalizedRegion,
-    });
-    if (error) throw new Error(error.message);
+      p_region: region,
+    }));
     return typeof data === "string" ? data : null;
   }
 
@@ -174,24 +224,22 @@ class DispatchService {
   ): Promise<void> {
     if (!this.isSupabaseConfigured()) return;
     const supabase = createClient();
-    const { error } = await supabase.rpc("touch_operator_presence", {
+    await this.authenticatedQuery(() => supabase.rpc("touch_operator_presence", {
       p_sheet_date: date,
-      p_region: region === "ALL" ? "SP" : region,
+      p_region: region,
       p_active_dispatch_id: activeDispatchId,
       p_display_name: displayName,
       p_email: email,
-    });
-    if (error) throw new Error(error.message);
+    }));
   }
 
   async getOperatorPresence(date: string, region: string): Promise<OperatorPresence[]> {
     if (!this.isSupabaseConfigured()) return [];
     const supabase = createClient();
-    const { data, error } = await supabase.rpc("list_operator_presence", {
+    const data = await this.authenticatedQuery<OperatorPresence[]>(() => supabase.rpc("list_operator_presence", {
       p_sheet_date: date,
-      p_region: region === "ALL" ? "SP" : region,
-    });
-    if (error) throw new Error(error.message);
+      p_region: region,
+    }));
     return (data || []) as OperatorPresence[];
   }
 
@@ -204,14 +252,13 @@ class DispatchService {
   ): Promise<OperatorPresence[]> {
     if (!this.isSupabaseConfigured()) return [];
     const supabase = createClient();
-    const { data, error } = await supabase.rpc("touch_and_list_operator_presence", {
+    const data = await this.authenticatedQuery<OperatorPresence[]>(() => supabase.rpc("touch_and_list_operator_presence", {
       p_sheet_date: date,
-      p_region: region === "ALL" ? "SP" : region,
+      p_region: region,
       p_active_dispatch_id: activeDispatchId,
       p_display_name: displayName,
       p_email: email,
-    });
-    if (error) throw new Error(error.message);
+    }));
     return (data || []) as OperatorPresence[];
   }
 
@@ -222,9 +269,18 @@ class DispatchService {
   }
 
   async getDispatchesForSheet(date: string, region: string = "SP"): Promise<DispatchRowModel[]> {
+    if (region === "ALL") {
+      const regionalRows = await Promise.all(COMBINED_OPERATION_REGIONS.map((selectedRegion) =>
+        this.getDispatchesForSheet(date, selectedRegion)
+      ));
+      const combined = [...new Map(regionalRows.flat().map((row) => [row.id, row])).values()];
+      this.localDispatches = combined;
+      return combined;
+    }
+
     let rawDispatches: Dispatch[] = [];
     const scheduleEntriesByDriver = new Map<string, { scale_code: string; shift_letter?: string | null; shift_time?: string | null }>();
-    const normalizedRegion = region === "ALL" ? "SP" : region;
+    const normalizedRegion = region;
 
     if (this.isSupabaseConfigured()) {
       try {
@@ -697,26 +753,27 @@ class DispatchService {
   }
 
   async createDispatch(dispatch: Omit<Dispatch, "id" | "created_at" | "updated_at">): Promise<Dispatch> {
-    const newRecord: Dispatch = {
-      ...dispatch,
-      id: `disp-${Date.now()}`,
-      created_at: new Date().toISOString(),
-      updated_at: new Date().toISOString(),
-    };
-
     if (this.isSupabaseConfigured()) {
       try {
         const supabase = createClient();
         const { data, error } = await supabase.from("dispatches").insert(dispatch).select().single();
-        if (!error && data) {
-          this.localDispatches.push(data);
-          return data;
-        }
+        if (error) throw this.translateMutationError(error.message);
+        if (!data) throw new Error("O banco não confirmou a criação do acionamento.");
+        this.localDispatches.push(data);
+        return data;
       } catch (e) {
-        console.warn("Falha ao criar despacho no Supabase:", e);
+        console.error("Falha ao criar despacho no Supabase:", e);
+        throw e;
       }
     }
 
+    const now = new Date().toISOString();
+    const newRecord: Dispatch = {
+      ...dispatch,
+      id: crypto.randomUUID(),
+      created_at: now,
+      updated_at: now,
+    };
     this.localDispatches.push(newRecord);
     return newRecord;
   }

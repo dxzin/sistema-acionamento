@@ -11,8 +11,17 @@ if ($config.OwnerSid -ne [Security.Principal.WindowsIdentity]::GetCurrent().User
     throw 'Execute com a mesma conta do Windows usada na configuracao.'
 }
 $uri = $null
-if (-not [Uri]::TryCreate($config.SistemaUrl, [UriKind]::Absolute, [ref]$uri) -or $uri.Scheme -ne 'https' -or $uri.UserInfo) {
-    throw 'URL HTTPS invalida.'
+$localTest = $config.LocalTest -eq $true
+$validUri = [Uri]::TryCreate($config.SistemaUrl, [UriKind]::Absolute, [ref]$uri) -and -not $uri.UserInfo
+$privateTestHost = $validUri -and ($uri.Host -match '^10\.' -or $uri.Host -match '^192\.168\.' -or $uri.Host -match '^172\.(1[6-9]|2[0-9]|3[01])\.')
+$validTestUri = $validUri -and $localTest -and $uri.Scheme -eq 'http' -and (
+    $uri.Host -in @('localhost', '127.0.0.1') -or ($config.AllowPrivateTestServer -eq $true -and $privateTestHost)
+)
+if (-not $validUri -or ($uri.Scheme -ne 'https' -and -not $validTestUri)) {
+    throw 'URL invalida. HTTP de teste aceita somente localhost ou um endereco privado autorizado da rede local.'
+}
+if ($localTest -and -not $validTestUri) {
+    throw 'A ponte de teste deve apontar exclusivamente para o servidor de teste autorizado.'
 }
 if (-not $config.Host -or -not $config.Database -or -not $config.User -or [int]$config.Port -lt 1 -or [int]$config.Port -gt 65535) {
     throw 'Configuracao do banco invalida.'
@@ -33,7 +42,7 @@ $handler.AllowAutoRedirect = $false
 $client = New-Object Net.Http.HttpClient($handler)
 $client.Timeout = [TimeSpan]::FromSeconds(10)
 $client.DefaultRequestHeaders.Authorization = New-Object Net.Http.Headers.AuthenticationHeaderValue('Bearer', ([Net.NetworkCredential]::new('', $token).Password))
-$logPath = Join-Path $PSScriptRoot 'ponte.log'
+$logPath = Join-Path $PSScriptRoot $(if ($localTest) { 'ponte-teste.log' } else { 'ponte.log' })
 function Write-PonteLog([string]$Message) {
     $line = '{0} - {1}' -f (Get-Date -Format 'yyyy-MM-dd HH:mm:ss'), $Message
     Write-Host $line
@@ -90,7 +99,15 @@ try {
                 if ($queue.job) {
                     Write-PonteLog ('Consultando macros do login ' + $queue.job.login)
                     $pendingAnswer = @{ id = $queue.job.id; lease_token = $queue.job.lease_token }
-                    try { $pendingAnswer['result'] = Get-SighraDriverMacros $config $password $queue.job }
+                    try {
+                        try { $pendingAnswer['result'] = Get-SighraDriverMacros $config $password $queue.job }
+                        catch {
+                            if ($_.Exception.Message -notmatch 'MySQL 2013') { throw }
+                            Write-PonteLog 'A conexao caiu durante a consulta; repetindo uma vez com uma nova conexao.'
+                            Start-Sleep -Seconds 2
+                            $pendingAnswer['result'] = Get-SighraDriverMacros $config $password $queue.job
+                        }
+                    }
                     catch {
                         $pendingAnswer['error'] = $true
                         Write-PonteLog 'Nao foi possivel consultar as macros no Sighra.'

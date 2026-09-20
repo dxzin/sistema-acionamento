@@ -7,7 +7,13 @@ import { fileURLToPath } from "node:url";
 const { outputFiles } = await build({
   entryPoints: ["e2e/fixtures/dispatch-grid.tsx"], bundle: true, write: false,
   platform: "browser", format: "iife", jsx: "automatic",
-  define: { "process.env.NODE_ENV": '"development"', "process.env.NEXT_PUBLIC_SUPABASE_URL": '""', "process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY": '""' },
+  define: {
+    "process.env.NODE_ENV": '"development"',
+    "process.env.NEXT_PUBLIC_SUPABASE_URL": '""',
+    "process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY": '""',
+    "process.env.NEXT_PUBLIC_SIGHRA_JOURNEY_MODE": '"pilot"',
+    "process.env.NEXT_PUBLIC_SIGHRA_JOURNEY_PROVIDER": '"mock"',
+  },
   plugins: [{ name: "local-page-mocks", setup(builder) {
     builder.onResolve({ filter: /^(next\/navigation|@\/lib\/(auth-context|services\/dispatch-service)|@\/components\/(layout\/(Header|Sidebar)|acionamento\/DispatchFilters))$/ }, () => ({
       path: fileURLToPath(new URL("dispatch-page-mocks.tsx", import.meta.url)),

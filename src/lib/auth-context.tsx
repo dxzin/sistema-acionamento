@@ -1,6 +1,6 @@
 "use client";
 
-import React, { createContext, useContext, useEffect, useState } from "react";
+import React, { createContext, useCallback, useContext, useEffect, useState } from "react";
 import { Profile, UserRole } from "@/types/database";
 import { createClient } from "./supabase/client";
 import { usePathname, useRouter } from "next/navigation";
@@ -133,7 +133,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
-  const logout = async () => {
+  const logout = useCallback(async () => {
     const activeUserId = user?.id;
     setUser(null);
     if (typeof window !== "undefined") {
@@ -148,7 +148,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
     router.replace("/login");
     router.refresh();
-  };
+  }, [router, user?.id]);
 
   return (
     <AuthContext.Provider
