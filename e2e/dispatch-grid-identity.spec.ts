@@ -1,0 +1,172 @@
+import { test, expect } from "@playwright/test";
+
+test.beforeEach(async ({ page }) => {
+  await page.route("**/*", route => new URL(route.request().url()).hostname === "127.0.0.1"
+    ? route.continue() : route.abort());
+  await page.goto("/");
+});
+
+test("exibe a cidade/base UB e LZ entre condutor e login", async ({ page }) => {
+  const joaoCells = page.locator("tbody tr").filter({ hasText: "JOÃO" }).locator("td");
+  const gabrielCells = page.locator("tbody tr").filter({ hasText: "GABRIEL" }).locator("td");
+  await expect(joaoCells.nth(2)).toHaveText("UB");
+  await expect(gabrielCells.nth(2)).toHaveText("LZ");
+  await expect(page.locator("thead tr").nth(1).locator("th").nth(2)).toContainText("CIDADE");
+});
+
+test("não exibe a coluna Cidade na operação de SP", async ({ page }) => {
+  await page.goto("/page");
+  await expect(page.locator("thead tr").nth(1)).not.toContainText("CIDADE");
+  const joaoCells = page.locator("tbody tr").filter({ hasText: "JOÃO" }).locator("td");
+  await expect(joaoCells.nth(2)).toHaveText("1");
+});
+
+test("Tab continua no mesmo condutor depois de reordenar durante a edição", async ({ page }) => {
+  const joao = page.locator("tbody tr").filter({ hasText: "JOÃO" });
+  const forecast = joao.locator("td").nth(5).locator("input");
+  await forecast.click();
+  await forecast.fill("08:00");
+  await page.evaluate(() => (window as unknown as { refreshGrid(): void }).refreshGrid());
+  await expect(forecast).toBeFocused();
+  await page.keyboard.press("Tab");
+  await expect(joao.getByLabel("Status do acionamento")).toBeFocused();
+  await page.keyboard.type("APOIO");
+  await page.keyboard.press("Tab");
+  await expect(page.locator("#writes")).toContainText('"id":"joao","changes":{"dispatch_status":"APOIO"}');
+  await expect(page.locator("#writes")).not.toContainText('"id":"gabriel"');
+  await expect(page.locator("#writes")).not.toContainText('"id":"ana"');
+});
+
+test("colagem usa os IDs selecionados antes do refresh", async ({ page }) => {
+  const joao = page.locator("tbody tr").filter({ hasText: "JOÃO" });
+  const forecast = joao.locator("td").nth(5).locator("input");
+  await forecast.click();
+  await page.evaluate(() => (window as unknown as { refreshGrid(): void }).refreshGrid());
+  await forecast.evaluate(element => {
+    const data = new DataTransfer(); data.setData("text/plain", "08:00\tAPOIO");
+    element.dispatchEvent(new ClipboardEvent("paste", { bubbles: true, cancelable: true, clipboardData: data }));
+  });
+  await expect(page.locator("#writes")).toContainText('"id":"joao"');
+  await expect(page.locator("#writes")).not.toContainText('"id":"ana"');
+});
+
+test("mudança de horário mantém a célula estacionária e Tab acompanha o ID ao salvar", async ({ page }) => {
+  const joao = page.locator("tbody tr").filter({ hasText: "JOÃO" });
+  const forecast = joao.locator("td").nth(5).locator("input");
+  await forecast.click();
+  const before = await joao.evaluate(element => (element as HTMLTableRowElement).sectionRowIndex);
+  await forecast.fill("08:00");
+  await page.evaluate(() => (window as unknown as { changeJoaoShift(): void }).changeJoaoShift());
+  await expect(forecast).toBeFocused();
+  expect(await joao.evaluate(element => (element as HTMLTableRowElement).sectionRowIndex)).toBe(before);
+  await page.keyboard.press("Tab");
+  await expect(joao.getByLabel("Status do acionamento")).toBeFocused();
+});
+
+test("colagem de várias linhas preserva os destinatários após mudar a ordenação", async ({ page }) => {
+  const originalOrder = await page.locator("tbody tr").evaluateAll(elements => elements.map(element => element.getAttribute("data-dispatch-id")));
+  await page.getByTitle("Selecionar coluna F", { exact: true }).click();
+  await page.evaluate(() => (window as unknown as { changeJoaoShift(): void }).changeJoaoShift());
+  await expect(page.locator("tbody tr").first()).toContainText("JOÃO");
+  await page.locator(".excel-grid").evaluate(element => {
+    const data = new DataTransfer(); data.setData("text/plain", "APOIO\nTROCA\nACIONADO");
+    element.dispatchEvent(new ClipboardEvent("paste", { bubbles: true, cancelable: true, clipboardData: data }));
+  });
+  const expected = originalOrder.map((id, index) => ({ id, changes: { dispatch_status: ["APOIO", "TROCA", "ACIONADO"][index] } }));
+  await expect.poll(async () => JSON.parse(await page.locator("#writes").innerText())).toEqual(expected);
+});
+
+test("seleção removida não transfere limpeza para o condutor que ocupou a posição", async ({ page }) => {
+  await page.locator("tbody tr").filter({ hasText: "JOÃO" }).locator("td").nth(5).click();
+  await page.evaluate(() => (window as unknown as { removeJoao(): void }).removeJoao());
+  await page.locator(".excel-grid").focus();
+  await page.keyboard.press("Delete");
+  await expect(page.locator("#writes")).toHaveText("[]");
+});
+
+test("resposta de refresh anterior ao save não sobrescreve o texto confirmado", async ({ page }) => {
+  await page.clock.install();
+  await page.goto("/page");
+  const input = page.locator("tbody tr").filter({ hasText: "JOÃO" }).locator("td").nth(14).locator("input");
+  await expect(input).toHaveValue("original");
+  await page.evaluate(() => (window as unknown as { pageFixture: { deferRead(): void } }).pageFixture.deferRead());
+  await page.clock.fastForward(5000);
+  await expect.poll(() => page.evaluate(() => (window as unknown as { pageFixture: { readIsWaiting(): boolean } }).pageFixture.readIsWaiting())).toBe(true);
+  await input.click();
+  await input.fill("texto novo de JOÃO");
+  await input.blur();
+  await expect.poll(() => page.evaluate(() => (window as unknown as { pageFixture: { writes(): unknown[] } }).pageFixture.writes().length)).toBe(1);
+  await page.evaluate(() => (window as unknown as { pageFixture: { releaseRead(): void } }).pageFixture.releaseRead());
+  await page.clock.fastForward(50);
+  await expect(input).toHaveValue("texto novo de JOÃO");
+});
+
+test("filtro da página mantém o condutor focado até concluir a edição", async ({ page }) => {
+  await page.goto("/page");
+  const joao = page.locator("tbody tr").filter({ hasText: "JOÃO" });
+  const input = joao.locator("td").nth(14).locator("input");
+  await input.click();
+  await input.fill("rascunho de JOÃO");
+  await page.evaluate(() => (window as unknown as { filterPageToGabriel(): void }).filterPageToGabriel());
+  await expect(input).toBeFocused();
+  await expect(input).toHaveValue("rascunho de JOÃO");
+  await input.blur();
+  await expect(joao).toHaveCount(0);
+  await expect.poll(() => page.evaluate(() => (window as unknown as { pageFixture: { writes(): { id: string }[] } }).pageFixture.writes().map(item => item.id))).toEqual(["joao"]);
+});
+
+for (const [field, column, value] of [
+  ["previsão", 5, "08:00"], ["status", 6, "APOIO"], ["motivo", 7, "teste"],
+  ["local", 8, "BASE MANUAL"], ["entrada", 9, "08:00"], ["frota", 10, "ABC1234"], ["carga", 11, "C"],
+  ["destino", 12, "LOCAL A"], ["destino final", 13, "LOCAL B"],
+  ["saída", 14, "18:00"], ["observação", 15, "texto de JOÃO"],
+] as const) {
+  test(`${field}: digitação permanece em JOÃO com novos dados e alteração de horário`, async ({ page }) => {
+    const input = page.locator("tbody tr").filter({ hasText: "JOÃO" }).locator("td").nth(column).locator("input");
+    await input.click();
+    await input.fill(value);
+    await page.evaluate(() => {
+      const fixture = window as unknown as { changeJoaoShift(): void; insertDriver(): void };
+      fixture.changeJoaoShift(); fixture.insertDriver();
+    });
+    await expect(input).toBeFocused();
+    await expect(input).toHaveValue(value);
+    await input.blur();
+    await expect.poll(async () => JSON.parse(await page.locator("#writes").innerText()).map((write: { id: string }) => write.id)).toEqual(["joao"]);
+  });
+}
+
+test("Escape cancela a edição do condutor original mesmo após reordenar", async ({ page }) => {
+  const input = page.locator("tbody tr").filter({ hasText: "JOÃO" }).locator("td").nth(15).locator("input");
+  await input.click();
+  await input.fill("não salvar este rascunho");
+  await page.evaluate(() => (window as unknown as { changeJoaoShift(): void }).changeJoaoShift());
+  await page.keyboard.press("Escape");
+  await expect(input).toHaveValue("");
+  await expect(page.locator("#writes")).toHaveText('[{"id":"joao","changes":{"observations":null}}]');
+});
+
+test("status sai do filtro Vazio somente depois de terminar a edição", async ({ page }) => {
+  await page.getByRole("button", { name: "Filtrar coluna Status", exact: true }).click();
+  await page.getByLabel("Vazio", { exact: true }).click();
+  await page.getByRole("button", { name: "OK", exact: true }).click();
+  const joao = page.locator("tbody tr").filter({ hasText: "JOÃO" });
+  const input = joao.getByLabel("Status do acionamento");
+  await input.click();
+  await input.fill("APOIO");
+  await expect(input).toBeFocused();
+  await input.blur();
+  await expect(joao).toHaveCount(0);
+  await expect(page.locator("#writes")).toHaveText('[{"id":"joao","changes":{"dispatch_status":"APOIO"}}]');
+});
+
+test("Enter salva o condutor original e encontra o próximo por ID após o blur reordenar", async ({ page }) => {
+  const input = page.locator("tbody tr").filter({ hasText: "GABRIEL" }).getByLabel("Status do acionamento");
+  await input.click();
+  await input.fill("APOIO");
+  await page.evaluate(() => (window as unknown as { changeJoaoShift(): void }).changeJoaoShift());
+  await expect(input).toBeFocused();
+  await page.keyboard.press("Enter");
+  await expect(page.locator("tbody tr").filter({ hasText: "ANA" }).getByLabel("Status do acionamento")).toBeFocused();
+  await expect(page.locator("#writes")).toHaveText('[{"id":"gabriel","changes":{"dispatch_status":"APOIO"}}]');
+});

@@ -9,6 +9,7 @@
     "lint": "eslint .",
     "test": "tsx --test tests/**/*.test.ts",
     "test:e2e": "playwright test",
+    "test:grid": "playwright test --config e2e/dispatch-grid.playwright.config.ts",
     "verify": "npm run lint && npm run test && npm run build",
     "audit:data": "node scripts/audit-operational-data.mjs 2026 9 SP"
   },

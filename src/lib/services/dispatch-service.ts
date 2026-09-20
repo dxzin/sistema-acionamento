@@ -472,6 +472,7 @@ class DispatchService {
         vehicle,
         fleet_code: vehicle?.plate_code || "",
         origin_location: originLoc,
+        origin_name: originLoc?.name || "",
         destination_location: destLoc,
         final_destination_location: finalDestLoc,
         destination_name: destLoc?.name || "",
@@ -490,6 +491,7 @@ class DispatchService {
       base: _base,
       vehicle: _vehicle,
       origin_location: _origin,
+      origin_name,
       destination_location: _destination,
       final_destination_location: _finalDestination,
       destination_name,
@@ -529,7 +531,7 @@ class DispatchService {
       const { data: { session } } = await supabase.auth.getSession();
       if (!session?.access_token) {
         if (localMatch) return localMatch.id;
-        throw new Error("Sessão ausente para registrar o destino.");
+        throw new Error("Sessão ausente para registrar o local.");
       }
 
       const response = await fetch("/api/locations/resolve", {
@@ -538,13 +540,17 @@ class DispatchService {
         body: JSON.stringify({ name }),
       });
       const result = await response.json() as { id?: string | null; error?: string };
-      if (!response.ok || !result.id) throw new Error(result.error || "Falha ao registrar o destino digitado.");
+      if (!response.ok || !result.id) throw new Error(result.error || "Falha ao registrar o local digitado.");
       if (!this.localLocations.some((location) => location.id === result.id)) {
         this.localLocations.push({ id: result.id, name, is_active: true, created_at: new Date().toISOString() });
       }
       return result.id;
     };
 
+    if (origin_name !== undefined) {
+      processedUpdates.origin_location_id = await resolveLocationId(origin_name);
+      processedUpdates.origin_source = "MANUAL";
+    }
     if (destination_name !== undefined) {
       processedUpdates.destination_location_id = await resolveLocationId(destination_name);
     }

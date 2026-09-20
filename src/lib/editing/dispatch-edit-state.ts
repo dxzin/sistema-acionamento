@@ -128,9 +128,13 @@ export function resolveDispatchSnapshotFailure(
 export function mergeServerDispatches(
   serverRows: DispatchRowModel[],
   localRows: DispatchRowModel[],
-  edits: PendingDispatchEdits
+  edits: PendingDispatchEdits,
+  editingRowId: string | null = null
 ): DispatchRowModel[] {
+  const localById = new Map(localRows.map(row => [row.id, row]));
   const merged = serverRows.map((serverRow) => {
+    const local = localById.get(serverRow.id);
+    if (local && Date.parse(local.updated_at) > Date.parse(serverRow.updated_at)) return local;
     const pending = edits[serverRow.id];
     if (!pending) return serverRow;
     const changes = Object.fromEntries(
@@ -141,7 +145,7 @@ export function mergeServerDispatches(
   const serverIds = new Set(serverRows.map((row) => row.id));
   return [
     ...merged,
-    ...localRows.filter((row) => edits[row.id] && !serverIds.has(row.id)),
+    ...localRows.filter((row) => (edits[row.id] || row.id === editingRowId) && !serverIds.has(row.id)),
   ];
 }
 

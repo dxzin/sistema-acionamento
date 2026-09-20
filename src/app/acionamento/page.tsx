@@ -53,6 +53,8 @@ function AcionamentoContent() {
   const [saveState, setSaveState] = useState<{ status: "idle" | "saving" | "saved" | "error"; message?: string }>({ status: "idle" });
   const [onlineOperators, setOnlineOperators] = useState<OperatorPresence[]>([]);
   const [activeDispatchId, setActiveDispatchId] = useState<string | null>(null);
+  const [editingDispatchId, setEditingDispatchId] = useState<string | null>(null);
+  const editingDispatchIdRef = useRef<string | null>(null);
   const [syncStatus, setSyncStatus] = useState<"live" | "fallback" | "offline">("fallback");
   const [isExporting, setIsExporting] = useState(false);
   const loadRequestRef = useRef(0);
@@ -141,6 +143,8 @@ function AcionamentoContent() {
           return next;
         });
         pendingWritesRef.current += 1;
+        // Invalidate reads started before this write, even if they finish after it.
+        loadRequestRef.current += 1;
         setSaveState({ status: "saving" });
 
         try {
@@ -201,6 +205,7 @@ function AcionamentoContent() {
           completed = false;
           break;
         } finally {
+          loadRequestRef.current += 1;
           pendingWritesRef.current = Math.max(0, pendingWritesRef.current - 1);
         }
       }
@@ -243,6 +248,7 @@ function AcionamentoContent() {
   }, [flushPendingEdits, router]);
 
   const loadData = useCallback(async (foreground = true) => {
+    if (pendingWritesRef.current > 0) return;
     const requestId = ++loadRequestRef.current;
     if (foreground) {
       foregroundLoadsRef.current += 1;
@@ -265,7 +271,7 @@ function AcionamentoContent() {
           if (nextPending[row.id]) nextPending[row.id] = { ...nextPending[row.id], expectedUpdatedAt: row.updated_at };
         }
         pendingEditsRef.current = nextPending;
-        setDispatches((current) => mergeServerDispatches(dispatchesData, current, nextPending));
+        setDispatches((current) => mergeServerDispatches(dispatchesData, current, nextPending, editingDispatchIdRef.current));
         setLocations(locs);
         setDailySheet(sheet);
         syncTokenRef.current = syncToken;
@@ -632,6 +638,7 @@ function AcionamentoContent() {
   // Filtragem dos registros
   const filteredDispatches = useMemo(() => {
     return dispatches.filter((item) => {
+      if (item.id === editingDispatchId) return true;
       // Busca por nome ou login
       if (filters.searchQuery) {
         const q = filters.searchQuery.toLowerCase();
@@ -652,7 +659,7 @@ function AcionamentoContent() {
 
       return true;
     });
-  }, [dispatches, filters]);
+  }, [dispatches, filters, editingDispatchId]);
 
   // Cálculo dos KPIs da barra de status
   const summaryKPIs: DispatchSummaryKPIs = useMemo(() => {
@@ -761,7 +768,9 @@ function AcionamentoContent() {
 
           {/* Grade Operacional Estilo Planilha */}
           <DispatchGrid
+            key={filters.region}
             dispatches={filteredDispatches}
+            showCity={filters.region === "UBJP"}
             onDraftRow={stageLocalEdits}
             onUpdateRow={handleUpdateRow}
             onUpdateBatch={handleUpdateBatch}
@@ -771,6 +780,10 @@ function AcionamentoContent() {
             readOnly={dailySheet?.status !== "OPEN"}
             activeEditors={activeEditors}
             onActiveRowChange={setActiveDispatchId}
+            onEditingRowChange={(id) => {
+              editingDispatchIdRef.current = id;
+              setEditingDispatchId(id);
+            }}
             reminderTimes={reminderTimes}
             onSetReminder={setDispatchReminder}
             onRemoveReminder={removeDispatchReminder}

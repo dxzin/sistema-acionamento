@@ -1,0 +1,8 @@
+{
+  "name": "ponte-sighra",
+  "private": true,
+  "type": "module",
+  "scripts": { "start": "node --env-file=.env agent.mjs" },
+  "dependencies": { "mysql2": "^3.0.0" },
+  "engines": { "node": ">=22" }
+}

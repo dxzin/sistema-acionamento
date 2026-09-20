@@ -106,3 +106,16 @@ test("resposta antiga não remove nem sobrescreve uma versão mais nova", () => 
   assert.equal(requestB[0].changes.observations, "teste novo");
   assert.equal(requestB[0].expectedUpdatedAt, "2026-09-15T10:02:00Z");
 });
+
+test("refresh anterior ao salvamento não substitui uma linha já confirmada mais recente", () => {
+  const saved = row("1", "texto novo salvo", "2026-09-15T10:02:00Z");
+  const stale = row("1", "texto antigo", "2026-09-15T10:00:00Z");
+  assert.equal(mergeServerDispatches([stale], [saved], {})[0].observations, "texto novo salvo");
+});
+
+test("refresh preserva o registro focado ausente da resposta sem associar seu rascunho a outro", () => {
+  const joao = row("joao", "rascunho");
+  const gabriel = row("gabriel", "outro");
+  const merged = mergeServerDispatches([gabriel], [joao, gabriel], {}, "joao");
+  assert.deepEqual(merged.map(item => [item.id, item.observations]), [["gabriel", "outro"], ["joao", "rascunho"]]);
+});

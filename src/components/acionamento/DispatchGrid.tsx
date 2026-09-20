@@ -4,10 +4,12 @@ import React, { useEffect, useState, useMemo, useRef } from "react";
 import { DispatchRowModel } from "@/types/domain";
 import { DispatchStatus, CargoStatus } from "@/types/database";
 import { normalizeClockTime } from "@/lib/calculations/jornada";
+import { captureGridSelection, DispatchGridSelection, gridSelectionBounds, resolveGridSelectionRows } from "@/lib/editing/dispatch-grid-selection";
 import { ArrowUpDown, Bell, BellRing, Check, ChevronDown, Columns3, Copy, Clock, Eye, EyeOff, Maximize2, Minimize2, Minus, Plus, Search, Trash2, Volume2, VolumeX, X } from "lucide-react";
 
 interface DispatchGridProps {
   dispatches: DispatchRowModel[];
+  showCity?: boolean;
   onDraftRow?: (id: string, updates: Partial<DispatchRowModel>) => void;
   onUpdateRow: (id: string, updates: Partial<DispatchRowModel>) => Promise<void>;
   onUpdateBatch: (updates: Map<string, Partial<DispatchRowModel>>) => Promise<void>;
@@ -17,6 +19,7 @@ interface DispatchGridProps {
   readOnly?: boolean;
   activeEditors?: Record<string, string[]>;
   onActiveRowChange?: (rowId: string | null) => void;
+  onEditingRowChange?: (rowId: string | null) => void;
   reminderTimes?: Record<string, string>;
   onSetReminder?: (dispatchId: string, driverName: string, time: string) => string | null;
   onRemoveReminder?: (dispatchId: string) => void;
@@ -35,35 +38,36 @@ interface GridHistoryAction {
   changes: GridHistoryChange[];
 }
 
-type SortField = keyof DispatchRowModel | "driver_name" | "login" | "schedule_time";
+type SortField = keyof DispatchRowModel | "driver_name" | "city" | "login" | "schedule_time";
 type ColumnFilterKey =
-  | "driver" | "login" | "schedule" | "forecast" | "status" | "reason"
+  | "driver" | "city" | "login" | "schedule" | "forecast" | "status" | "reason"
   | "origin" | "entry" | "fleet" | "cargo" | "destination" | "finalDestination"
   | "exit" | "observations" | "scale" | "nextForecast" | "workedTime";
 
 const FILTER_COLUMNS: ColumnFilterKey[] = [
-  "driver", "login", "schedule", "forecast", "status", "reason", "origin", "entry",
+  "driver", "city", "login", "schedule", "forecast", "status", "reason", "origin", "entry",
   "fleet", "cargo", "destination", "finalDestination", "exit", "observations", "scale",
   "nextForecast", "workedTime",
 ];
 
 const COLUMN_LABELS = [
-  "Condutor", "Login", "Horário", "Previsão", "Status", "Motivo do abono", "Local",
+  "Condutor", "Cidade", "Login", "Horário", "Previsão", "Status", "Motivo do abono", "Local",
   "Entrada", "Frota", "C/V", "Destino", "Destino final", "Saída", "Observação",
   "Dia de escala", "Prev. próximo dia", "Tempo de jornada",
 ];
 const ROW_NUMBER_WIDTH = 44;
-const COLUMN_WIDTHS = [230, 86, 92, 90, 135, 230, 100, 90, 100, 55, 120, 120, 90, 180, 80, 95, 110];
+const COLUMN_WIDTHS = [230, 78, 86, 92, 90, 135, 230, 100, 90, 100, 55, 120, 120, 90, 180, 80, 95, 110];
 
 function getColumnValue(row: DispatchRowModel, key: ColumnFilterKey): string {
   const values: Record<ColumnFilterKey, string | null | undefined> = {
     driver: row.driver.name,
+    city: row.base?.code,
     login: row.driver.login_matricula,
     schedule: row.driver.default_start_time?.slice(0, 5),
     forecast: row.forecast_start_time,
     status: row.dispatch_status,
     reason: row.abono_reason,
-    origin: row.origin_location?.name,
+    origin: row.origin_name || row.origin_location?.name,
     entry: row.entry_time,
     fleet: row.fleet_code || row.vehicle?.plate_code,
     cargo: row.cargo_status,
@@ -427,6 +431,7 @@ function EditableStatusCell({ value, listId, className, onCommit, onDraftChange 
 
 export function DispatchGrid({
   dispatches,
+  showCity = false,
   onDraftRow = () => undefined,
   onUpdateRow,
   onUpdateBatch,
@@ -436,6 +441,7 @@ export function DispatchGrid({
   readOnly = false,
   activeEditors = {},
   onActiveRowChange,
+  onEditingRowChange,
   reminderTimes = {},
   onSetReminder,
   onRemoveReminder,
@@ -454,13 +460,25 @@ export function DispatchGrid({
   const tableRef = useRef<HTMLTableElement>(null);
   const gridCanvasRef = useRef<HTMLDivElement>(null);
   const bottomScrollRef = useRef<HTMLDivElement>(null);
-  const [selection, setSelection] = useState<{
-    anchor: { row: number; column: number };
-    focus: { row: number; column: number };
-  } | null>(null);
+  const [selection, setSelection] = useState<DispatchGridSelection | null>(null);
+  const [editingRow, setEditingRow] = useState<{ id: string; index: number } | null>(null);
   const [isSelecting, setIsSelecting] = useState(false);
   const [hiddenColumns, setHiddenColumns] = useState<number[]>([]);
-  const [columnWidths, setColumnWidths] = useState<number[]>([...COLUMN_WIDTHS]);
+  const activeFilterColumns = useMemo(
+    () => showCity ? FILTER_COLUMNS : FILTER_COLUMNS.filter((key) => key !== "city"),
+    [showCity]
+  );
+  const activeColumnLabels = useMemo(
+    () => showCity ? COLUMN_LABELS : COLUMN_LABELS.filter((_, index) => index !== 1),
+    [showCity]
+  );
+  const defaultColumnWidths = useMemo(
+    () => showCity ? COLUMN_WIDTHS : COLUMN_WIDTHS.filter((_, index) => index !== 1),
+    [showCity]
+  );
+  const protectedColumnCount = showCity ? 3 : 2;
+  const preferenceSuffix = showCity ? "mg" : "sp";
+  const [columnWidths, setColumnWidths] = useState<number[]>([...defaultColumnWidths]);
   const [gridZoom, setGridZoom] = useState(100);
   const [isExpanded, setIsExpanded] = useState(false);
   const [showColumnMenu, setShowColumnMenu] = useState(false);
@@ -500,23 +518,23 @@ export function DispatchGrid({
 
   useEffect(() => {
     try {
-      const saved = localStorage.getItem("dispatch-hidden-columns");
+      const saved = localStorage.getItem(`dispatch-hidden-columns-${preferenceSuffix}`);
       if (saved) setHiddenColumns(JSON.parse(saved));
-      const savedWidths = localStorage.getItem("dispatch-column-widths");
+      const savedWidths = localStorage.getItem(`dispatch-column-widths-${preferenceSuffix}`);
       if (savedWidths) {
         const parsed = JSON.parse(savedWidths) as number[];
-        if (parsed.length === COLUMN_WIDTHS.length && parsed.every((width) => Number.isFinite(width))) {
-          setColumnWidths(parsed.map((width, index) => Math.max(index < 2 ? COLUMN_WIDTHS[index] : 55, width)));
+        if (parsed.length === defaultColumnWidths.length && parsed.every((width) => Number.isFinite(width))) {
+          setColumnWidths(parsed.map((width, index) => Math.max(index < protectedColumnCount ? defaultColumnWidths[index] : 55, width)));
         }
       }
       const savedZoom = Number(localStorage.getItem("dispatch-grid-zoom"));
       if (Number.isFinite(savedZoom) && savedZoom >= 75 && savedZoom <= 150) setGridZoom(savedZoom);
     } catch { /* preferência local inválida: usa todas as colunas */ }
-  }, []);
+  }, [defaultColumnWidths, preferenceSuffix, protectedColumnCount]);
 
   useEffect(() => {
-    localStorage.setItem("dispatch-column-widths", JSON.stringify(columnWidths));
-  }, [columnWidths]);
+    localStorage.setItem(`dispatch-column-widths-${preferenceSuffix}`, JSON.stringify(columnWidths));
+  }, [columnWidths, preferenceSuffix]);
 
   useEffect(() => {
     localStorage.setItem("dispatch-grid-zoom", String(gridZoom));
@@ -622,12 +640,12 @@ export function DispatchGrid({
     `excel-status-${status.toLowerCase().replaceAll(" ", "-").replace("ã", "a")}`;
 
   const filterOptions = useMemo(() => Object.fromEntries(
-    FILTER_COLUMNS.map((key) => [key, Array.from(new Set([
+    activeFilterColumns.map((key) => [key, Array.from(new Set([
       ...(key === "status" ? [""] : []),
       ...dispatches.map((row) => getColumnValue(row, key)).filter(Boolean),
     ]))
       .sort((a, b) => a.localeCompare(b, "pt-BR", { numeric: true }))])
-  ) as Record<ColumnFilterKey, string[]>, [dispatches]);
+  ) as Record<ColumnFilterKey, string[]>, [activeFilterColumns, dispatches]);
 
   // Filtragem e ordenação dos despachos
   const processedDispatches = useMemo(() => {
@@ -637,23 +655,26 @@ export function DispatchGrid({
       const q = columnSearch.toLowerCase().trim();
       result = result.filter(
         (row) =>
-          row.driver.name.toLowerCase().includes(q) ||
+          row.id === editingRow?.id || row.driver.name.toLowerCase().includes(q) ||
           row.driver.login_matricula.toLowerCase().includes(q)
       );
     }
 
-    result = result.filter((row) => FILTER_COLUMNS.every((key) => {
+    result = result.filter((row) => row.id === editingRow?.id || activeFilterColumns.every((key) => {
       const selectedValues = columnFilters[key];
       return !selectedValues?.length || selectedValues.includes(getColumnValue(row, key));
     }));
 
-    return result.sort((a, b) => {
+    result.sort((a, b) => {
       let aVal: string | number | boolean | null = "";
       let bVal: string | number | boolean | null = "";
 
       if (sortField === "driver_name") {
         aVal = a.driver.name;
         bVal = b.driver.name;
+      } else if (sortField === "city") {
+        aVal = a.base?.code || "";
+        bVal = b.base?.code || "";
       } else if (sortField === "login") {
         aVal = a.driver.login_matricula;
         bVal = b.driver.login_matricula;
@@ -676,9 +697,17 @@ export function DispatchGrid({
 
       if (aVal < bVal) return sortAsc ? -1 : 1;
       if (aVal > bVal) return sortAsc ? 1 : -1;
-      return 0;
+      // Equal sort values must not inherit an arbitrary server response order.
+      return a.id.localeCompare(b.id);
     });
-  }, [dispatches, columnSearch, sortField, sortAsc, columnFilters]);
+    // Keep the focused record visible and stationary while it is being edited.
+    // Identity, not this visual position, is used for every write/navigation.
+    if (editingRow) {
+      const index = result.findIndex(row => row.id === editingRow.id);
+      if (index >= 0) result.splice(Math.min(editingRow.index, result.length - 1), 0, ...result.splice(index, 1));
+    }
+    return result;
+  }, [dispatches, columnSearch, sortField, sortAsc, columnFilters, editingRow, activeFilterColumns]);
 
   const locationNames = useMemo(
     () => Array.from(new Set([
@@ -699,7 +728,7 @@ export function DispatchGrid({
   };
 
   useEffect(() => {
-    localStorage.setItem("dispatch-hidden-columns", JSON.stringify(hiddenColumns));
+    localStorage.setItem(`dispatch-hidden-columns-${preferenceSuffix}`, JSON.stringify(hiddenColumns));
     const table = tableRef.current;
     if (!table) return;
     table.querySelectorAll("tr").forEach((row) => Array.from(row.children).forEach((cell, cellIndex) => {
@@ -708,36 +737,29 @@ export function DispatchGrid({
     table.querySelectorAll("colgroup col").forEach((column, columnIndex) => {
       (column as HTMLElement).style.display = columnIndex > 0 && hiddenColumns.includes(columnIndex - 1) ? "none" : "";
     });
-  }, [hiddenColumns, processedDispatches.length]);
+  }, [hiddenColumns, processedDispatches.length, preferenceSuffix]);
 
-  const selectionBounds = selection ? {
-    top: Math.min(selection.anchor.row, selection.focus.row),
-    bottom: Math.max(selection.anchor.row, selection.focus.row),
-    left: Math.min(selection.anchor.column, selection.focus.column),
-    right: Math.max(selection.anchor.column, selection.focus.column),
-  } : null;
+  const selectionBounds = gridSelectionBounds(selection);
+  const selectionDispatches = resolveGridSelectionRows(selection, processedDispatches);
 
   useEffect(() => {
     const table = tableRef.current;
     if (!table) return;
     table.querySelectorAll("tbody td").forEach((cell) => cell.classList.remove("excel-range-selected"));
     if (!selection) return;
-    const bounds = {
-      top: Math.min(selection.anchor.row, selection.focus.row),
-      bottom: Math.max(selection.anchor.row, selection.focus.row),
-      left: Math.min(selection.anchor.column, selection.focus.column),
-      right: Math.max(selection.anchor.column, selection.focus.column),
-    };
-    table.querySelectorAll<HTMLTableRowElement>("tbody tr").forEach((row, rowIndex) => {
+    const bounds = gridSelectionBounds(selection);
+    if (!bounds) return;
+    const selectedIds = new Set(selection.rowIds.slice(bounds.top, bounds.bottom + 1));
+    table.querySelectorAll<HTMLTableRowElement>("tbody tr").forEach((row) => {
       Array.from(row.cells).forEach((cell, cellIndex) => {
         const columnIndex = cellIndex - 1;
-        if (rowIndex >= bounds.top && rowIndex <= bounds.bottom &&
+        if (selectedIds.has(row.dataset.dispatchId || "") &&
             columnIndex >= bounds.left && columnIndex <= bounds.right) {
           cell.classList.add("excel-range-selected");
         }
       });
     });
-  }, [selection]);
+  }, [selection, processedDispatches]);
 
   useEffect(() => {
     const stopSelecting = () => setIsSelecting(false);
@@ -756,26 +778,25 @@ export function DispatchGrid({
     const cell = target instanceof Element ? target.closest<HTMLTableCellElement>("tbody td") : null;
     const row = cell?.parentElement as HTMLTableRowElement | null;
     if (!cell || !row) return null;
-    return { row: row.sectionRowIndex, column: cell.cellIndex - 1 };
+    const rowId = row.dataset.dispatchId;
+    if (!rowId) return null;
+    return { rowId, column: cell.cellIndex - 1 };
   };
 
   const updateForPastedCell = (column: number, rawValue: string): Partial<DispatchRowModel> | null => {
     const value = rawValue.trim();
-    switch (column) {
-      case 3: return { forecast_start_time: value || null };
-      case 4: return { dispatch_status: value.toUpperCase() };
-      case 5: return { abono_reason: value || null };
-      case 6: {
-        const location = locations.find((item) => item.name.toUpperCase() === value.toUpperCase());
-        return { origin_location_id: location?.id || null };
-      }
-      case 7: return { entry_time: value ? normalizeClockTime(value) : null };
-      case 8: return { fleet_code: value.toUpperCase() };
-      case 9: return { cargo_status: (value.toUpperCase() || null) as CargoStatus | null };
-      case 10: return { destination_name: value.toUpperCase() };
-      case 11: return { final_destination_name: value.toUpperCase() };
-      case 12: return { exit_time: value ? normalizeClockTime(value) : null };
-      case 13: return { observations: value || null };
+    switch (activeFilterColumns[column]) {
+      case "forecast": return { forecast_start_time: value || null };
+      case "status": return { dispatch_status: value.toUpperCase() };
+      case "reason": return { abono_reason: value || null };
+      case "origin": return { origin_name: value.toUpperCase() };
+      case "entry": return { entry_time: value ? normalizeClockTime(value) : null };
+      case "fleet": return { fleet_code: value.toUpperCase() };
+      case "cargo": return { cargo_status: (value.toUpperCase() || null) as CargoStatus | null };
+      case "destination": return { destination_name: value.toUpperCase() };
+      case "finalDestination": return { final_destination_name: value.toUpperCase() };
+      case "exit": return { exit_time: value ? normalizeClockTime(value) : null };
+      case "observations": return { observations: value || null };
       default: return null;
     }
   };
@@ -783,6 +804,9 @@ export function DispatchGrid({
   const valueBeforeUpdate = (row: DispatchRowModel, key: keyof DispatchRowModel) => {
     if (key === "destination_name") {
       return row.destination_name ?? row.destination_location?.name ?? "";
+    }
+    if (key === "origin_name") {
+      return row.origin_name ?? row.origin_location?.name ?? "";
     }
     if (key === "final_destination_name") {
       return row.final_destination_name ?? row.final_destination_location?.name ?? "";
@@ -823,7 +847,7 @@ export function DispatchGrid({
   };
 
   const commitBatch = async (updatesByRow: Map<string, Partial<DispatchRowModel>>) => {
-    if (readOnly) return false;
+    if (readOnly || !updatesByRow.size) return false;
     const changes = Array.from(updatesByRow, ([id, updates]) => historyChangeFor(id, updates))
       .filter((change): change is GridHistoryChange => Boolean(change));
     try {
@@ -857,10 +881,10 @@ export function DispatchGrid({
   const copySelection = async () => {
     if (!selectionBounds) return;
     const text = Array.from({ length: selectionBounds.bottom - selectionBounds.top + 1 }, (_, rowOffset) => {
-      const row = processedDispatches[selectionBounds.top + rowOffset];
+      const row = selectionDispatches[selectionBounds.top + rowOffset];
       return Array.from({ length: selectionBounds.right - selectionBounds.left + 1 }, (_, columnOffset) => {
         const column = selectionBounds.left + columnOffset;
-        return row && FILTER_COLUMNS[column] ? getColumnValue(row, FILTER_COLUMNS[column]) : "";
+        return row && activeFilterColumns[column] ? getColumnValue(row, activeFilterColumns[column]) : "";
       }).join("\t");
     }).join("\n");
     await navigator.clipboard.writeText(text);
@@ -870,7 +894,7 @@ export function DispatchGrid({
     if (!selectionBounds) return;
     const updatesByRow = new Map<string, Partial<DispatchRowModel>>();
     for (let rowIndex = selectionBounds.top; rowIndex <= selectionBounds.bottom; rowIndex++) {
-      const row = processedDispatches[rowIndex];
+      const row = selectionDispatches[rowIndex];
       if (!row) continue;
       for (let column = selectionBounds.left; column <= selectionBounds.right; column++) {
         const updates = updateForPastedCell(column, "");
@@ -885,13 +909,13 @@ export function DispatchGrid({
     const updatesByRow = new Map<string, Partial<DispatchRowModel>>();
 
     if (direction === "down") {
-      const sourceRow = processedDispatches[selectionBounds.top];
+      const sourceRow = selectionDispatches[selectionBounds.top];
       if (!sourceRow || selectionBounds.bottom <= selectionBounds.top) return;
       for (let rowIndex = selectionBounds.top + 1; rowIndex <= selectionBounds.bottom; rowIndex++) {
-        const targetRow = processedDispatches[rowIndex];
+        const targetRow = selectionDispatches[rowIndex];
         if (!targetRow) continue;
         for (let column = selectionBounds.left; column <= selectionBounds.right; column++) {
-          const key = FILTER_COLUMNS[column];
+          const key = activeFilterColumns[column];
           const updates = key ? updateForPastedCell(column, getColumnValue(sourceRow, key)) : null;
           if (updates) updatesByRow.set(targetRow.id, { ...(updatesByRow.get(targetRow.id) || {}), ...updates });
         }
@@ -899,8 +923,8 @@ export function DispatchGrid({
     } else {
       if (selectionBounds.right <= selectionBounds.left) return;
       for (let rowIndex = selectionBounds.top; rowIndex <= selectionBounds.bottom; rowIndex++) {
-        const row = processedDispatches[rowIndex];
-        const sourceKey = FILTER_COLUMNS[selectionBounds.left];
+        const row = selectionDispatches[rowIndex];
+        const sourceKey = activeFilterColumns[selectionBounds.left];
         if (!row || !sourceKey) continue;
         const sourceValue = getColumnValue(row, sourceKey);
         for (let column = selectionBounds.left + 1; column <= selectionBounds.right; column++) {
@@ -915,29 +939,27 @@ export function DispatchGrid({
 
   const selectAllCells = () => {
     if (!processedDispatches.length) return;
-    setSelection({
-      anchor: { row: 0, column: 0 },
-      focus: { row: processedDispatches.length - 1, column: COLUMN_LABELS.length - 1 },
-    });
+    setSelection(captureGridSelection(processedDispatches,
+      { rowId: processedDispatches[0].id, column: 0 },
+      { rowId: processedDispatches[processedDispatches.length - 1].id, column: activeColumnLabels.length - 1 }));
   };
 
   const selectColumn = (column: number) => {
     if (!processedDispatches.length || column < 0) return;
-    setSelection({
-      anchor: { row: 0, column },
-      focus: { row: processedDispatches.length - 1, column },
-    });
+    setSelection(captureGridSelection(processedDispatches,
+      { rowId: processedDispatches[0].id, column },
+      { rowId: processedDispatches[processedDispatches.length - 1].id, column }));
   };
 
   const selectRow = (row: number) => {
-    setSelection({
-      anchor: { row, column: 0 },
-      focus: { row, column: COLUMN_LABELS.length - 1 },
-    });
+    const rowId = processedDispatches[row]?.id;
+    if (!rowId) return;
+    setSelection(captureGridSelection(processedDispatches,
+      { rowId, column: 0 }, { rowId, column: activeColumnLabels.length - 1 }));
   };
 
   const startColumnResize = (event: React.MouseEvent, column: number) => {
-    if (column < 2) return;
+    if (column < protectedColumnCount) return;
     event.preventDefault();
     event.stopPropagation();
     const startX = event.clientX;
@@ -956,6 +978,10 @@ export function DispatchGrid({
   };
 
   const replaceValues = async () => {
+    if (selection && !selectionBounds) {
+      setReplaceResult("A seleção não está mais disponível. Selecione novamente as células.");
+      return;
+    }
     const needle = findText.trim();
     if (!needle) {
       setReplaceResult("Digite o valor que deseja localizar.");
@@ -966,7 +992,7 @@ export function DispatchGrid({
       top: 0,
       bottom: processedDispatches.length - 1,
       left: 0,
-      right: COLUMN_LABELS.length - 1,
+      right: activeColumnLabels.length - 1,
     };
     const updatesByRow = new Map<string, Partial<DispatchRowModel>>();
     let changedCells = 0;
@@ -974,10 +1000,10 @@ export function DispatchGrid({
     const escapedNeedle = needle.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 
     for (let rowIndex = bounds.top; rowIndex <= bounds.bottom; rowIndex++) {
-      const row = processedDispatches[rowIndex];
+      const row = selectionBounds ? selectionDispatches[rowIndex] : processedDispatches[rowIndex];
       if (!row) continue;
       for (let column = bounds.left; column <= bounds.right; column++) {
-        const key = FILTER_COLUMNS[column];
+        const key = activeFilterColumns[column];
         if (!key) continue;
         const currentValue = getColumnValue(row, key);
         const matches = matchWholeCell
@@ -1006,23 +1032,31 @@ export function DispatchGrid({
 
   const moveSelection = (rowDelta: number, columnDelta: number, extend: boolean) => {
     if (!selection) return;
-    let nextRow = Math.max(0, Math.min(processedDispatches.length - 1, selection.focus.row + rowDelta));
+    const currentRow = processedDispatches.findIndex(row => row.id === selection.focus.rowId);
+    if (currentRow < 0) return;
+    const nextRow = Math.max(0, Math.min(processedDispatches.length - 1, currentRow + rowDelta));
     let nextColumn = selection.focus.column + columnDelta;
-    while (nextColumn >= 0 && nextColumn < COLUMN_LABELS.length && hiddenColumns.includes(nextColumn)) {
+    while (nextColumn >= 0 && nextColumn < activeColumnLabels.length && hiddenColumns.includes(nextColumn)) {
       nextColumn += columnDelta >= 0 ? 1 : -1;
     }
-    nextColumn = Math.max(0, Math.min(COLUMN_LABELS.length - 1, nextColumn));
-    const focus = { row: nextRow, column: nextColumn };
-    setSelection((current) => current ? (extend ? { ...current, focus } : { anchor: focus, focus }) : null);
+    nextColumn = Math.max(0, Math.min(activeColumnLabels.length - 1, nextColumn));
+    const focus = { rowId: processedDispatches[nextRow].id, column: nextColumn };
+    setSelection(captureGridSelection(processedDispatches, extend ? selection.anchor : focus, focus));
     requestAnimationFrame(() => {
-      const cell = tableRef.current?.querySelectorAll<HTMLTableRowElement>("tbody tr")[nextRow]?.cells[nextColumn + 1];
+      // Saving on blur may reorder rows before this callback runs.
+      const row = Array.from(tableRef.current?.querySelectorAll<HTMLTableRowElement>("tbody tr") || [])
+        .find(item => item.dataset.dispatchId === focus.rowId);
+      const cell = row?.cells[focus.column + 1];
       const control = cell?.querySelector<HTMLElement>("input,select");
       (control || cell)?.focus();
     });
   };
 
   const handleGridPaste = async (event: React.ClipboardEvent<HTMLDivElement>) => {
-    if (!selectionBounds) return;
+    if (!selectionBounds) {
+      if (selection) event.preventDefault();
+      return;
+    }
     const matrix = event.clipboardData.getData("text/plain").replace(/\r/g, "").split("\n")
       .filter((line, index, rows) => line.length > 0 || index < rows.length - 1)
       .map((line) => line.split("\t"));
@@ -1041,13 +1075,13 @@ export function DispatchGrid({
     const targetIsRange = selectedCount > 1;
     const lastRow = targetIsRange
       ? selectionBounds.bottom
-      : Math.min(processedDispatches.length - 1, selectionBounds.top + matrix.length - 1);
+      : Math.min(selectionDispatches.length - 1, selectionBounds.top + matrix.length - 1);
     const lastColumn = targetIsRange
       ? selectionBounds.right
       : selectionBounds.left + sourceColumnCount - 1;
 
     for (let rowIndex = selectionBounds.top; rowIndex <= lastRow; rowIndex++) {
-      const row = processedDispatches[rowIndex];
+      const row = selectionDispatches[rowIndex];
       if (!row) continue;
       for (let column = selectionBounds.left; column <= lastColumn; column++) {
         const sourceRow = (rowIndex - selectionBounds.top) % matrix.length;
@@ -1307,9 +1341,9 @@ export function DispatchGrid({
               <button type="button" onClick={() => setShowColumnMenu(false)} aria-label="Fechar"><X className="h-3.5 w-3.5" /></button>
             </div>
             <div className="max-h-64 overflow-y-auto">
-              {COLUMN_LABELS.map((label, index) => {
+              {activeColumnLabels.map((label, index) => {
                 const visible = !hiddenColumns.includes(index);
-                const protectedColumn = index < 2;
+                const protectedColumn = index < protectedColumnCount;
                 return (
                   <button
                     type="button"
@@ -1336,7 +1370,7 @@ export function DispatchGrid({
             </button>
             <button
               type="button"
-              onClick={() => setColumnWidths([...COLUMN_WIDTHS])}
+              onClick={() => setColumnWidths([...defaultColumnWidths])}
               className="mt-1 w-full border border-[#a6a6a6] bg-[#f3f3f3] py-1 text-[10px] font-bold text-slate-700 hover:bg-[#e2f0d9]"
             >
               Restaurar larguras
@@ -1354,6 +1388,24 @@ export function DispatchGrid({
       >
         <table
           ref={tableRef}
+          onFocusCapture={(event) => {
+            const position = cellPosition(event.target);
+            if (!position || !(event.target instanceof HTMLInputElement || event.target instanceof HTMLSelectElement)) return;
+            const index = processedDispatches.findIndex(row => row.id === position.rowId);
+            setEditingRow(current => current?.id === position.rowId ? current : { id: position.rowId, index });
+            onEditingRowChange?.(position.rowId);
+            onActiveRowChange?.(position.rowId);
+            setSelection(current => current?.focus.rowId === position.rowId && current.focus.column === position.column
+              ? current : captureGridSelection(processedDispatches, position));
+          }}
+          onBlurCapture={(event) => {
+            const from = cellPosition(event.target);
+            const to = cellPosition(event.relatedTarget);
+            if (from && from.rowId !== to?.rowId) {
+              setEditingRow(null);
+              onEditingRowChange?.(null);
+            }
+          }}
           style={{
             width: visibleTableWidth,
             minWidth: visibleTableWidth,
@@ -1364,26 +1416,25 @@ export function DispatchGrid({
             setContextMenu(null);
             const position = cellPosition(event.target);
             if (!position) return;
-            onActiveRowChange?.(processedDispatches[position.row]?.id || null);
+            onActiveRowChange?.(position.rowId);
             setIsSelecting(true);
-            setSelection((current) => event.shiftKey && current
-              ? { ...current, focus: position }
-              : { anchor: position, focus: position });
+            setSelection((current) => captureGridSelection(processedDispatches,
+              event.shiftKey && current ? current.anchor : position, position));
           }}
           onContextMenu={(event) => {
             const position = cellPosition(event.target);
             if (!position) return;
             event.preventDefault();
             const insideSelection = selectionBounds &&
-              position.row >= selectionBounds.top && position.row <= selectionBounds.bottom &&
+              selection?.rowIds.slice(selectionBounds.top, selectionBounds.bottom + 1).includes(position.rowId) &&
               position.column >= selectionBounds.left && position.column <= selectionBounds.right;
-            if (!insideSelection) setSelection({ anchor: position, focus: position });
+            if (!insideSelection) setSelection(captureGridSelection(processedDispatches, position));
             setContextMenu({ x: event.clientX, y: event.clientY, column: position.column });
           }}
           onMouseOver={(event) => {
             if (!isSelecting) return;
             const position = cellPosition(event.target);
-            if (position) setSelection((current) => current ? { ...current, focus: position } : null);
+            if (position) setSelection((current) => current ? captureGridSelection(processedDispatches, current.anchor, position) : null);
           }}
           className="text-left border-collapse table-fixed text-[11px]"
         >
@@ -1391,7 +1442,7 @@ export function DispatchGrid({
           <colgroup>
             <col style={{ width: ROW_NUMBER_WIDTH }} />
             {columnWidths.map((width, index) => (
-              <col key={COLUMN_LABELS[index]} style={{ width }} />
+              <col key={activeColumnLabels[index]} style={{ width }} />
             ))}
           </colgroup>
 
@@ -1407,10 +1458,10 @@ export function DispatchGrid({
                   selectAllCells();
                 }}
               >#</th>
-              {"ABCDEFGHIJKLMNOPQ".split("").map((letter, column) => (
+              {"ABCDEFGHIJKLMNOPQR".slice(0, activeColumnLabels.length).split("").map((letter, column) => (
                 <th
                   key={letter}
-                  className={`${column === 0 ? "sticky left-[44px] z-30" : column === 1 ? "sticky left-[274px] z-30" : "relative"} cursor-pointer text-center hover:!bg-[#d9ead3]`}
+                  className={`${column === 0 ? "sticky left-[44px] z-30" : column === 1 ? "sticky left-[274px] z-30" : showCity && column === 2 ? "sticky left-[352px] z-30" : "relative"} cursor-pointer text-center hover:!bg-[#d9ead3]`}
                   title={`Selecionar coluna ${letter}`}
                   onMouseDown={(event) => {
                     event.preventDefault();
@@ -1419,7 +1470,7 @@ export function DispatchGrid({
                   }}
                 >
                   {letter}
-                  {column >= 2 && (
+                  {column >= protectedColumnCount && (
                     <span
                       role="separator"
                       aria-orientation="vertical"
@@ -1482,10 +1533,22 @@ export function DispatchGrid({
                 </div>
               </th>
 
-              {/* Coluna 2: LOGIN (Fixada à esquerda) */}
+              {showCity && (
+                <th
+                  onClick={() => handleSort("city")}
+                  className="px-2 py-1.5 sticky left-[274px] z-30 border-r border-emerald-700 cursor-pointer text-center"
+                >
+                  <div className="flex items-center justify-center space-x-1 hover:text-emerald-100">
+                    <span className="font-bold tracking-wide">CIDADE</span>
+                    <ArrowUpDown className="w-3 h-3 opacity-80 shrink-0" />
+                  </div>
+                </th>
+              )}
+
+              {/* Coluna 3: LOGIN (Fixada à esquerda) */}
               <th
                 onClick={() => handleSort("login")}
-                className="px-2 py-1.5 sticky left-[274px] z-30 border-r border-emerald-700 cursor-pointer text-center"
+                className={`px-2 py-1.5 sticky ${showCity ? "left-[352px]" : "left-[274px]"} z-30 border-r border-emerald-700 cursor-pointer text-center`}
               >
                 <div className="flex items-center justify-center space-x-1 hover:text-emerald-100">
                   <span className="font-bold tracking-wide">LOGIN</span>
@@ -1589,16 +1652,18 @@ export function DispatchGrid({
             </tr>
             <tr className="h-7 bg-[#e7e6e6]">
               <th className="excel-row-number sticky left-0 z-40 border-r border-slate-400" />
-              {FILTER_COLUMNS.map((key, index) => {
+              {activeFilterColumns.map((key, index) => {
                 const stickyClass = index === 0
                   ? "sticky left-[44px] z-30"
                   : index === 1
                     ? "sticky left-[274px] z-30"
+                    : showCity && index === 2
+                      ? "sticky left-[352px] z-30"
                     : "";
                 return (
                   <th key={key} className={`${stickyClass} bg-[#e7e6e6] border-r border-b border-[#b7b7b7] p-0.5`}>
                     <ExcelColumnFilter
-                      label={COLUMN_LABELS[index]}
+                      label={activeColumnLabels[index]}
                       options={filterOptions[key]}
                       selected={columnFilters[key] || []}
                       onChange={(values) => setColumnFilters((current) => ({ ...current, [key]: values }))}
@@ -1624,6 +1689,7 @@ export function DispatchGrid({
               return (
                 <tr
                   key={row.id}
+                  data-dispatch-id={row.id}
                   onClick={() => {
                     setSelectedRow(row.id);
                     onActiveRowChange?.(row.id);
@@ -1706,8 +1772,14 @@ export function DispatchGrid({
                     </div>
                   </td>
 
-                  {/* 2. LOGIN (Fixado - Texto Escuro e Nítido) */}
-                  <td className="sticky left-[274px] z-20 px-2 py-1 text-center group border-r border-slate-300 font-mono">
+                  {showCity && (
+                    <td className="sticky left-[274px] z-20 px-2 py-1 text-center border-r border-slate-300 bg-slate-100 font-bold text-slate-900">
+                      {row.base?.code || "--"}
+                    </td>
+                  )}
+
+                  {/* 3. LOGIN (Fixado - Texto Escuro e Nítido) */}
+                  <td className={`sticky ${showCity ? "left-[352px]" : "left-[274px]"} z-20 px-2 py-1 text-center group border-r border-slate-300 font-mono`}>
                     <div className="flex items-center justify-between">
                       <span className="mx-auto text-slate-800 font-bold text-xs">{row.driver.login_matricula}</span>
                       <button
@@ -1790,12 +1862,14 @@ export function DispatchGrid({
                   </td>
 
                   {/* 7. LOCAL */}
-                  <td className="px-1 py-1 text-center" {...cellFeedback(row.id, "origin_location_id")}>
-                    <span className="block w-full text-center font-semibold text-slate-900">
-                      {locations.find((location) => location.id === row.origin_location_id)?.name
-                        ?? row.origin_location?.name
-                        ?? ""}
-                    </span>
+                  <td className="px-0 py-0" {...cellFeedback(row.id, "origin_location_id")}>
+                    <EditableLocationCell
+                      value={row.origin_name ?? locations.find((location) => location.id === row.origin_location_id)?.name ?? row.origin_location?.name ?? ""}
+                      options={locationNames}
+                      label={`Local de ${row.driver.name}`}
+                      onCommit={(value) => commitUpdate(row.id, { origin_name: value })}
+                      onDraftChange={(value) => onDraftRow(row.id, { origin_name: value })}
+                    />
                   </td>
 
                   {/* 8. ENTRADA */}
@@ -1936,7 +2010,7 @@ export function DispatchGrid({
             })}
             {!processedDispatches.length && (
               <tr>
-                <td colSpan={18} className="py-10 text-center text-slate-500 font-sans">
+                <td colSpan={activeColumnLabels.length + 1} className="py-10 text-center text-slate-500 font-sans">
                   Nenhum registro encontrado para os filtros selecionados.
                 </td>
               </tr>
@@ -1976,7 +2050,7 @@ export function DispatchGrid({
           <button
             type="button"
             role="menuitem"
-            disabled={contextMenu.column < 2}
+            disabled={contextMenu.column < protectedColumnCount}
             onClick={() => {
               setHiddenColumns((current) => current.includes(contextMenu.column)
                 ? current

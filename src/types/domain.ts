@@ -6,6 +6,7 @@ export interface DispatchRowModel extends Dispatch {
   vehicle?: Vehicle;
   fleet_code?: string;
   origin_location?: Location;
+  origin_name?: string;
   destination_location?: Location;
   final_destination_location?: Location;
   destination_name?: string;

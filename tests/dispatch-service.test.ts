@@ -22,6 +22,12 @@ test("condutor inativo não entra no acionamento", () => {
   assert.equal(isDriverActiveForDispatch(undefined), false);
 });
 
+test("local digitado livremente é resolvido e marcado como manual", async () => {
+  const saved = await dispatchService.updateDispatch("disp-1", { origin_name: "  novo local  " });
+  assert.ok(saved?.origin_location_id);
+  assert.equal(saved.origin_source, "MANUAL");
+});
+
 test("editar somente a entrada preserva a saída existente no cálculo", async () => {
   const saved = await dispatchService.updateDispatch("disp-1", { entry_time: "02:00:00" });
   assert.ok(saved);
