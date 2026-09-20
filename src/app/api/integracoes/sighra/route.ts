@@ -23,6 +23,9 @@ export async function POST(request: Request) {
   if (!configured) return json({ erro: "Ponte não configurada." }, 503);
   const identity = bridgeIdentity(request);
   if (!identity) return json({ erro: "Credencial inválida." }, 401);
+  if (!localBridgeTestEnabled() && identity !== activeBridgeId()) {
+    return json({ erro: "Esta ponte não está ativa para este ambiente." }, 403);
+  }
   let body;
   try {
     const raw = await request.text();
