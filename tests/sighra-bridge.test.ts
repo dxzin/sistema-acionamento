@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { GET, POST } from "../src/app/api/integracoes/sighra/route";
 import { resetLocalBridgeForTests, touchLocalBridge } from "../src/lib/sighra/local-bridge";
+import { activeBridgeId, bridgeAuth, bridgeIdentity } from "../src/lib/sighra/server";
 
 test("ponte recusa chave ausente, inválida e mensagens indevidas antes de acessar o banco", async () => {
   const original = process.env.SIGHRA_BRIDGE_TOKEN;
@@ -24,6 +25,45 @@ test("ponte recusa chave ausente, inválida e mensagens indevidas antes de acess
   } finally {
     if (original === undefined) delete process.env.SIGHRA_BRIDGE_TOKEN;
     else process.env.SIGHRA_BRIDGE_TOKEN = original;
+  }
+});
+
+test("produção reconhece a ponte do notebook e só a ativa após a troca explícita", () => {
+  const previous = {
+    local: process.env.SIGHRA_LOCAL_BRIDGE_TEST,
+    company: process.env.SIGHRA_BRIDGE_TOKEN,
+    notebook: process.env.SIGHRA_NOTEBOOK_BRIDGE_TOKEN,
+    active: process.env.SIGHRA_ACTIVE_BRIDGE,
+  };
+  const company = "company-bridge-".padEnd(40, "c");
+  const notebook = "notebook-bridge-".padEnd(40, "n");
+  const request = (token: string) => new Request("https://sistema.example/api/integracoes/sighra", {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  try {
+    delete process.env.SIGHRA_LOCAL_BRIDGE_TEST;
+    process.env.SIGHRA_BRIDGE_TOKEN = company;
+    process.env.SIGHRA_NOTEBOOK_BRIDGE_TOKEN = notebook;
+    delete process.env.SIGHRA_ACTIVE_BRIDGE;
+
+    assert.equal(bridgeIdentity(request(company)), "empresa");
+    assert.equal(bridgeIdentity(request(notebook)), "notebook");
+    assert.equal(activeBridgeId(), "empresa");
+    assert.equal(bridgeAuth(request(company)), true);
+    assert.equal(bridgeAuth(request(notebook)), false);
+
+    process.env.SIGHRA_ACTIVE_BRIDGE = "notebook";
+    assert.equal(activeBridgeId(), "notebook");
+    assert.equal(bridgeAuth(request(company)), false);
+    assert.equal(bridgeAuth(request(notebook)), true);
+  } finally {
+    for (const [key, value] of Object.entries(previous)) {
+      const envName = key === "local" ? "SIGHRA_LOCAL_BRIDGE_TEST"
+        : key === "company" ? "SIGHRA_BRIDGE_TOKEN"
+          : key === "notebook" ? "SIGHRA_NOTEBOOK_BRIDGE_TOKEN" : "SIGHRA_ACTIVE_BRIDGE";
+      if (value === undefined) delete process.env[envName];
+      else process.env[envName] = value;
+    }
   }
 });
 

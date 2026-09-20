@@ -2,6 +2,7 @@ import { createClient as createAdminClient } from "@supabase/supabase-js";
 import { createClient } from "@/lib/supabase/server";
 import { validDashboardToken } from "@/lib/api/schedule-dashboard";
 import { getLocalBridgeStatus, localBridgeTestEnabled, localBridgeToken, touchLocalBridge } from "@/lib/sighra/local-bridge";
+import { activeBridgeId, bridgeIdentity } from "@/lib/sighra/server";
 
 export const runtime = "nodejs";
 
@@ -16,9 +17,12 @@ function database() {
 }
 
 export async function POST(request: Request) {
-  const secret = localBridgeTestEnabled() ? localBridgeToken() : process.env.SIGHRA_BRIDGE_TOKEN;
-  if (!secret || secret.length < 32) return json({ erro: "Ponte não configurada." }, 503);
-  if (!validDashboardToken(request.headers.get("authorization"), secret)) return json({ erro: "Credencial inválida." }, 401);
+  const configured = localBridgeTestEnabled()
+    ? Boolean(localBridgeToken())
+    : Boolean(process.env.SIGHRA_BRIDGE_TOKEN || process.env.SIGHRA_NOTEBOOK_BRIDGE_TOKEN);
+  if (!configured) return json({ erro: "Ponte não configurada." }, 503);
+  const identity = bridgeIdentity(request);
+  if (!identity) return json({ erro: "Credencial inválida." }, 401);
   let body;
   try {
     const raw = await request.text();
@@ -35,11 +39,12 @@ export async function POST(request: Request) {
   const db = database();
   if (!db) return json({ erro: "Serviço não configurado." }, 503);
   const now = new Date().toISOString();
+  const bridgeId = identity === "notebook" ? "notebook" : "empresa";
   const row = { id: "empresa", last_seen_at: now, database_ok: body.database_ok, query_enabled: body.query_enabled === true,
     ...(body.database_ok ? { last_database_ok_at: now } : {}) };
   const { error } = await db.from("sighra_bridge_status").upsert(row);
   if (error) return json({ erro: "Não foi possível registrar o sinal." }, 503);
-  return json({ recebido_em: now });
+  return json({ recebido_em: now, ambiente: bridgeId });
 }
 
 function localStatusResponse() {
@@ -61,12 +66,15 @@ export async function GET(request: Request) {
   if (localBridgeTestEnabled()) {
     return localStatusResponse();
   }
-  if (!process.env.SIGHRA_BRIDGE_TOKEN) return json({ status: "nao_configurada" });
+  const bridgeId = activeBridgeId();
+  const activeToken = bridgeId === "notebook" ? process.env.SIGHRA_NOTEBOOK_BRIDGE_TOKEN : process.env.SIGHRA_BRIDGE_TOKEN;
+  if (!activeToken) return json({ status: "nao_configurada" });
   const db = database();
   if (!db) return json({ erro: "Serviço não configurado." }, 503);
   const { data, error } = await db.from("sighra_bridge_status").select("last_seen_at,database_ok,last_database_ok_at,query_enabled").eq("id", "empresa").maybeSingle();
   if (error) return json({ erro: "Status indisponível." }, 503);
   const online = data && Date.now() - Date.parse(data.last_seen_at) < 120_000;
   return json({ status: !online ? "offline" : data.database_ok ? "online" : "sem_banco",
-    ultimo_sinal: data?.last_seen_at ?? null, ultimo_acesso_banco: data?.last_database_ok_at ?? null, query_enabled: data?.query_enabled ?? false });
+    ultimo_sinal: data?.last_seen_at ?? null, ultimo_acesso_banco: data?.last_database_ok_at ?? null,
+    query_enabled: data?.query_enabled ?? false, ambiente: bridgeId });
 }
