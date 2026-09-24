@@ -3,6 +3,9 @@
 @tailwind utilities;
 
 :root {
+  color-scheme: light;
+  --background: #e7e7e7;
+  --foreground: #222222;
   --excel-green: #107c41;
   --excel-green-dark: #0b5a30;
   --excel-green-soft: #e2f0d9;
@@ -11,11 +14,53 @@
   --excel-grid: #d9d9d9;
   --excel-text: #222222;
   --excel-selection: #21a366;
+  --surface-canvas: #e7e7e7;
+  --surface-workspace: #dedede;
+  --surface-panel: #ffffff;
+  --surface-raised: #f3f3f3;
+  --surface-subtle: #ededed;
+  --surface-hover: #e2f0d9;
+  --border-default: #c9c9c9;
+  --border-strong: #a6a6a6;
+  --text-primary: #222222;
+  --text-secondary: #555555;
+  --text-muted: #6b7280;
+  --accent-soft: #e2f0d9;
+  --accent-text: #174d2d;
+  --focus-ring: #0b6fb8;
+}
+
+[data-app-theme="dark"] {
+  color-scheme: dark;
+  --background: #171b20;
+  --foreground: #e7edf4;
+  --excel-green: #176b42;
+  --excel-green-dark: #105233;
+  --excel-green-soft: #203d31;
+  --excel-chrome: #252b32;
+  --excel-border: #4b5560;
+  --excel-grid: #3d4650;
+  --excel-text: #e7edf4;
+  --excel-selection: #55c987;
+  --surface-canvas: #171b20;
+  --surface-workspace: #1b2026;
+  --surface-panel: #22282f;
+  --surface-raised: #292f37;
+  --surface-subtle: #303740;
+  --surface-hover: #203d31;
+  --border-default: #46505b;
+  --border-strong: #5a6571;
+  --text-primary: #e7edf4;
+  --text-secondary: #c5ced8;
+  --text-muted: #aab4c0;
+  --accent-soft: #203d31;
+  --accent-text: #a9e6c3;
+  --focus-ring: #7dd3fc;
 }
 
 body {
   color: var(--excel-text);
-  background: #e7e7e7;
+  background: var(--surface-canvas);
   font-family: "Segoe UI", Calibri, Arial, sans-serif;
   overflow-x: hidden;
 }
@@ -26,17 +71,17 @@ body {
 }
 
 ::-webkit-scrollbar-track {
-  background: #f0f0f0;
-  border: 1px solid #d1d1d1;
+  background: var(--surface-raised);
+  border: 1px solid var(--border-default);
 }
 
 ::-webkit-scrollbar-thumb {
-  background: #c1c1c1;
-  border: 2px solid #f0f0f0;
+  background: color-mix(in srgb, var(--text-muted) 62%, var(--surface-raised));
+  border: 2px solid var(--surface-raised);
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: #a8a8a8;
+  background: color-mix(in srgb, var(--text-secondary) 72%, var(--surface-raised));
 }
 
 .excel-shell { background: #e9e9e9; color: var(--excel-text); }
@@ -136,8 +181,10 @@ body {
 .excel-grid { color: var(--excel-text); background: #fff; border: 1px solid #a6a6a6; box-shadow: none; }
 .excel-grid table { min-width: 1760px; background: #fff; }
 .excel-grid thead { color: #fff !important; background: var(--excel-green) !important; box-shadow: none !important; border-bottom: 1px solid var(--excel-green-dark) !important; }
-.excel-grid thead tr:last-child th { color: #fff !important; background: var(--excel-green) !important; border-right: 1px solid #4e9d72 !important; border-bottom: 1px solid #0a6033 !important; font-family: Calibri, "Segoe UI", sans-serif; font-size: 11px; letter-spacing: .025em; font-weight: 700; }
-.excel-grid thead tr:last-child th:hover { background: var(--excel-green-dark) !important; }
+.excel-grid thead tr:nth-child(2) th { color: #fff !important; background: var(--excel-green) !important; border-right: 1px solid #4e9d72 !important; border-bottom: 1px solid #0a6033 !important; font-family: Calibri, "Segoe UI", sans-serif; font-size: 11px; letter-spacing: .025em; font-weight: 700; }
+.excel-grid thead tr:nth-child(2) th:hover { background: var(--excel-green-dark) !important; }
+.excel-grid thead tr:last-child:not(:nth-child(2)) th { color: #475569 !important; background: #e7e6e6 !important; border-right: 1px solid #bcbcbc !important; border-bottom: 1px solid #9f9f9f !important; }
+.excel-grid thead tr:last-child:not(:nth-child(2)) th:hover { background: #dedede !important; }
 .excel-grid .excel-column-letters th { height: 20px; padding: 0; color: #454545 !important; background: #e6e6e6 !important; border-right: 1px solid #bcbcbc !important; border-bottom: 1px solid #b8b8b8 !important; font-weight: 400; text-align: center; }
 .excel-grid .excel-column-letters th:nth-child(1) { width: 44px; min-width: 44px; max-width: 44px; }
 .excel-grid .excel-column-letters th:nth-child(2) { width: 230px; min-width: 230px; max-width: 230px; }
@@ -288,16 +335,17 @@ body {
 @keyframes dispatch-reminder-enter { from { opacity: 0; transform: translateY(8px); } }
 @keyframes dispatch-reminder-ring { 0%, 100% { transform: rotate(0); } 25% { transform: rotate(14deg); } 75% { transform: rotate(-14deg); } }
 
-/* Modo escuro da folha de acionamento: grafite, sem preto puro e sem apagar os parâmetros operacionais. */
+/* Modo escuro da folha de acionamento: superfícies em camadas, contraste AA e cores operacionais tonais. */
 [data-app-theme="dark"] body,
-[data-app-theme="dark"] .excel-shell { color: #e5e7eb; background: #1d2126; }
-[data-app-theme="dark"] .excel-workspace { background: #20242a; }
-[data-app-theme="dark"] .excel-sidebar { color: #d9dee5; background: #252a31; border-color: #454c55; }
+[data-app-theme="dark"] .excel-shell { color: var(--text-primary); background: var(--surface-canvas); }
+[data-app-theme="dark"] .excel-titlebar { background: #105c38; border-color: #0a4329; }
+[data-app-theme="dark"] .excel-workspace { background: var(--surface-workspace); }
+[data-app-theme="dark"] .excel-sidebar { color: var(--text-secondary); background: var(--surface-panel); border-color: var(--border-default); }
 [data-app-theme="dark"] .excel-sidebar-title,
-[data-app-theme="dark"] .excel-sidebar-footer { color: #aeb7c2; background: #292f36; border-color: #454c55; }
-[data-app-theme="dark"] .excel-sheet-link { color: #d9dee5; }
+[data-app-theme="dark"] .excel-sidebar-footer { color: var(--text-muted); background: var(--surface-raised); border-color: var(--border-default); }
+[data-app-theme="dark"] .excel-sheet-link { color: var(--text-secondary); }
 [data-app-theme="dark"] .excel-sheet-link:hover { color: #fff; background: #303740; }
-[data-app-theme="dark"] .excel-sheet-link.is-active { color: #9de0bb; background: #1f352b; border-left-color: #39a96b; box-shadow: inset 0 -1px 0 #405048, inset 0 1px 0 #405048; }
+[data-app-theme="dark"] .excel-sheet-link.is-active { color: var(--accent-text); background: var(--accent-soft); border-left-color: #55c987; box-shadow: inset 0 -1px 0 #365746, inset 0 1px 0 #365746; }
 [data-app-theme="dark"] .excel-kpis { background: #454c55; border-color: #454c55; }
 [data-app-theme="dark"] .excel-kpis > div { color: #e5e7eb !important; background: #292f36 !important; }
 [data-app-theme="dark"] .excel-kpis > div > div > div:first-child { color: #aeb7c2 !important; }
@@ -331,6 +379,8 @@ body {
 [data-app-theme="dark"] .excel-grid .excel-grid-canvas,
 [data-app-theme="dark"] .excel-grid table { background: #20242a !important; }
 [data-app-theme="dark"] .excel-grid .excel-column-letters th { color: #cbd5e1 !important; background: #30353c !important; border-color: #555d67 !important; }
+[data-app-theme="dark"] .excel-grid thead tr:last-child:not(:nth-child(2)) th { color: var(--text-muted) !important; background: var(--surface-raised) !important; border-color: var(--border-default) !important; }
+[data-app-theme="dark"] .excel-grid thead tr:last-child:not(:nth-child(2)) th:hover { background: var(--surface-subtle) !important; }
 [data-app-theme="dark"] .excel-grid tbody tr { background: #252a31; }
 [data-app-theme="dark"] .excel-grid tbody tr:nth-child(even) { background: #292f36; }
 [data-app-theme="dark"] .excel-grid tbody tr:hover,
@@ -392,7 +442,7 @@ body {
 .excel-grid .excel-status-suspensao { color: #953734 !important; background: #f2dcdb !important; border-color: #e6b8b7 !important; }
 .excel-grid .excel-status-viagem-fechada { color: #1f497d !important; background: #dce6f1 !important; border-color: #b8cce4 !important; }
 
-input:focus-visible, select:focus-visible, button:focus-visible, a:focus-visible { outline: 2px solid #5aa9e6; outline-offset: 1px; }
+input:focus-visible, select:focus-visible, button:focus-visible, a:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px; }
 
 /* Relatório gerencial: uma folha de fechamento, com a linguagem visual do Excel. */
 .excel-report-sheet { min-width: 760px; border: 1px solid #a6a6a6; background: #fff; color: #172033; box-shadow: 0 1px 2px rgba(15, 23, 42, .08); font-family: Calibri, "Segoe UI", sans-serif; }
@@ -467,18 +517,21 @@ input:focus-visible, select:focus-visible, button:focus-visible, a:focus-visible
   .excel-report-table th { position: static; }
 }
 
-/* No tema escuro, o texto do status mantém contraste com a cor operacional da célula. */
-[data-app-theme="dark"] .excel-grid .excel-status-acionado { color: #005a16 !important; -webkit-text-fill-color: #005a16; }
-[data-app-theme="dark"] .excel-grid .excel-status-abonado { color: #8f0010 !important; -webkit-text-fill-color: #8f0010; }
-[data-app-theme="dark"] .excel-grid .excel-status-apoio { color: #7a4200 !important; -webkit-text-fill-color: #7a4200; }
+/* Cores tonais mantêm a família semântica no escuro sem criar células luminosas. */
+[data-app-theme="dark"] .excel-grid .excel-status-acionado { color: #bbf7d0 !important; background: #173f2a !important; border-color: #2f7d4f !important; -webkit-text-fill-color: #bbf7d0; }
+[data-app-theme="dark"] .excel-grid .excel-status-abonado { color: #fecaca !important; background: #4a2528 !important; border-color: #8f3c46 !important; -webkit-text-fill-color: #fecaca; }
+[data-app-theme="dark"] .excel-grid .excel-status-apoio { color: #fde68a !important; background: #473a1d !important; border-color: #8a7028 !important; -webkit-text-fill-color: #fde68a; }
 [data-app-theme="dark"] .excel-grid .excel-status-troca,
-[data-app-theme="dark"] .excel-grid .excel-status-baldeio { color: #171717 !important; -webkit-text-fill-color: #171717; }
-[data-app-theme="dark"] .excel-grid .excel-status-falta { color: #fff !important; -webkit-text-fill-color: #fff; }
-[data-app-theme="dark"] .excel-grid .excel-status-atestado { color: #173f6b !important; -webkit-text-fill-color: #173f6b; }
-[data-app-theme="dark"] .excel-grid .excel-status-afastado { color: #52396d !important; -webkit-text-fill-color: #52396d; }
-[data-app-theme="dark"] .excel-grid .excel-status-bate-e-volta { color: #a94f00 !important; -webkit-text-fill-color: #a94f00; }
-[data-app-theme="dark"] .excel-grid .excel-status-suspensao { color: #842724 !important; -webkit-text-fill-color: #842724; }
-[data-app-theme="dark"] .excel-grid .excel-status-viagem-fechada { color: #173f6b !important; -webkit-text-fill-color: #173f6b; }
+[data-app-theme="dark"] .excel-grid .excel-status-baldeio { color: #fef08a !important; background: #494112 !important; border-color: #8b7c22 !important; -webkit-text-fill-color: #fef08a; }
+[data-app-theme="dark"] .excel-grid .excel-status-falta { color: #fff !important; background: #681f28 !important; border-color: #b6404c !important; -webkit-text-fill-color: #fff; }
+[data-app-theme="dark"] .excel-grid .excel-status-atestado { color: #bfdbfe !important; background: #1e3a56 !important; border-color: #38658e !important; -webkit-text-fill-color: #bfdbfe; }
+[data-app-theme="dark"] .excel-grid .excel-status-afastado { color: #e9d5ff !important; background: #3c2d4c !important; border-color: #6c5085 !important; -webkit-text-fill-color: #e9d5ff; }
+[data-app-theme="dark"] .excel-grid .excel-status-bate-e-volta { color: #fed7aa !important; background: #4b2f1d !important; border-color: #8a5834 !important; -webkit-text-fill-color: #fed7aa; }
+[data-app-theme="dark"] .excel-grid .excel-status-suspensao { color: #fecaca !important; background: #4a2826 !important; border-color: #89504b !important; -webkit-text-fill-color: #fecaca; }
+[data-app-theme="dark"] .excel-grid .excel-status-viagem-fechada { color: #c7d2fe !important; background: #29375a !important; border-color: #4b6095 !important; -webkit-text-fill-color: #c7d2fe; }
+[data-app-theme="dark"] .excel-grid [class~="bg-[#FFF2CC]"] { color: #fde68a !important; background-color: #473a1d !important; }
+[data-app-theme="dark"] .excel-grid [class~="bg-[#DDEBF7]"] { color: #bfdbfe !important; background-color: #1e3a56 !important; }
+[data-app-theme="dark"] .excel-grid [class~="bg-[#EDE7F6]"] { color: #e9d5ff !important; background-color: #3c2d4c !important; }
 
 @media (max-width: 900px) {
   .excel-sidebar { width: 52px; }
@@ -501,7 +554,8 @@ input:focus-visible, select:focus-visible, button:focus-visible, a:focus-visible
 .excel-schedule-grid .excel-row-number { background-color: #ededed !important; color: #555 !important; }
 
 /* Tema escuro global: cobre as demais folhas sem descaracterizar a linguagem de planilha. */
-[data-app-theme="dark"] .excel-theme-control option { color: #111; background: #fff; }
+[data-app-theme="dark"] .excel-theme-control { background: rgba(0, 0, 0, .2); border-color: rgba(255, 255, 255, .42); }
+[data-app-theme="dark"] .excel-theme-control option { color: var(--text-primary); background: var(--surface-raised); }
 [data-app-theme="dark"] .excel-shell [class~="bg-white"],
 [data-app-theme="dark"] .excel-shell [class~="bg-slate-50"],
 [data-app-theme="dark"] .excel-shell [class~="bg-slate-100"],
@@ -514,6 +568,35 @@ input:focus-visible, select:focus-visible, button:focus-visible, a:focus-visible
 [data-app-theme="dark"] .excel-shell input,
 [data-app-theme="dark"] .excel-shell select { color: #f1f5f9; background-color: #343a42; border-color: #59616b; }
 [data-app-theme="dark"] .excel-shell input::placeholder { color: #9ca6b2; }
+[data-app-theme="dark"] .excel-shell textarea { color: var(--text-primary); background: var(--surface-subtle); border-color: var(--border-strong); }
+[data-app-theme="dark"] .excel-shell [class~="border-slate-200"],
+[data-app-theme="dark"] .excel-shell [class~="border-slate-300"],
+[data-app-theme="dark"] .excel-shell [class~="border-slate-400"],
+[data-app-theme="dark"] .excel-shell [class~="border-[#a6a6a6]"] { border-color: var(--border-default) !important; }
+[data-app-theme="dark"] .excel-shell [class~="bg-slate-200"],
+[data-app-theme="dark"] .excel-shell [class~="hover:bg-slate-200"]:hover { background-color: var(--surface-subtle) !important; }
+[data-app-theme="dark"] .excel-shell [class~="hover:bg-slate-100"]:hover { background-color: #353d46 !important; }
+[data-app-theme="dark"] .excel-shell [class~="text-emerald-700"] { color: #86efac !important; }
+[data-app-theme="dark"] .excel-shell [class~="text-red-700"],
+[data-app-theme="dark"] .excel-shell [class~="text-rose-800"],
+[data-app-theme="dark"] .excel-shell [class~="text-rose-900"] { color: #fecaca !important; }
+
+/* Estados semânticos recebem variantes escuras; significado não depende apenas da cor. */
+[data-app-theme="dark"] .excel-shell [class~="bg-emerald-50"] { background-color: #173f2a !important; }
+[data-app-theme="dark"] .excel-shell [class~="border-emerald-300"] { border-color: #2f7d4f !important; }
+[data-app-theme="dark"] .excel-shell [class~="text-emerald-900"] { color: #bbf7d0 !important; }
+[data-app-theme="dark"] .excel-shell [class~="bg-amber-50"] { background-color: #473a1d !important; }
+[data-app-theme="dark"] .excel-shell [class~="border-amber-300"] { border-color: #8a7028 !important; }
+[data-app-theme="dark"] .excel-shell [class~="text-amber-900"] { color: #fde68a !important; }
+[data-app-theme="dark"] .excel-shell [class~="bg-rose-50"],
+[data-app-theme="dark"] .excel-shell [class~="bg-red-50"] { background-color: #4a2528 !important; }
+[data-app-theme="dark"] .excel-shell [class~="border-rose-300"],
+[data-app-theme="dark"] .excel-shell [class~="border-red-300"] { border-color: #8f3c46 !important; }
+
+[data-app-theme="dark"] .excel-schedule-grid td.excel-schedule-rest,
+[data-app-theme="dark"] .excel-schedule-grid td.excel-schedule-rest input { background-color: #681f28 !important; }
+[data-app-theme="dark"] .excel-schedule-grid td.excel-schedule-vacation,
+[data-app-theme="dark"] .excel-schedule-grid td.excel-schedule-vacation input { color: #fed7aa !important; background-color: #4b2f1d !important; -webkit-text-fill-color: #fed7aa; }
 [data-app-theme="dark"] .excel-catalog-grid,
 [data-app-theme="dark"] .excel-schedule-grid { color: #e5e7eb; background: #20242a; border-color: #4b5159; }
 [data-app-theme="dark"] .excel-catalog-grid .excel-column-letters th,
@@ -566,6 +649,13 @@ input:focus-visible, select:focus-visible, button:focus-visible, a:focus-visible
 [data-app-theme="dark"] .excel-report-compact-table tbody tr:nth-child(even) td { background: #292f36; }
 [data-app-theme="dark"] .excel-report-table td:first-child,
 [data-app-theme="dark"] .excel-report-compact-table td:first-child { color: #b8c0ca; background: #30353c; }
+[data-app-theme="dark"] .excel-report-status-acionado { border-color: #2f7d4f; background: #173f2a; color: #bbf7d0; }
+[data-app-theme="dark"] .excel-report-status-abonado { border-color: #8f3c46; background: #4a2528; color: #fecaca; }
+[data-app-theme="dark"] .excel-report-status-apoio { border-color: #8a7028; background: #473a1d; color: #fde68a; }
+[data-app-theme="dark"] .excel-report-status-baldeio,
+[data-app-theme="dark"] .excel-report-status-troca { border-color: #8b7c22; background: #494112; color: #fef08a; }
+[data-app-theme="dark"] .excel-report-status-empty { border-color: var(--border-default); background: var(--surface-subtle); color: var(--text-muted); }
+[data-app-theme="dark"] .excel-report-status-other { border-color: #4b6095; background: #29375a; color: #c7d2fe; }
 
 @media print {
   [data-app-theme="dark"] .excel-report-sheet,
@@ -581,16 +671,22 @@ input:focus-visible, select:focus-visible, button:focus-visible, a:focus-visible
 .excel-grid tbody tr td.excel-driver-castilho,
 .excel-grid tbody tr:hover td.excel-driver-castilho,
 .excel-grid tbody tr.excel-selected-row td.excel-driver-castilho,
-.excel-grid tbody tr.excel-collaborator-row td.excel-driver-castilho,
+.excel-grid tbody tr.excel-collaborator-row td.excel-driver-castilho {
+  background-color: #e2f0d9 !important;
+  color: #000 !important;
+}
+.excel-grid tbody td.excel-driver-castilho .excel-driver-name-value {
+  color: #000 !important;
+  -webkit-text-fill-color: #000;
+}
 [data-app-theme="dark"] .excel-grid tbody tr td.excel-driver-castilho,
 [data-app-theme="dark"] .excel-grid tbody tr:hover td.excel-driver-castilho,
 [data-app-theme="dark"] .excel-grid tbody tr.excel-selected-row td.excel-driver-castilho,
 [data-app-theme="dark"] .excel-grid tbody tr.excel-collaborator-row td.excel-driver-castilho {
-  background-color: #e2f0d9 !important;
-  color: #000 !important;
+  background-color: #244b38 !important;
+  color: #e8f7ee !important;
 }
-.excel-grid tbody td.excel-driver-castilho .excel-driver-name-value,
 [data-app-theme="dark"] .excel-grid tbody td.excel-driver-castilho .excel-driver-name-value {
-  color: #000 !important;
-  -webkit-text-fill-color: #000;
+  color: #e8f7ee !important;
+  -webkit-text-fill-color: #e8f7ee;
 }

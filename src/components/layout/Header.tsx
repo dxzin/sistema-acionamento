@@ -11,7 +11,7 @@ type ThemePreference = "light" | "dark" | "auto";
 export function Header() {
   const { user, logout } = useAuth();
   const [time, setTime] = useState<string>("");
-  const [themePreference, setThemePreference] = useState<ThemePreference>("light");
+  const [themePreference, setThemePreference] = useState<ThemePreference>("auto");
   const [systemDark, setSystemDark] = useState(false);
   const [themeReady, setThemeReady] = useState(false);
 
@@ -33,8 +33,8 @@ export function Header() {
   }, []);
 
   useEffect(() => {
-    const savedTheme = localStorage.getItem("app-theme") || localStorage.getItem("dispatch-grid-theme");
-    if (["light", "dark", "auto"].includes(savedTheme || "")) setThemePreference(savedTheme as ThemePreference);
+    const savedTheme = localStorage.getItem("app-theme") || localStorage.getItem("dispatch-grid-theme") || "auto";
+    if (["light", "dark", "auto"].includes(savedTheme)) setThemePreference(savedTheme as ThemePreference);
     setThemeReady(true);
 
     const media = window.matchMedia("(prefers-color-scheme: dark)");
@@ -50,6 +50,7 @@ export function Header() {
     if (!themeReady) return;
     localStorage.setItem("app-theme", themePreference);
     document.documentElement.dataset.appTheme = darkMode ? "dark" : "light";
+    document.documentElement.style.colorScheme = darkMode ? "dark" : "light";
   }, [darkMode, themePreference, themeReady]);
 
   return (
@@ -71,13 +72,13 @@ export function Header() {
       <div className="flex items-center space-x-4">
         {user && <SighraBridgeStatus />}
         {(user?.role === "admin" || user?.role === "supervisor") && <SupabaseUsage compact />}
-        <label className="excel-theme-control flex h-7 items-center gap-1 border border-white/25 bg-black/10 px-1.5 text-[10px] font-bold text-white" title="Tema do sistema">
+        <label className="excel-theme-control flex min-h-11 items-center gap-1.5 border border-white/30 bg-black/10 px-2.5 text-[10px] font-bold text-white" title="Aparência do sistema">
           {darkMode ? <Moon className="h-3.5 w-3.5" /> : <Sun className="h-3.5 w-3.5" />}
           <select
             value={themePreference}
             onChange={(event) => setThemePreference(event.target.value as ThemePreference)}
             className="bg-transparent text-[10px] font-bold text-white outline-none"
-            aria-label="Tema do sistema"
+            aria-label="Aparência do sistema"
           >
             <option value="light">Claro</option>
             <option value="dark">Escuro</option>
