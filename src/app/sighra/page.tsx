@@ -2,6 +2,8 @@
 import { FormEvent, useEffect, useState } from "react";
 import { Header } from "@/components/layout/Header";
 import { Sidebar } from "@/components/layout/Sidebar";
+import { SighraBridgeStatus } from "@/components/layout/SighraBridgeStatus";
+import { useAuth } from "@/lib/auth-context";
 import type { SighraResult } from "@/lib/sighra/queries";
 import { macroLocation, macroMapUrl } from "@/lib/sighra/queries";
 import type { SighraMacro } from "@/lib/sighra/queries";
@@ -24,6 +26,7 @@ async function responseJson(response: Response) {
 }
 
 export default function SighraPage() {
+  const { user } = useAuth();
   const [login, setLogin] = useState("");
   const [job, setJob] = useState<Job | null>(null);
   const [requesting, setRequesting] = useState(false);
@@ -73,6 +76,7 @@ export default function SighraPage() {
     <div className="flex flex-1 overflow-hidden">
       <Sidebar />
       <main className="excel-workspace flex-1 overflow-auto p-3 space-y-3">
+        <SighraBridgeStatus canManage={user?.role === "admin" || user?.role === "supervisor"} compact={false} />
         <section className="excel-toolbar border border-slate-300 p-3 text-sm">
           <h1 className="font-semibold text-lg">Consulta Sighra</h1>
           <p className="text-xs mt-1">Consulte as últimas 10 macros pelo login do condutor. A ponte e a VPN precisam estar conectadas.</p>

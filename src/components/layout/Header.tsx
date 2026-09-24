@@ -70,7 +70,7 @@ export function Header() {
       </div>
 
       <div className="flex items-center space-x-4">
-        {user && <SighraBridgeStatus />}
+        {user && <SighraBridgeStatus canManage={user.role === "admin" || user.role === "supervisor"} />}
         {(user?.role === "admin" || user?.role === "supervisor") && <SupabaseUsage compact />}
         <label className="excel-theme-control flex min-h-11 items-center gap-1.5 border border-white/30 bg-black/10 px-2.5 text-[10px] font-bold text-white" title="Aparência do sistema">
           {darkMode ? <Moon className="h-3.5 w-3.5" /> : <Sun className="h-3.5 w-3.5" />}

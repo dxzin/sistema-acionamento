@@ -1,4 +1,4 @@
-import { adminDb, json, sessionDb, validOrigin } from "@/lib/sighra/server";
+import { activeBridgeId, adminDb, json, sessionDb, validOrigin } from "@/lib/sighra/server";
 import { jobView, validDate, validLogin } from "@/lib/sighra/queries";
 import { addCalendarDays, currentDateInBrasilia } from "@/lib/dates/operational-date";
 import { enqueueLocalBridgeJob, getLocalBridgeJob, getLocalBridgeStatus, localBridgeTestEnabled } from "@/lib/sighra/local-bridge";
@@ -22,11 +22,13 @@ export async function POST(request: Request) {
   }
   try {
     const db = adminDb();
-    const { data: bridge, error: bridgeError } = await db.from("sighra_bridge_status").select("database_ok,last_seen_at,query_enabled").eq("id", "empresa").maybeSingle();
+    const bridgeId = await activeBridgeId();
+    const bridgeLabel = bridgeId === "notebook" ? "notebook" : "PC da empresa";
+    const { data: bridge, error: bridgeError } = await db.from("sighra_bridge_status").select("database_ok,last_seen_at,query_enabled").eq("id", bridgeId).maybeSingle();
     if (bridgeError) throw bridgeError;
-    if (!bridge || Date.now() - Date.parse(bridge.last_seen_at) >= 120_000) return json({ erro: "A ponte está offline. Confira o PC e a VPN." }, 503);
-    if (!bridge.query_enabled) return json({ erro: "Atualize os scripts no PC da empresa e reinicie a ponte para habilitar consultas." }, 503);
-    if (!bridge.database_ok) return json({ erro: "A ponte está sem acesso ao Sighra. Confira a VPN." }, 503);
+    if (!bridge || Date.now() - Date.parse(bridge.last_seen_at) >= 120_000) return json({ erro: `A ponte selecionada (${bridgeLabel}) está offline.` }, 503);
+    if (!bridge.query_enabled) return json({ erro: `A ponte selecionada (${bridgeLabel}) ainda não habilitou consultas.` }, 503);
+    if (!bridge.database_ok) return json({ erro: `A ponte selecionada (${bridgeLabel}) está sem acesso ao SIGhRA. Confira a VPN.` }, 503);
     const { data, error } = await db.rpc("enqueue_sighra_query", { p_user: user.id, p_login: login, p_since: since }).single();
     if (error) {
       if (error.message.includes("QUERY_RATE_LIMIT")) return json({ erro: "Aguarde as consultas anteriores antes de consultar novamente." }, 429);

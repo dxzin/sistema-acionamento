@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { GET, POST } from "../src/app/api/integracoes/sighra/route";
 import { resetLocalBridgeForTests, touchLocalBridge } from "../src/lib/sighra/local-bridge";
-import { activeBridgeId, bridgeAuth, bridgeIdentity } from "../src/lib/sighra/server";
+import { bridgeIdentity, bridgeIsActive, defaultActiveBridgeId } from "../src/lib/sighra/server";
 
 test("ponte recusa chave ausente, inválida e mensagens indevidas antes de acessar o banco", async () => {
   const original = process.env.SIGHRA_BRIDGE_TOKEN;
@@ -48,14 +48,14 @@ test("produção reconhece a ponte do notebook e só a ativa após a troca expl�
 
     assert.equal(bridgeIdentity(request(company)), "empresa");
     assert.equal(bridgeIdentity(request(notebook)), "notebook");
-    assert.equal(activeBridgeId(), "empresa");
-    assert.equal(bridgeAuth(request(company)), true);
-    assert.equal(bridgeAuth(request(notebook)), false);
+    assert.equal(defaultActiveBridgeId(), "empresa");
+    assert.equal(bridgeIsActive(bridgeIdentity(request(company)), "empresa"), true);
+    assert.equal(bridgeIsActive(bridgeIdentity(request(notebook)), "empresa"), false);
 
     process.env.SIGHRA_ACTIVE_BRIDGE = "notebook";
-    assert.equal(activeBridgeId(), "notebook");
-    assert.equal(bridgeAuth(request(company)), false);
-    assert.equal(bridgeAuth(request(notebook)), true);
+    assert.equal(defaultActiveBridgeId(), "notebook");
+    assert.equal(bridgeIsActive(bridgeIdentity(request(company)), "notebook"), false);
+    assert.equal(bridgeIsActive(bridgeIdentity(request(notebook)), "notebook"), true);
   } finally {
     for (const [key, value] of Object.entries(previous)) {
       const envName = key === "local" ? "SIGHRA_LOCAL_BRIDGE_TEST"

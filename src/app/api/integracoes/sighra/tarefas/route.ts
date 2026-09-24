@@ -1,13 +1,15 @@
-import { adminDb, bridgeAuth, json } from "@/lib/sighra/server";
+import { adminDb, bridgeAccess, json } from "@/lib/sighra/server";
 import { parseResult } from "@/lib/sighra/queries";
 import { claimLocalBridgeJob, completeLocalBridgeJob, localBridgeTestEnabled } from "@/lib/sighra/local-bridge";
 export const runtime = "nodejs";
 export async function POST(request: Request) {
-  if (!bridgeAuth(request)) return json({ erro: "Credencial inválida." }, 401);
+  const access = await bridgeAccess(request);
+  if (!access.identity) return json({ erro: "Credencial inválida." }, 401);
   if (localBridgeTestEnabled()) {
     const job = claimLocalBridgeJob();
     return json({ job: job ? { id: job.id, login: job.login, since_date: job.sinceDate, lease_token: job.leaseToken } : null });
   }
+  if (!access.active) return json({ job: null, ponte_ativa: false });
   try {
     const { data, error } = await adminDb().rpc("claim_sighra_query");
     if (error) throw error;
@@ -16,7 +18,9 @@ export async function POST(request: Request) {
   } catch { return json({ erro: "Fila indisponível." }, 503); }
 }
 export async function PATCH(request: Request) {
-  if (!bridgeAuth(request)) return json({ erro: "Credencial inválida." }, 401);
+  const access = await bridgeAccess(request);
+  if (!access.identity) return json({ erro: "Credencial inválida." }, 401);
+  if (!access.active) return json({ erro: "A ponte ativa foi trocada antes da entrega deste resultado." }, 409);
   let body;
   try {
     const raw = await request.text();
