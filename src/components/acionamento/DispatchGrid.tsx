@@ -54,6 +54,10 @@ const FILTER_COLUMNS: ColumnFilterKey[] = [
   "nextForecast", "workedTime",
 ];
 
+const EMPTY_VALUE_FILTER_COLUMNS = new Set<ColumnFilterKey>([
+  "status", "origin", "entry", "fleet", "cargo", "destination", "finalDestination", "exit",
+]);
+
 const COLUMN_LABELS = [
   "Condutor", "Cidade", "Login", "Horário", "Previsão", "Status", "Motivo do abono", "Local",
   "Entrada", "Frota", "C/V", "Destino", "Destino final", "Saída", "Observação",
@@ -648,7 +652,7 @@ export function DispatchGrid({
 
   const filterOptions = useMemo(() => Object.fromEntries(
     activeFilterColumns.map((key) => [key, Array.from(new Set([
-      ...(key === "status" ? [""] : []),
+      ...(EMPTY_VALUE_FILTER_COLUMNS.has(key) ? [""] : []),
       ...dispatches.map((row) => getColumnValue(row, key)).filter(Boolean),
     ]))
       .sort((a, b) => a.localeCompare(b, "pt-BR", { numeric: true }))])

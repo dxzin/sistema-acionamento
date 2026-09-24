@@ -160,6 +160,16 @@ test("status sai do filtro Vazio somente depois de terminar a edição", async (
   await expect(page.locator("#writes")).toHaveText('[{"id":"joao","changes":{"dispatch_status":"APOIO"}}]');
 });
 
+test("oferece filtro Vazio nas colunas operacionais que podem ficar sem preenchimento", async ({ page }) => {
+  const columns = ["Local", "Entrada", "Frota", "C/V", "Destino", "Destino final", "Saída"];
+
+  for (const column of columns) {
+    await page.getByRole("button", { name: `Filtrar coluna ${column}`, exact: true }).click();
+    await expect(page.getByLabel("Vazio", { exact: true })).toBeVisible();
+    await page.getByRole("button", { name: "OK", exact: true }).click();
+  }
+});
+
 test("Enter salva o condutor original e encontra o próximo por ID após o blur reordenar", async ({ page }) => {
   const input = page.locator("tbody tr").filter({ hasText: "GABRIEL" }).getByLabel("Status do acionamento");
   await input.click();
