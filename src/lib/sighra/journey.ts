@@ -16,6 +16,7 @@ export interface JourneyRecordSnapshot {
   status: string;
   entryTime: string | null;
   exitTime: string | null;
+  fleetCode: string | null;
   updatedAt: string;
 }
 
@@ -34,6 +35,7 @@ export interface JourneyEvent {
 export interface JourneyPair {
   start: JourneyEvent;
   end: JourneyEvent | null;
+  restart?: JourneyEvent | null;
 }
 
 export type JourneyResolution =
@@ -41,7 +43,7 @@ export type JourneyResolution =
   | { status: "not_found" | "ambiguous"; pair: null; message: string; reasons: string[] };
 
 export interface JourneyFieldConflict {
-  field: "entry_time" | "exit_time";
+  field: "entry_time" | "exit_time" | "fleet_code";
   current: string;
   sighra: string;
 }
@@ -50,7 +52,7 @@ export interface JourneyPreview {
   record: JourneyRecordSnapshot;
   resolution: JourneyResolution;
   conflicts: JourneyFieldConflict[];
-  changes: Partial<Pick<DispatchRowModel, "entry_time" | "exit_time">>;
+  changes: Partial<Pick<DispatchRowModel, "entry_time" | "exit_time" | "fleet_code">>;
   canApply: boolean;
 }
 
@@ -73,6 +75,16 @@ export function classifyJourneyEvent(name: string): JourneyEventType {
   return "intermediate";
 }
 
+function isTravelRestart(event: JourneyEvent) {
+  const name = normalizeText(event.name);
+  return name === "REINICIO DE VIAGEM" || name === "REINICIO DE VIAGEM GA";
+}
+
+function validJourneyPlate(value: string | null | undefined) {
+  const plate = value?.trim().toUpperCase() || "";
+  return /^[A-Z0-9-]{5,20}$/.test(plate) ? plate : null;
+}
+
 export function clockTime(timestamp: string) {
   return `${timestamp.slice(11, 16)}:00`;
 }
@@ -87,6 +99,7 @@ export function snapshotJourneyRecord(row: DispatchRowModel, operationalDate: st
     status: row.dispatch_status,
     entryTime: row.entry_time || null,
     exitTime: row.exit_time || null,
+    fleetCode: row.fleet_code || row.vehicle?.plate_code || null,
     updatedAt: row.updated_at,
   };
 }
@@ -204,7 +217,14 @@ export function resolveJourneyForRecord(events: JourneyEvent[], record: JourneyR
       return { status: "ambiguous", pair: null, message: "Jornada não identificada com segurança. Necessária conferência manual.", reasons: ["Há múltiplos fins possíveis para o mesmo início."] };
     }
   }
-  const pair = { start, end };
+  // Apenas as duas primeiras macros de reinício desta jornada podem fornecer a placa.
+  // Nunca usamos a placa do início, do fim ou de outra jornada.
+  const restart = sameDriver
+    .filter((event) => isTravelRestart(event) && event.occurredAt > start.occurredAt && (!end || event.occurredAt < end.occurredAt))
+    .sort((a, b) => a.occurredAt.localeCompare(b.occurredAt))
+    .slice(0, 2)
+    .find((event) => validJourneyPlate(event.plate)) || null;
+  const pair = { start, end, restart };
   return {
     status: "safe",
     pair,
@@ -218,11 +238,14 @@ export function buildJourneyPreview(record: JourneyRecordSnapshot, resolution: J
   if (resolution.status !== "safe") return { record, resolution, conflicts: [], changes: {}, canApply: false };
   const entry = clockTime(resolution.pair.start.occurredAt);
   const exit = resolution.pair.end ? clockTime(resolution.pair.end.occurredAt) : null;
+  const plate = validJourneyPlate(resolution.pair.restart?.plate);
   const conflicts: JourneyFieldConflict[] = [];
   if (record.entryTime && record.entryTime !== entry) conflicts.push({ field: "entry_time", current: record.entryTime, sighra: entry });
   if (exit && record.exitTime && record.exitTime !== exit) conflicts.push({ field: "exit_time", current: record.exitTime, sighra: exit });
+  if (plate && record.fleetCode && record.fleetCode.toUpperCase() !== plate) conflicts.push({ field: "fleet_code", current: record.fleetCode, sighra: plate });
   const changes: JourneyPreview["changes"] = {};
   if (!record.entryTime) changes.entry_time = entry;
   if (exit && !record.exitTime) changes.exit_time = exit;
+  if (plate && !record.fleetCode) changes.fleet_code = plate;
   return { record, resolution, conflicts, changes, canApply: conflicts.length === 0 && Object.keys(changes).length > 0 };
 }

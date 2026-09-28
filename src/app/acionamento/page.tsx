@@ -171,7 +171,7 @@ function AcionamentoContent() {
           provider: job.simulation === true ? "mock" : journeyProvider.kind,
           requestedAt: job.created_at,
           queryId: job.id,
-          events: job.result.journey_events.map(mapSighraJourneyEvent),
+          events: [...job.result.journey_events, ...(job.result.restart_events || [])].map(mapSighraJourneyEvent),
         };
         const resolved = resolveJourneyRecord(dispatches, requested, filters.date);
         if (resolved.row) {
@@ -789,7 +789,7 @@ function AcionamentoContent() {
           provider: item.job.simulation === true ? "mock" : journeyProvider.kind,
           requestedAt: item.job.created_at,
           queryId: item.job.id,
-          events: item.job.result.journey_events.map(mapSighraJourneyEvent),
+          events: [...item.job.result.journey_events, ...(item.job.result.restart_events || [])].map(mapSighraJourneyEvent),
         };
         void auditJourney(
           item.preview.record,
@@ -874,7 +874,7 @@ function AcionamentoContent() {
         provider: item.job.simulation === true ? "mock" : journeyProvider.kind,
         requestedAt: item.job.created_at,
         queryId: item.job.id,
-        events: item.job.result.journey_events.map(mapSighraJourneyEvent),
+        events: [...item.job.result.journey_events, ...(item.job.result.restart_events || [])].map(mapSighraJourneyEvent),
       };
       const resolved = resolveJourneyRecord(dispatchesRef.current, item.record, filters.date);
       if (!resolved.row) {

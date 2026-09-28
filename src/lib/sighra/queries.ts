@@ -1,7 +1,7 @@
 export type SighraMacro = { id?: string; login: string; name: string; gps_at: string; inserted_at: string | null; vehicle: string | null;
   plate?: string | null; point?: string | null; city?: string | null; state?: string | null; street?: string | null;
   latitude?: number | null; longitude?: number | null };
-export type SighraResult = { macros: SighraMacro[]; last_end: SighraMacro | null; journey_events?: SighraMacro[] };
+export type SighraResult = { macros: SighraMacro[]; last_end: SighraMacro | null; journey_events?: SighraMacro[]; restart_events?: SighraMacro[] };
 export const END_MACROS = new Set(["FIM DE JORNADA", "FIM DE JORNADA GA"]);
 export function validLogin(value: unknown): value is string { return typeof value === "string" && /^\d{1,20}$/.test(value); }
 export function validDate(value: unknown): value is string {
@@ -14,8 +14,9 @@ function timestamp(value: unknown): value is string {
 export function parseResult(value: unknown, login: string, since: string): SighraResult {
   if (!value || typeof value !== "object") throw new Error("Resultado inválido.");
   const body = value as Record<string, unknown>;
-  if (Object.keys(body).some(key => !["macros", "last_end", "journey_events"].includes(key)) || !Array.isArray(body.macros) || body.macros.length > 10 ||
-    !(body.journey_events === undefined || (Array.isArray(body.journey_events) && body.journey_events.length <= 40))) throw new Error("Resultado inválido.");
+  if (Object.keys(body).some(key => !["macros", "last_end", "journey_events", "restart_events"].includes(key)) || !Array.isArray(body.macros) || body.macros.length > 10 ||
+    !(body.journey_events === undefined || (Array.isArray(body.journey_events) && body.journey_events.length <= 40)) ||
+    !(body.restart_events === undefined || (Array.isArray(body.restart_events) && body.restart_events.length <= 80))) throw new Error("Resultado inválido.");
   const macro = (item: unknown): SighraMacro => {
     if (!item || typeof item !== "object") throw new Error("Macro inválida.");
     const row = item as Record<string, unknown>;
@@ -47,7 +48,13 @@ export function parseResult(value: unknown, login: string, since: string): Sighr
     ? undefined
     : body.journey_events.map(macro).sort((a, b) => a.gps_at.localeCompare(b.gps_at));
   if (journey_events?.some(item => item.gps_at.slice(0, 10) < since)) throw new Error("Evento de jornada inválido.");
-  return { macros, last_end, journey_events };
+  const restart_events = body.restart_events === undefined
+    ? undefined
+    : body.restart_events.map(macro).sort((a, b) => a.gps_at.localeCompare(b.gps_at));
+  if (restart_events?.some(item => item.gps_at.slice(0, 10) < since || !/^REINICIO DE VIAGEM(?: GA)?$/.test(item.name.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toUpperCase()))) {
+    throw new Error("Reinício de viagem inválido.");
+  }
+  return { macros, last_end, journey_events, restart_events };
 }
 export function exitTime(macro: SighraMacro) { return `${macro.gps_at.slice(11, 16)}:00`; }
 export function macroLocation(macro: SighraMacro) {

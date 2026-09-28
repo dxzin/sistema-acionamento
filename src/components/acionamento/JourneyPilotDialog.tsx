@@ -67,13 +67,16 @@ export function JourneyPilotDialog({ preview, provider, saving, error, onApply, 
               </div>
             </div>
           )}
+          {pair && <p className="border border-slate-200 bg-slate-50 p-2 text-xs">
+            Placa: {pair.restart?.plate ? <><b>{pair.restart.plate}</b> · macro de reinício de viagem {formatTimestamp(pair.restart.occurredAt)}</> : "sem placa nas duas primeiras macros de reinício; os horários podem ser aplicados."}
+          </p>}
 
           {preview.conflicts.length > 0 && (
             <div className="border border-rose-300 bg-rose-50 p-3">
               <strong className="text-rose-900">Já existe um valor manual divergente.</strong>
               {preview.conflicts.map((conflict) => (
                 <p key={conflict.field} className="mt-1 text-xs text-rose-900">
-                  {conflict.field === "entry_time" ? "Início" : "Fim"}: atual <b>{formatClock(conflict.current)}</b> · SIGhRa <b>{formatClock(conflict.sighra)}</b>
+                  {conflict.field === "entry_time" ? "Início" : conflict.field === "exit_time" ? "Fim" : "Placa"}: atual <b>{conflict.field === "fleet_code" ? conflict.current : formatClock(conflict.current)}</b> · SIGhRa <b>{conflict.field === "fleet_code" ? conflict.sighra : formatClock(conflict.sighra)}</b>
                 </p>
               ))}
               <p className="mt-1 text-xs text-rose-800">O piloto não substitui esse valor.</p>

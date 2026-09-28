@@ -5,7 +5,7 @@ import type { JourneyPreview, JourneyRecordSnapshot } from "../src/lib/sighra/jo
 
 const record = (login: string): JourneyRecordSnapshot => ({
   recordId: crypto.randomUUID(), login, driverName: `Condutor ${login}`, operationalDate: "2026-09-25",
-  shift: "04:00:00", status: "ACIONADO", entryTime: null, exitTime: null, updatedAt: "2026-09-25T10:00:00Z",
+  shift: "04:00:00", status: "ACIONADO", entryTime: null, exitTime: null, fleetCode: null, updatedAt: "2026-09-25T10:00:00Z",
 });
 const job = (login: string, status: JourneyBatchJob["status"]): JourneyBatchJob => ({
   id: crypto.randomUUID(), login, status, created_at: "2026-09-25T10:00:00Z", since_date: "2026-09-25", result: null, error: null,
