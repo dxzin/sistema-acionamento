@@ -149,6 +149,29 @@ test("copia várias linhas da própria grade e cola em outros condutores", async
   ]);
 });
 
+test("várias linhas de Status até Destino final mantêm valores e colunas ao colar", async ({ page }) => {
+  await page.goto("/copy-rows");
+  await page.setViewportSize({ width: 2100, height: 900 });
+  await page.context().grantPermissions(["clipboard-read", "clipboard-write"]);
+  await page.evaluate(() => (window as unknown as { prepareMultiRowCopy(): void }).prepareMultiRowCopy());
+  const sourceRows = page.locator("tbody tr");
+  const status = await sourceRows.first().locator("td").nth(5).boundingBox();
+  const finalDestination = await sourceRows.nth(1).locator("td").nth(12).boundingBox();
+  if (!status || !finalDestination) throw new Error("Trecho da linha não encontrado");
+  await page.mouse.move(status.x + 10, status.y + 10);
+  await page.mouse.down();
+  await page.mouse.move(finalDestination.x + 10, finalDestination.y + 10, { steps: 8 });
+  await page.mouse.up();
+  await page.keyboard.press("ControlOrMeta+C");
+  await page.getByTitle("Selecionar linha 4", { exact: true }).click();
+  await page.getByTitle("Selecionar linha 5", { exact: true }).click({ modifiers: ["Shift"] });
+  await page.keyboard.press("ControlOrMeta+V");
+  await expect.poll(async () => JSON.parse(await page.locator("#writes").innerText())).toEqual([
+    { id: "maria", changes: { dispatch_status: "ACIONADO", destination_name: "UBERABA", final_destination_name: "BAURU" } },
+    { id: "pedro", changes: { dispatch_status: "APOIO", destination_name: "CASTILHO", final_destination_name: "LENÇÓIS" } },
+  ]);
+});
+
 test("cola uma cidade nas células de destino de vários condutores", async ({ page }) => {
   await page.setViewportSize({ width: 2100, height: 900 });
   await page.context().grantPermissions(["clipboard-read", "clipboard-write"]);

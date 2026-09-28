@@ -1149,7 +1149,8 @@ export function DispatchGrid({
     const singleValue = !hasHeaders && sourceRows.length === 1 && sourceColumns === 1;
     const copiedColumn = singleValue && selectedColumns === activeFilterColumns.length &&
       copiedCellRef.current?.text === clipboardText ? copiedCellRef.current.column : null;
-    const firstTargetColumn = copiedColumn ?? selectionBounds.left;
+    const copiedRangeIntoFullRows = copiedGridRange && selectedColumns === activeFilterColumns.length;
+    const firstTargetColumn = copiedColumn ?? (copiedRangeIntoFullRows ? copiedGridRange.left : selectionBounds.left);
     if (selectedRows === 1 && selectedColumns === 1 && singleValue) return;
     event.preventDefault();
     setPendingExcelPaste(null);
