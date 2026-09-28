@@ -494,6 +494,8 @@ export function DispatchGrid({
   const gridRef = useRef<HTMLDivElement>(null);
   const gridCanvasRef = useRef<HTMLDivElement>(null);
   const bottomScrollRef = useRef<HTMLDivElement>(null);
+  const headerSelectionRef = useRef<{ kind: "row" | "column"; anchor: number } | null>(null);
+  const copiedCellRef = useRef<{ text: string; column: number } | null>(null);
   const [selection, setSelection] = useState<DispatchGridSelection | null>(null);
   const [editingRow, setEditingRow] = useState<{ id: string; index: number } | null>(null);
   const [isSelecting, setIsSelecting] = useState(false);
@@ -813,7 +815,10 @@ export function DispatchGrid({
   }, [selection, processedDispatches]);
 
   useEffect(() => {
-    const stopSelecting = () => setIsSelecting(false);
+    const stopSelecting = () => {
+      setIsSelecting(false);
+      headerSelectionRef.current = null;
+    };
     const closeContextMenu = () => setContextMenu(null);
     window.addEventListener("mouseup", stopSelecting);
     window.addEventListener("blur", closeContextMenu);
@@ -938,6 +943,8 @@ export function DispatchGrid({
         return row && activeFilterColumns[column] ? getColumnValue(row, activeFilterColumns[column]) : "";
       }).join("\t");
     }).join("\n");
+    copiedCellRef.current = selectionBounds.top === selectionBounds.bottom && selectionBounds.left === selectionBounds.right
+      ? { text, column: selectionBounds.left } : null;
     await navigator.clipboard.writeText(text);
   };
 
@@ -996,20 +1003,21 @@ export function DispatchGrid({
       { rowId: processedDispatches[processedDispatches.length - 1].id, column: activeColumnLabels.length - 1 }));
   };
 
-  const selectColumn = (column: number) => {
+  const selectColumnRange = (anchor: number, column: number) => {
     if (!processedDispatches.length || column < 0) return;
     gridRef.current?.focus();
     setSelection(captureGridSelection(processedDispatches,
-      { rowId: processedDispatches[0].id, column },
+      { rowId: processedDispatches[0].id, column: anchor },
       { rowId: processedDispatches[processedDispatches.length - 1].id, column }));
   };
 
-  const selectRow = (row: number) => {
+  const selectRowRange = (anchor: number, row: number) => {
+    const anchorId = processedDispatches[anchor]?.id;
     const rowId = processedDispatches[row]?.id;
-    if (!rowId) return;
+    if (!anchorId || !rowId) return;
     gridRef.current?.focus();
     setSelection(captureGridSelection(processedDispatches,
-      { rowId, column: 0 }, { rowId, column: activeColumnLabels.length - 1 }));
+      { rowId: anchorId, column: 0 }, { rowId, column: activeColumnLabels.length - 1 }));
   };
 
   const startColumnResize = (event: React.MouseEvent, column: number) => {
@@ -1130,6 +1138,9 @@ export function DispatchGrid({
     const fullSheetWithoutHeaders = !hasHeaders && selectionBounds.left === 0 &&
       sourceColumns === EXCEL_EXPORT_COLUMNS.length && sourceRows.every((row) => row.length === sourceColumns);
     const singleValue = !hasHeaders && sourceRows.length === 1 && sourceColumns === 1;
+    const copiedColumn = singleValue && selectedColumns === activeFilterColumns.length &&
+      copiedCellRef.current?.text === clipboardText ? copiedCellRef.current.column : null;
+    const firstTargetColumn = copiedColumn ?? selectionBounds.left;
     if (selectedRows === 1 && selectedColumns === 1 && singleValue) return;
     event.preventDefault();
     setPendingExcelPaste(null);
@@ -1139,7 +1150,7 @@ export function DispatchGrid({
       setPasteFeedback("Para colar a planilha inteira, selecione a primeira célula ou a linha inicial pela coluna A.");
       return;
     }
-    if (singleValue && selectedColumns === activeFilterColumns.length) {
+    if (singleValue && selectedColumns === activeFilterColumns.length && copiedColumn === null) {
       setPasteFeedback("Selecione somente as colunas que devem receber esse valor, como Destino ou Destino final.");
       return;
     }
@@ -1152,9 +1163,10 @@ export function DispatchGrid({
     const repeatOneRow = !hasHeaders && !fullSheetWithoutHeaders && sourceRows.length === 1 && selectedRows > 1;
     const rowCount = singleValue || repeatOneRow ? selectedRows
       : selectedRows === 1 ? sourceRows.length : Math.min(selectedRows, sourceRows.length);
-    const columnCount = singleValue ? selectedColumns : selectedColumns === 1 ? sourceColumns : Math.min(selectedColumns, sourceColumns);
+    const columnCount = copiedColumn !== null ? 1 : singleValue ? selectedColumns
+      : selectedColumns === 1 ? sourceColumns : Math.min(selectedColumns, sourceColumns);
     if (!sourceRows.length || rowCount > selectionDispatches.length - selectionBounds.top ||
-        (!hasHeaders && columnCount > activeFilterColumns.length - selectionBounds.left) ||
+        (!hasHeaders && columnCount > activeFilterColumns.length - firstTargetColumn) ||
         (hasHeaders && selectedRows > 1 && sourceRows.length > selectedRows)) {
       setPasteFeedback("A planilha copiada ultrapassa as linhas ou colunas disponíveis. Nenhuma célula foi alterada.");
       return;
@@ -1179,7 +1191,7 @@ export function DispatchGrid({
       const updates: Partial<DispatchRowModel> = {};
       for (let sourceColumn = 0; sourceColumn < (hasHeaders ? headerKeys.length : columnCount); sourceColumn++) {
         const key = hasHeaders ? headerKeys[sourceColumn] : fullSheetWithoutHeaders
-          ? EXCEL_EXPORT_COLUMNS[sourceColumn] : activeFilterColumns[selectionBounds.left + sourceColumn];
+          ? EXCEL_EXPORT_COLUMNS[sourceColumn] : activeFilterColumns[firstTargetColumn + sourceColumn];
         const column = key ? activeFilterColumns.indexOf(key) : -1;
         if (column < 0) continue;
         const value = source?.[singleValue ? 0 : sourceColumn];
@@ -1221,6 +1233,13 @@ export function DispatchGrid({
       ref={gridRef}
       className={`excel-grid flex flex-1 flex-col overflow-hidden ${isExpanded ? "is-expanded fixed inset-0 z-[100] min-h-0 bg-white" : ""}`}
       tabIndex={0}
+      onCopyCapture={(event) => {
+        const target = event.target;
+        const position = cellPosition(target);
+        if (!position || !(target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement)) return;
+        const text = target.value.slice(target.selectionStart || 0, target.selectionEnd || 0);
+        copiedCellRef.current = text ? { text, column: position.column } : null;
+      }}
       onPaste={(event) => {
         if (readOnly) {
           event.preventDefault();
@@ -1633,7 +1652,15 @@ export function DispatchGrid({
                   onMouseDown={(event) => {
                     event.preventDefault();
                     event.stopPropagation();
-                    selectColumn(column);
+                    const previousAnchor = selectionBounds?.top === 0 && selectionBounds.bottom === processedDispatches.length - 1
+                      ? selection?.anchor.column : undefined;
+                    const anchor = event.shiftKey ? previousAnchor ?? column : column;
+                    headerSelectionRef.current = { kind: "column", anchor };
+                    selectColumnRange(anchor, column);
+                  }}
+                  onMouseEnter={(event) => {
+                    const drag = headerSelectionRef.current;
+                    if (drag?.kind === "column" && event.buttons === 1) selectColumnRange(drag.anchor, column);
                   }}
                 >
                   {letter}
@@ -1875,7 +1902,15 @@ export function DispatchGrid({
                     onMouseDown={(event) => {
                       event.preventDefault();
                       event.stopPropagation();
-                      selectRow(index);
+                      const previousAnchor = selectionBounds?.left === 0 && selectionBounds.right === activeColumnLabels.length - 1
+                        ? processedDispatches.findIndex((item) => item.id === selection?.anchor.rowId) : -1;
+                      const anchor = event.shiftKey && previousAnchor >= 0 ? previousAnchor : index;
+                      headerSelectionRef.current = { kind: "row", anchor };
+                      selectRowRange(anchor, index);
+                    }}
+                    onMouseEnter={(event) => {
+                      const drag = headerSelectionRef.current;
+                      if (drag?.kind === "row" && event.buttons === 1) selectRowRange(drag.anchor, index);
                     }}
                   >
                     {index + 1}

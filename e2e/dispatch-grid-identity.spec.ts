@@ -175,6 +175,53 @@ test("repete Destino e Destino final copiados juntos em várias linhas", async (
   ]);
 });
 
+test("valor copiado de Destino pode ser colado em várias linhas selecionadas pelo número", async ({ page }) => {
+  await page.setViewportSize({ width: 2100, height: 900 });
+  await page.evaluate(() => (window as unknown as { setAnaDestination(): void }).setAnaDestination());
+  const source = page.getByRole("textbox", { name: "Destino de ANA" });
+  await source.click();
+  await page.keyboard.press("ControlOrMeta+A");
+  await page.keyboard.press("ControlOrMeta+C");
+  await page.getByTitle("Selecionar linha 2", { exact: true }).click();
+  await page.getByTitle("Selecionar linha 3", { exact: true }).click({ modifiers: ["Shift"] });
+  await expect(page.locator("tbody td.excel-range-selected")).toHaveCount(36);
+  await page.keyboard.press("ControlOrMeta+A");
+  await expect(page.locator("tbody td.excel-range-selected")).toHaveCount(36);
+  await page.keyboard.press("ControlOrMeta+V");
+  await expect.poll(async () => JSON.parse(await page.locator("#writes").innerText())).toEqual([
+    { id: "gabriel", changes: { destination_name: "UBERABA" } },
+    { id: "joao", changes: { destination_name: "UBERABA" } },
+  ]);
+});
+
+test("arrastar pelos números seleciona várias linhas", async ({ page }) => {
+  const first = await page.getByTitle("Selecionar linha 1", { exact: true }).boundingBox();
+  const last = await page.getByTitle("Selecionar linha 3", { exact: true }).boundingBox();
+  if (!first || !last) throw new Error("Números das linhas não encontrados");
+  await page.mouse.move(first.x + first.width / 2, first.y + first.height / 2);
+  await page.mouse.down();
+  await expect(page.locator("tbody td.excel-range-selected")).toHaveCount(18);
+  await page.mouse.move(last.x + last.width / 2, last.y + last.height / 2, { steps: 8 });
+  await page.mouse.up();
+  await expect(page.locator("tbody td.excel-range-selected")).toHaveCount(54);
+});
+
+test("Shift nas letras seleciona várias colunas para repetir um valor", async ({ page }) => {
+  await page.setViewportSize({ width: 2100, height: 900 });
+  await page.getByTitle("Selecionar coluna L", { exact: true }).click();
+  await page.getByTitle("Selecionar coluna M", { exact: true }).click({ modifiers: ["Shift"] });
+  await expect(page.locator("tbody td.excel-range-selected")).toHaveCount(6);
+  await page.locator(".excel-grid").evaluate(element => {
+    const data = new DataTransfer(); data.setData("text/plain", "UBERABA");
+    element.dispatchEvent(new ClipboardEvent("paste", { bubbles: true, cancelable: true, clipboardData: data }));
+  });
+  await expect.poll(async () => JSON.parse(await page.locator("#writes").innerText())).toEqual([
+    { id: "ana", changes: { destination_name: "UBERABA", final_destination_name: "UBERABA" } },
+    { id: "gabriel", changes: { destination_name: "UBERABA", final_destination_name: "UBERABA" } },
+    { id: "joao", changes: { destination_name: "UBERABA", final_destination_name: "UBERABA" } },
+  ]);
+});
+
 test("bloco menor não repete a primeira linha nas linhas restantes", async ({ page }) => {
   await page.setViewportSize({ width: 2100, height: 900 });
   const cells = page.locator("tbody tr td:nth-child(13)");
