@@ -32,6 +32,26 @@ export function mapSighraJourneyEvent(macro: SighraMacro): JourneyEvent {
   };
 }
 
+export function journeyEventsFromResult(result: SighraResult): JourneyEvent[] {
+  const journeyEvents = result.journey_events || [];
+  if (result.restart_events) return [...journeyEvents, ...result.restart_events].map(mapSighraJourneyEvent);
+
+  // A ponte anterior já traz a placa das últimas dez macros. Essa janela só é
+  // suficiente para contar o primeiro e o segundo reinício se contém o início.
+  const visibleStarts = new Set(result.macros
+    .filter((macro) => classifyJourneyEvent(macro.name) === "start")
+    .map((macro) => `${macro.login}|${macro.gps_at}`));
+  const coveredStarts = journeyEvents
+    .filter((macro) => classifyJourneyEvent(macro.name) === "start" && visibleStarts.has(`${macro.login}|${macro.gps_at}`))
+    .map((macro) => macro.gps_at);
+  const firstCoveredStart = coveredStarts.sort()[0];
+  const restarts = firstCoveredStart
+    ? result.macros.filter((macro) => macro.gps_at > firstCoveredStart &&
+      /^REINICIO DE VIAGEM(?: GA)?$/.test(macro.name.trim().normalize("NFD").replace(/[\u0300-\u036f]/g, "").toUpperCase()))
+    : [];
+  return [...journeyEvents, ...restarts].map(mapSighraJourneyEvent);
+}
+
 async function responseJson(response: Response) {
   const data = await response.json();
   if (!response.ok) throw new Error(data.erro || "Não foi possível consultar a jornada.");
@@ -64,7 +84,7 @@ export class SighraJourneyProvider implements JourneyProvider {
       throw new Error("A ponte ainda não fornece a sequência completa da jornada. Atualize o script local da ponte antes de usar o piloto.");
     }
     return { provider: job.simulation === true ? "mock" : this.kind, requestedAt, queryId: job.id,
-      events: [...result.journey_events, ...(result.restart_events || [])].map(mapSighraJourneyEvent) };
+      events: journeyEventsFromResult(result) };
   }
 }
 

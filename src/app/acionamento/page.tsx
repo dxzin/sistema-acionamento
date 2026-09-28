@@ -49,7 +49,7 @@ import {
   type JourneyRecordSnapshot,
 } from "@/lib/sighra/journey";
 import { JOURNEY_FEATURE } from "@/lib/sighra/journey-config";
-import { createJourneyProvider, mapSighraJourneyEvent, type JourneyProviderResult } from "@/lib/sighra/journey-provider";
+import { createJourneyProvider, journeyEventsFromResult, type JourneyProviderResult } from "@/lib/sighra/journey-provider";
 import { recordJourneyAudit } from "@/lib/sighra/journey-audit";
 import {
   journeyBatchOutcome,
@@ -171,7 +171,7 @@ function AcionamentoContent() {
           provider: job.simulation === true ? "mock" : journeyProvider.kind,
           requestedAt: job.created_at,
           queryId: job.id,
-          events: [...job.result.journey_events, ...(job.result.restart_events || [])].map(mapSighraJourneyEvent),
+          events: journeyEventsFromResult(job.result),
         };
         const resolved = resolveJourneyRecord(dispatches, requested, filters.date);
         if (resolved.row) {
@@ -789,7 +789,7 @@ function AcionamentoContent() {
           provider: item.job.simulation === true ? "mock" : journeyProvider.kind,
           requestedAt: item.job.created_at,
           queryId: item.job.id,
-          events: [...item.job.result.journey_events, ...(item.job.result.restart_events || [])].map(mapSighraJourneyEvent),
+          events: journeyEventsFromResult(item.job.result),
         };
         void auditJourney(
           item.preview.record,
@@ -874,7 +874,7 @@ function AcionamentoContent() {
         provider: item.job.simulation === true ? "mock" : journeyProvider.kind,
         requestedAt: item.job.created_at,
         queryId: item.job.id,
-        events: [...item.job.result.journey_events, ...(item.job.result.restart_events || [])].map(mapSighraJourneyEvent),
+        events: journeyEventsFromResult(item.job.result),
       };
       const resolved = resolveJourneyRecord(dispatchesRef.current, item.record, filters.date);
       if (!resolved.row) {
