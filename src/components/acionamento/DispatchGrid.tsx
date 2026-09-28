@@ -756,7 +756,7 @@ export function DispatchGrid({
 
   const selectionBounds = gridSelectionBounds(selection);
   const selectionDispatches = resolveGridSelectionRows(selection, processedDispatches);
-  const hasJourneyBatchSelection = Boolean(selectionBounds && selectionBounds.bottom > selectionBounds.top);
+  const hasJourneyBatchSelection = Boolean(selectionBounds);
   const journeyBatchDispatches = useMemo(() => {
     const candidates = hasJourneyBatchSelection && selectionBounds
       ? selectionDispatches.slice(selectionBounds.top, selectionBounds.bottom + 1)
