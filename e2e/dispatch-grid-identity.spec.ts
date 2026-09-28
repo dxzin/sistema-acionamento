@@ -48,6 +48,17 @@ test("não exibe a coluna Cidade na operação de SP", async ({ page }) => {
   await expect(joaoCells.nth(2)).toHaveText("1");
 });
 
+test("exportação permite escolher vários dias com uma aba por data", async ({ page }) => {
+  await page.goto("/page");
+  await page.getByRole("button", { name: "Exportar Excel" }).click();
+  const dialog = page.getByRole("dialog", { name: "Exportar período de acionamento" });
+  await expect(dialog).toBeVisible();
+  await dialog.getByLabel("Data inicial da exportação").fill("2026-09-25");
+  await dialog.getByLabel("Data final da exportação").fill("2026-09-28");
+  await expect(dialog).toContainText("4 dia(s), com uma aba por dia.");
+  await expect(dialog.getByRole("button", { name: "Gerar Excel" })).toBeEnabled();
+});
+
 test("Tab continua no mesmo condutor depois de reordenar durante a edição", async ({ page }) => {
   const joao = page.locator("tbody tr").filter({ hasText: "JOÃO" });
   const forecast = joao.locator("td").nth(5).locator("input");
@@ -477,7 +488,12 @@ test("filtro da página mantém o condutor focado até concluir a edição", asy
   const input = joao.locator("td").nth(14).locator("input");
   await input.click();
   await input.fill("rascunho de JOÃO");
-  await page.evaluate(() => (window as unknown as { filterPageToGabriel(): void }).filterPageToGabriel());
+  await page.getByPlaceholder("Buscar por Condutor ou Login...").evaluate((element) => {
+    const input = element as HTMLInputElement;
+    const setValue = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set;
+    setValue?.call(input, "GABRIEL");
+    input.dispatchEvent(new Event("input", { bubbles: true }));
+  });
   await expect(input).toBeFocused();
   await expect(input).toHaveValue("rascunho de JOÃO");
   await input.blur();

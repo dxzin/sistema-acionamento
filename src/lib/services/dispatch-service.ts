@@ -268,13 +268,17 @@ class DispatchService {
     await supabase.from("operator_presence").delete().eq("user_id", userId);
   }
 
-  async getDispatchesForSheet(date: string, region: string = "SP"): Promise<DispatchRowModel[]> {
+  async getDispatchesForSheet(
+    date: string,
+    region: string = "SP",
+    options: { readOnly?: boolean; preserveLocalSnapshot?: boolean } = {}
+  ): Promise<DispatchRowModel[]> {
     if (region === "ALL") {
       const regionalRows = await Promise.all(COMBINED_OPERATION_REGIONS.map((selectedRegion) =>
-        this.getDispatchesForSheet(date, selectedRegion)
+        this.getDispatchesForSheet(date, selectedRegion, options)
       ));
       const combined = [...new Map(regionalRows.flat().map((row) => [row.id, row])).values()];
-      this.localDispatches = combined;
+      if (!options.preserveLocalSnapshot) this.localDispatches = combined;
       return combined;
     }
 
@@ -345,7 +349,7 @@ class DispatchService {
         const shouldCreateSheet = !sheet && canCreateDailySheet(date);
         const shouldReconcileOpenSheet = sheet?.status === "OPEN" && missingScheduledDriverIds.length > 0;
 
-        if (shouldCreateSheet || shouldReconcileOpenSheet) {
+        if (!options.readOnly && (shouldCreateSheet || shouldReconcileOpenSheet)) {
           const targetBases = REGION_BASES[normalizedRegion] || ["LP", "CASTILHO"];
           const [{ data: bases }, { data: baseLocations }] = await Promise.all([
             supabase.from("bases").select("*").in("code", targetBases),
@@ -470,7 +474,7 @@ class DispatchService {
     const vehiclesMap = new Map(vehicles.map((v) => [v.id, v]));
     const locationsMap = new Map(locations.map((l) => [l.id, l]));
 
-    if (this.isSupabaseConfigured()) {
+    if (this.isSupabaseConfigured() && !options.preserveLocalSnapshot) {
       this.localDispatches = [...rawDispatches];
     }
 

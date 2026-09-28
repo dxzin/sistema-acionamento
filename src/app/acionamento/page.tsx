@@ -1108,18 +1108,44 @@ function AcionamentoContent() {
     reminders.map((reminder) => [reminder.dispatchId, reminderClockTime(reminder)])
   ), [reminders]);
 
-  const handleExport = async () => {
-    if (!filteredDispatches.length || isExporting) return;
+  const handleExport = async (startDate: string, endDate: string) => {
+    if (isExporting) return;
     setIsExporting(true);
     setSaveState({ status: "saving" });
     try {
-      const { exportDispatchSheet } = await import("@/lib/exports/dispatch-sheet");
-      await exportDispatchSheet(filteredDispatches, filters.date, filters.region);
+      const { dispatchExportDates, exportDispatchSheets } = await import("@/lib/exports/dispatch-sheet");
+      const dates = dispatchExportDates(startDate, endDate);
+      const days: { date: string; rows: DispatchRowModel[] }[] = [];
+      let exportedRows = 0;
+
+      for (const date of dates) {
+        const rows = date === filters.date
+          ? filteredDispatches
+          : await dispatchService.getDispatchesForSheet(date, filters.region, {
+              readOnly: true,
+              preserveLocalSnapshot: true,
+            });
+        const visibleRows = date === filters.date ? rows : rows.filter((item) => {
+          if (filters.searchQuery) {
+            const query = filters.searchQuery.toLocaleLowerCase("pt-BR");
+            if (!item.driver.name.toLocaleLowerCase("pt-BR").includes(query) &&
+                !item.driver.login_matricula.toLocaleLowerCase("pt-BR").includes(query)) return false;
+          }
+          if (!matchesDispatchStatus(item.dispatch_status, filters.statusFilter)) return false;
+          if (filters.shiftFilter && item.driver.default_shift !== filters.shiftFilter) return false;
+          return true;
+        });
+        exportedRows += visibleRows.length;
+        days.push({ date, rows: visibleRows });
+      }
+
+      if (!exportedRows) throw new Error("Nenhuma linha encontrada no período com os filtros atuais.");
+      await exportDispatchSheets(days, filters.region);
       setSaveState({ status: "saved" });
     } catch (error) {
       setSaveState({
         status: "error",
-        message: error instanceof Error ? error.message : "Não foi possível exportar a folha.",
+        message: error instanceof Error ? error.message : "Não foi possível exportar as folhas.",
       });
     } finally {
       setIsExporting(false);

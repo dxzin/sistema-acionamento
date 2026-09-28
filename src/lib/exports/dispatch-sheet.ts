@@ -43,13 +43,11 @@ function safeFilePart(value: string) {
   return value.replace(/[^a-zA-Z0-9_-]+/g, "-");
 }
 
-export async function exportDispatchSheet(rows: DispatchRowModel[], date: string, region: string) {
-  // A biblioteca pesada só é baixada quando o operador realmente exporta.
-  const ExcelJS = (await import("exceljs")).default;
-  const workbook = new ExcelJS.Workbook();
-  workbook.creator = "Sistema de Acionamento Logístico";
-  workbook.created = new Date();
-
+function addDispatchWorksheet(
+  workbook: import("exceljs").Workbook,
+  rows: DispatchRowModel[],
+  date: string
+) {
   const sheet = workbook.addWorksheet(`Acionamento ${date}`, {
     views: [{ state: "frozen", xSplit: 2, ySplit: 1 }],
   });
@@ -89,6 +87,41 @@ export async function exportDispatchSheet(rows: DispatchRowModel[], date: string
       }
     }
   });
+}
+
+export interface DispatchExportDay {
+  date: string;
+  rows: DispatchRowModel[];
+}
+
+export function dispatchExportDates(startDate: string, endDate: string, maximumDays = 31): string[] {
+  const validDate = (value: string) => {
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
+    const parsed = new Date(`${value}T00:00:00Z`);
+    return !Number.isNaN(parsed.getTime()) && parsed.toISOString().slice(0, 10) === value;
+  };
+  if (!validDate(startDate) || !validDate(endDate)) throw new Error("Informe datas válidas para exportação.");
+  if (endDate < startDate) throw new Error("A data final deve ser igual ou posterior à data inicial.");
+
+  const dates: string[] = [];
+  const cursor = new Date(`${startDate}T00:00:00Z`);
+  const end = new Date(`${endDate}T00:00:00Z`);
+  while (cursor <= end) {
+    dates.push(cursor.toISOString().slice(0, 10));
+    if (dates.length > maximumDays) throw new Error(`Selecione no máximo ${maximumDays} dias por arquivo.`);
+    cursor.setUTCDate(cursor.getUTCDate() + 1);
+  }
+  return dates;
+}
+
+export async function exportDispatchSheets(days: DispatchExportDay[], region: string) {
+  if (!days.length) throw new Error("Nenhuma folha encontrada no período selecionado.");
+  // A biblioteca pesada só é baixada quando o operador realmente exporta.
+  const ExcelJS = (await import("exceljs")).default;
+  const workbook = new ExcelJS.Workbook();
+  workbook.creator = "Sistema de Acionamento Logístico";
+  workbook.created = new Date();
+  days.forEach((day) => addDispatchWorksheet(workbook, day.rows, day.date));
 
   const output = await workbook.xlsx.writeBuffer();
   const blob = new Blob([output as BlobPart], {
@@ -97,9 +130,17 @@ export async function exportDispatchSheet(rows: DispatchRowModel[], date: string
   const url = URL.createObjectURL(blob);
   const link = document.createElement("a");
   link.href = url;
-  link.download = `acionamento_${safeFilePart(region)}_${date}.xlsx`;
+  const startDate = days[0].date;
+  const endDate = days[days.length - 1].date;
+  link.download = startDate === endDate
+    ? `acionamento_${safeFilePart(region)}_${startDate}.xlsx`
+    : `acionamento_${safeFilePart(region)}_${startDate}_a_${endDate}.xlsx`;
   document.body.appendChild(link);
   link.click();
   link.remove();
   URL.revokeObjectURL(url);
+}
+
+export async function exportDispatchSheet(rows: DispatchRowModel[], date: string, region: string) {
+  await exportDispatchSheets([{ date, rows }], region);
 }

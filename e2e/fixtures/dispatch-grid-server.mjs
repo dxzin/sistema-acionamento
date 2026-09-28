@@ -16,7 +16,7 @@ const { outputFiles } = await build({
     "process.env.NEXT_PUBLIC_SIGHRA_JOURNEY_PROVIDER": '"mock"',
   },
   plugins: [{ name: "local-page-mocks", setup(builder) {
-    builder.onResolve({ filter: /^(next\/navigation|@\/lib\/(auth-context|services\/dispatch-service)|@\/components\/(layout\/(Header|Sidebar)|acionamento\/DispatchFilters))$/ }, () => ({
+    builder.onResolve({ filter: /^(next\/navigation|@\/lib\/(auth-context|services\/dispatch-service)|@\/components\/layout\/(Header|Sidebar))$/ }, () => ({
       path: fileURLToPath(new URL("dispatch-page-mocks.tsx", import.meta.url)),
     }));
   } }, ...(process.env.DISPATCH_GRID_BASELINE ? [{ name: "baseline", setup(builder) {
