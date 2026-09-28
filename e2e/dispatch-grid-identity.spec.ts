@@ -6,6 +6,14 @@ test.beforeEach(async ({ page }) => {
   await page.goto("/");
 });
 
+test("consulta em lote envia de uma vez os condutores elegíveis visíveis", async ({ page }) => {
+  await page.evaluate(() => (window as unknown as { makeJourneyEligible(): void }).makeJourneyEligible());
+  const button = page.getByRole("button", { name: "Buscar jornadas (3)" });
+  await expect(button).toBeEnabled();
+  await button.click();
+  await expect(page.locator("#batch-requests")).toHaveText('[["ana","gabriel","joao"]]');
+});
+
 test("exibe a cidade/base UB e LZ entre condutor e login", async ({ page }) => {
   const joaoCells = page.locator("tbody tr").filter({ hasText: "JOÃO" }).locator("td");
   const gabrielCells = page.locator("tbody tr").filter({ hasText: "GABRIEL" }).locator("td");
@@ -82,6 +90,91 @@ test("seleção removida não transfere limpeza para o condutor que ocupou a pos
   await page.locator(".excel-grid").focus();
   await page.keyboard.press("Delete");
   await expect(page.locator("#writes")).toHaveText("[]");
+});
+
+test("Ctrl+A após selecionar a coluna Entrada não apaga outras colunas", async ({ page }) => {
+  await page.getByTitle("Selecionar coluna I", { exact: true }).click();
+  await page.locator(".excel-grid").focus();
+  await page.keyboard.press("ControlOrMeta+A");
+  await page.keyboard.press("Delete");
+  await expect.poll(async () => JSON.parse(await page.locator("#writes").innerText())).toEqual([
+    { id: "ana", changes: { entry_time: null } },
+    { id: "gabriel", changes: { entry_time: null } },
+    { id: "joao", changes: { entry_time: null } },
+  ]);
+});
+
+test("Ctrl+A após selecionar uma linha mantém a limpeza nessa linha", async ({ page }) => {
+  await page.getByTitle("Selecionar linha 1", { exact: true }).click();
+  await page.locator(".excel-grid").focus();
+  await page.keyboard.press("ControlOrMeta+A");
+  await page.keyboard.press("Delete");
+  await expect.poll(async () => JSON.parse(await page.locator("#writes").innerText())).toMatchObject([
+    { id: "ana", changes: { entry_time: null, dispatch_status: "" } },
+  ]);
+});
+
+test("Ctrl+A em uma caixa de Entrada seleciona só o texto da caixa", async ({ page }) => {
+  const input = page.locator("tbody tr").filter({ hasText: "JOÃO" }).locator("td").nth(9).locator("input");
+  await input.fill("08:15");
+  await page.keyboard.press("ControlOrMeta+A");
+  await expect.poll(() => input.evaluate(element => ({
+    start: (element as HTMLInputElement).selectionStart,
+    end: (element as HTMLInputElement).selectionEnd,
+  }))).toEqual({ start: 0, end: 5 });
+  await page.keyboard.press("Delete");
+  await expect(input).toHaveValue("");
+  await expect(page.locator("#writes")).toHaveText("[]");
+  await input.blur();
+  await expect(page.locator("#writes")).toHaveText('[{"id":"joao","changes":{"entry_time":null}}]');
+});
+
+test("prévia do alarme usa o arquivo de áudio e o volume configurado", async ({ page }) => {
+  await page.addInitScript(() => {
+    const originalPlay = HTMLMediaElement.prototype.play;
+    HTMLMediaElement.prototype.play = function () {
+      (window as unknown as { alarmAudio: HTMLMediaElement }).alarmAudio = this;
+      return originalPlay.call(this);
+    };
+  });
+  await page.goto("/page");
+  await page.locator(".dispatch-reminder-button").first().click();
+  await page.getByRole("button", { name: "Testar" }).click();
+  await expect.poll(() => page.evaluate(() => {
+    const audio = (window as unknown as { alarmAudio?: HTMLMediaElement }).alarmAudio;
+    return audio && {
+      path: new URL(audio.currentSrc || audio.src).pathname,
+      volume: audio.volume,
+      duration: Math.round(audio.duration),
+      playing: !audio.paused && audio.currentTime > 0,
+    };
+  })).toEqual({ path: "/audio/alarme.mp3", volume: 0.65, duration: 26, playing: true });
+});
+
+test("alarme programado toca o MP3 e para ao confirmar", async ({ page }) => {
+  await page.clock.install({ time: new Date("2026-09-28T10:00:00") });
+  await page.addInitScript(() => {
+    const originalPlay = HTMLMediaElement.prototype.play;
+    HTMLMediaElement.prototype.play = function () {
+      (window as unknown as { alarmAudio: HTMLMediaElement }).alarmAudio = this;
+      return originalPlay.call(this);
+    };
+  });
+  await page.goto("/page");
+  await page.locator(".dispatch-reminder-button").first().click();
+  await page.getByLabel("Horário do alerta").fill("10:01");
+  await page.getByRole("button", { name: "Salvar alerta" }).click();
+  await page.clock.fastForward(61_000);
+  await expect(page.getByRole("alert", { name: "" }).filter({ hasText: "Hora de acionar" })).toBeVisible();
+  await expect.poll(() => page.evaluate(() => {
+    const audio = (window as unknown as { alarmAudio?: HTMLMediaElement }).alarmAudio;
+    return Boolean(audio && !audio.paused && audio.currentTime > 0);
+  })).toBe(true);
+  await page.getByRole("button", { name: "Entendido" }).click();
+  await expect.poll(() => page.evaluate(() => {
+    const audio = (window as unknown as { alarmAudio?: HTMLMediaElement }).alarmAudio;
+    return Boolean(audio?.paused && audio.currentTime === 0);
+  })).toBe(true);
 });
 
 test("resposta de refresh anterior ao save não sobrescreve o texto confirmado", async ({ page }) => {

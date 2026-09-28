@@ -1,6 +1,7 @@
 import { build } from "esbuild";
 import { createServer } from "node:http";
 import { execFileSync } from "node:child_process";
+import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 
 // Isolated component harness: no Next server, .env, Supabase or production API.
@@ -29,6 +30,10 @@ createServer((request, response) => {
   if (request.url === "/grid.js") {
     response.writeHead(200, { "Content-Type": "text/javascript" });
     response.end(outputFiles[0].text);
+  } else if (request.url === "/audio/alarme.mp3") {
+    const audio = readFileSync(fileURLToPath(new URL("../../public/audio/alarme.mp3", import.meta.url)));
+    response.writeHead(200, { "Content-Type": "audio/mpeg", "Content-Length": audio.length });
+    response.end(audio);
   } else {
     response.writeHead(200, { "Content-Type": "text/html" });
     response.end('<html><body><div id="root"></div><script src="/grid.js"></script></body></html>');

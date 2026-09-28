@@ -1,15 +1,32 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
+  cancelLocalBridgeBatch,
   claimLocalBridgeJob,
   completeLocalBridgeJob,
+  enqueueLocalBridgeBatch,
   enqueueLocalBridgeJob,
+  getLocalBridgeBatch,
   getLocalBridgeJob,
   getLocalBridgeStatus,
   localBridgeTestEnabled,
   resetLocalBridgeForTests,
   touchLocalBridge,
 } from "../src/lib/sighra/local-bridge";
+
+test("fila local agrupa consultas em lote e permite cancelamento", () => {
+  resetLocalBridgeForTests();
+  try {
+    const batch = enqueueLocalBridgeBatch("usuario-local", ["28156", "67511"], "2026-09-25", true);
+    assert.equal(batch.jobs.length, 2);
+    assert.equal(getLocalBridgeBatch(batch.batchId, "usuario-local").length, 2);
+    assert.equal(getLocalBridgeBatch(batch.batchId, "outro-usuario").length, 0);
+    assert.equal(cancelLocalBridgeBatch(batch.batchId, "usuario-local"), 2);
+    assert.deepEqual(getLocalBridgeBatch(batch.batchId, "usuario-local").map((job) => job.status), ["failed", "failed"]);
+  } finally {
+    resetLocalBridgeForTests();
+  }
+});
 
 test("fila local completa uma consulta sem usar a fila compartilhada", () => {
   const previous = process.env.SIGHRA_LOCAL_BRIDGE_TEST;

@@ -6,7 +6,7 @@ import { DispatchStatus, CargoStatus } from "@/types/database";
 import { normalizeClockTime } from "@/lib/calculations/jornada";
 import { isJourneyEligible } from "@/lib/sighra/journey";
 import { captureGridSelection, DispatchGridSelection, gridSelectionBounds, resolveGridSelectionRows } from "@/lib/editing/dispatch-grid-selection";
-import { ArrowUpDown, Bell, BellRing, Check, ChevronDown, Columns3, Copy, Clock, Eye, EyeOff, Loader2, Maximize2, Minimize2, Minus, Plus, RefreshCw, Search, Trash2, Volume2, VolumeX, X } from "lucide-react";
+import { ArrowUpDown, Bell, BellRing, Check, ChevronDown, Columns3, Copy, Clock, Eye, EyeOff, ListChecks, Loader2, Maximize2, Minimize2, Minus, Plus, RefreshCw, Search, Trash2, Volume2, VolumeX, X } from "lucide-react";
 
 interface DispatchGridProps {
   dispatches: DispatchRowModel[];
@@ -29,7 +29,9 @@ interface DispatchGridProps {
   onPreviewReminderSound?: () => void;
   journeyPilotEnabled?: boolean;
   journeyRequestingId?: string | null;
+  journeyBatchRequesting?: boolean;
   onRequestJourney?: (dispatchId: string) => void;
+  onRequestJourneyBatch?: (dispatchIds: string[]) => void;
 }
 
 interface GridHistoryChange {
@@ -458,7 +460,9 @@ export function DispatchGrid({
   onPreviewReminderSound,
   journeyPilotEnabled = false,
   journeyRequestingId = null,
+  journeyBatchRequesting = false,
   onRequestJourney,
+  onRequestJourneyBatch,
 }: DispatchGridProps) {
   const [copiedCell, setCopiedCell] = useState<string | null>(null);
   const [sortField, setSortField] = useState<SortField>("schedule_time");
@@ -752,6 +756,15 @@ export function DispatchGrid({
 
   const selectionBounds = gridSelectionBounds(selection);
   const selectionDispatches = resolveGridSelectionRows(selection, processedDispatches);
+  const hasJourneyBatchSelection = Boolean(selectionBounds && selectionBounds.bottom > selectionBounds.top);
+  const journeyBatchDispatches = useMemo(() => {
+    const candidates = hasJourneyBatchSelection && selectionBounds
+      ? selectionDispatches.slice(selectionBounds.top, selectionBounds.bottom + 1)
+      : processedDispatches;
+    return candidates.filter((row): row is DispatchRowModel => Boolean(
+      row && isJourneyEligible(row.dispatch_status) && row.driver.login_matricula?.trim()
+    ));
+  }, [hasJourneyBatchSelection, processedDispatches, selectionBounds, selectionDispatches]);
 
   useEffect(() => {
     const table = tableRef.current;
@@ -1126,6 +1139,12 @@ export function DispatchGrid({
           return;
         }
         const key = event.key.toLowerCase();
+        const editingText = event.target instanceof HTMLInputElement ||
+          event.target instanceof HTMLTextAreaElement ||
+          (event.target instanceof HTMLElement && event.target.isContentEditable);
+        if (editingText && (((event.ctrlKey || event.metaKey) && ["a", "c", "z", "y"].includes(key)) || event.key === "Delete")) {
+          return;
+        }
         if ((event.ctrlKey || event.metaKey) && key === "c") {
           event.preventDefault();
           copySelection();
@@ -1133,7 +1152,6 @@ export function DispatchGrid({
         }
         if ((event.ctrlKey || event.metaKey) && key === "a") {
           event.preventDefault();
-          selectAllCells();
           return;
         }
         if ((event.ctrlKey || event.metaKey) && key === "d") {
@@ -1265,6 +1283,20 @@ export function DispatchGrid({
         </div>
       )}
       <div className="excel-grid-actions relative flex items-center justify-end gap-2 border-b border-[#a6a6a6] bg-[#f3f3f3] px-2 py-1">
+        {journeyPilotEnabled && (
+          <button
+            type="button"
+            onClick={() => onRequestJourneyBatch?.(journeyBatchDispatches.map((row) => row.id))}
+            disabled={readOnly || journeyBatchRequesting || Boolean(journeyRequestingId) || journeyBatchDispatches.length === 0 || journeyBatchDispatches.length > 50}
+            className="flex items-center gap-1 border border-[#70ad8f] bg-[#e2f0d9] px-2 py-1 text-[10px] font-bold text-[#185c37] hover:bg-[#c6e0b4] disabled:cursor-not-allowed disabled:opacity-50"
+            title={journeyBatchDispatches.length > 50
+              ? "Selecione no máximo 50 condutores por consulta"
+              : hasJourneyBatchSelection ? "Buscar jornadas dos condutores selecionados" : "Buscar jornadas das linhas visíveis"}
+          >
+            {journeyBatchRequesting ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <ListChecks className="h-3.5 w-3.5" />}
+            Buscar jornadas ({journeyBatchDispatches.length})
+          </button>
+        )}
         <button
           type="button"
           onClick={() => setIsExpanded((expanded) => !expanded)}
@@ -1745,7 +1777,7 @@ export function DispatchGrid({
                             event.stopPropagation();
                             onRequestJourney?.(row.id);
                           }}
-                          disabled={Boolean(journeyRequestingId) || readOnly}
+                          disabled={Boolean(journeyRequestingId) || journeyBatchRequesting || readOnly}
                           className="shrink-0 border border-[#70ad8f] bg-[#e2f0d9] p-0.5 text-[#185c37] hover:bg-[#c6e0b4] disabled:cursor-not-allowed disabled:opacity-50"
                           title={`Buscar jornada SIGhRa de ${row.driver.name}`}
                           aria-label={`Buscar jornada SIGhRa de ${row.driver.name}`}

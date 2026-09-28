@@ -413,6 +413,18 @@ body {
 [data-app-theme="dark"] .excel-grid .excel-dark-popup [class~="bg-[#f3f3f3]"] { background: #343a42 !important; }
 [data-app-theme="dark"] .excel-grid .excel-dark-popup input { color: #f1f5f9 !important; background: #252a31 !important; border-color: #59616b !important; }
 [data-app-theme="dark"] .excel-grid .excel-dark-popup button:hover { background: #244b38 !important; }
+[data-app-theme="dark"] .journey-batch-dialog { color: #e5e7eb; background: #252a31; border-color: #59616b; }
+[data-app-theme="dark"] .journey-batch-dialog header,
+[data-app-theme="dark"] .journey-batch-dialog footer,
+[data-app-theme="dark"] .journey-batch-dialog thead { background: #30353c !important; border-color: #59616b !important; }
+[data-app-theme="dark"] .journey-batch-dialog tbody tr,
+[data-app-theme="dark"] .journey-batch-dialog > div { border-color: #454c55 !important; }
+[data-app-theme="dark"] .journey-batch-dialog [class~="text-slate-900"],
+[data-app-theme="dark"] .journey-batch-dialog [class~="text-slate-700"] { color: #f1f5f9 !important; }
+[data-app-theme="dark"] .journey-batch-dialog [class~="text-slate-600"] { color: #cbd5e1 !important; }
+[data-app-theme="dark"] .journey-batch-dialog [class~="bg-slate-50"],
+[data-app-theme="dark"] .journey-batch-dialog [class~="bg-slate-100"] { background: #343a42 !important; }
+[data-app-theme="dark"] .journey-batch-dialog footer button[class~="bg-white"] { color: #e5e7eb; background: #343a42; border-color: #59616b; }
 
 /* Status operacional: mantém as cores de referência da planilha no campo e na célula. */
 .excel-grid tbody td.excel-status-cell,

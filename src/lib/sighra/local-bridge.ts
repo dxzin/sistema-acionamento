@@ -10,6 +10,7 @@ export type LocalBridgeStatus = {
 
 export type LocalBridgeJob = {
   id: string;
+  batchId: string | null;
   requestedBy: string;
   login: string;
   sinceDate: string;
@@ -86,21 +87,67 @@ export function getLocalBridgeStatus(): LocalBridgeStatus {
   return { ...store().status };
 }
 
-export function enqueueLocalBridgeJob(requestedBy: string, login: string, sinceDate: string, simulation = false): LocalBridgeJob {
+function enqueueLocalBridgeJobWithOptions(
+  requestedBy: string,
+  login: string,
+  sinceDate: string,
+  simulation: boolean,
+  batchId: string | null,
+  expiresInMs: number,
+  reuseActive = true
+): LocalBridgeJob {
   const now = Date.now();
   pruneLocalBridgeJobs(now);
-  for (const job of store().jobs.values()) {
-    if (job.requestedBy === requestedBy && job.login === login && job.sinceDate === sinceDate &&
-      ["queued", "running"].includes(job.status) && Date.parse(job.expiresAt) > now) return { ...job };
+  if (reuseActive) {
+    for (const job of store().jobs.values()) {
+      if (job.requestedBy === requestedBy && job.login === login && job.sinceDate === sinceDate &&
+        ["queued", "running"].includes(job.status) && Date.parse(job.expiresAt) > now) return { ...job };
+    }
   }
   const job: LocalBridgeJob = {
-    id: crypto.randomUUID(), requestedBy, login, sinceDate, status: "queued",
-    createdAt: new Date(now).toISOString(), expiresAt: new Date(now + 180_000).toISOString(),
+    id: crypto.randomUUID(), batchId, requestedBy, login, sinceDate, status: "queued",
+    createdAt: new Date(now).toISOString(), expiresAt: new Date(now + expiresInMs).toISOString(),
     leaseToken: null, result: null, error: null,
     simulation,
   };
   store().jobs.set(job.id, job);
   return { ...job };
+}
+
+export function enqueueLocalBridgeJob(requestedBy: string, login: string, sinceDate: string, simulation = false): LocalBridgeJob {
+  return enqueueLocalBridgeJobWithOptions(requestedBy, login, sinceDate, simulation, null, 180_000);
+}
+
+export function enqueueLocalBridgeBatch(requestedBy: string, logins: string[], sinceDate: string, simulation = false) {
+  const activeBatch = [...store().jobs.values()].find((job) =>
+    job.requestedBy === requestedBy && job.batchId && ["queued", "running"].includes(job.status) &&
+    Date.parse(job.expiresAt) > Date.now()
+  );
+  if (activeBatch?.batchId) throw new Error("BATCH_IN_PROGRESS");
+  const batchId = crypto.randomUUID();
+  const jobs = [...new Set(logins)].map((login) =>
+    enqueueLocalBridgeJobWithOptions(requestedBy, login, sinceDate, simulation, batchId, 15 * 60_000, false)
+  );
+  return { batchId, jobs };
+}
+
+export function getLocalBridgeBatch(batchId: string, requestedBy: string): LocalBridgeJob[] {
+  pruneLocalBridgeJobs();
+  return [...store().jobs.values()]
+    .filter((job) => job.batchId === batchId && job.requestedBy === requestedBy)
+    .sort((a, b) => a.createdAt.localeCompare(b.createdAt))
+    .map((job) => ({ ...job }));
+}
+
+export function cancelLocalBridgeBatch(batchId: string, requestedBy: string): number {
+  let canceled = 0;
+  for (const job of store().jobs.values()) {
+    if (job.batchId !== batchId || job.requestedBy !== requestedBy || !["queued", "running"].includes(job.status)) continue;
+    job.status = "failed";
+    job.error = "Consulta em lote cancelada pelo operador.";
+    canceled++;
+  }
+  return canceled;
 }
 
 export function claimLocalBridgeJob(): LocalBridgeJob | null {

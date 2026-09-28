@@ -16,6 +16,7 @@ import { currentDateInBrasilia } from "@/lib/dates/operational-date";
 import { matchesDispatchStatus } from "@/lib/calculations/continuity";
 import { OperationalAlerts } from "@/components/acionamento/OperationalAlerts";
 import { JourneyPilotDialog } from "@/components/acionamento/JourneyPilotDialog";
+import { JourneyBatchDialog } from "@/components/acionamento/JourneyBatchDialog";
 import { summarizeOperationalAlerts } from "@/lib/calculations/operational-alerts";
 import { BellRing, Clock3, X } from "lucide-react";
 import {
@@ -48,11 +49,18 @@ import {
   type JourneyRecordSnapshot,
 } from "@/lib/sighra/journey";
 import { JOURNEY_FEATURE } from "@/lib/sighra/journey-config";
-import { createJourneyProvider, type JourneyProviderResult } from "@/lib/sighra/journey-provider";
+import { createJourneyProvider, mapSighraJourneyEvent, type JourneyProviderResult } from "@/lib/sighra/journey-provider";
 import { recordJourneyAudit } from "@/lib/sighra/journey-audit";
+import {
+  journeyBatchOutcome,
+  matchBatchJobs,
+  type JourneyBatchItem,
+  type JourneyBatchJob,
+} from "@/lib/sighra/journey-batch";
 
 type CellSaveStatus = "pending" | "saving" | "saved" | "error";
 type JourneyDialogState = { requested: JourneyRecordSnapshot; result: JourneyProviderResult; preview: JourneyPreview };
+type JourneyBatchState = { id: string; records: JourneyRecordSnapshot[]; jobs: JourneyBatchJob[] };
 
 function AcionamentoContent() {
   const { user, logout } = useAuth();
@@ -83,6 +91,7 @@ function AcionamentoContent() {
   const [cellSaveStates, setCellSaveStates] = useState<Record<string, { status: CellSaveStatus; message?: string }>>({});
   const firedRemindersRef = useRef<Set<string>>(new Set());
   const audioContextRef = useRef<AudioContext | null>(null);
+  const reminderAudioRef = useRef<HTMLAudioElement | null>(null);
   const [reminders, setReminders] = useState<DispatchReminder[]>([]);
   const [remindersReady, setRemindersReady] = useState(false);
   const [reminderVolume, setReminderVolume] = useState(DEFAULT_REMINDER_VOLUME);
@@ -93,8 +102,13 @@ function AcionamentoContent() {
   const [journeyDialog, setJourneyDialog] = useState<JourneyDialogState | null>(null);
   const [journeySaving, setJourneySaving] = useState(false);
   const [journeyError, setJourneyError] = useState<string | null>(null);
+  const [journeyBatch, setJourneyBatch] = useState<JourneyBatchState | null>(null);
+  const [journeyBatchRequesting, setJourneyBatchRequesting] = useState(false);
+  const [journeyBatchApplying, setJourneyBatchApplying] = useState(false);
+  const [journeyBatchError, setJourneyBatchError] = useState<string | null>(null);
   const journeyRequestRef = useRef(0);
   const journeyAbortRef = useRef<AbortController | null>(null);
+  const journeyBatchAuditedRef = useRef<Set<string>>(new Set());
 
   // Filtros
   const [filters, setFilters] = useState<DispatchFilterOptions>({
@@ -111,6 +125,70 @@ function AcionamentoContent() {
   }, [dispatches]);
 
   useEffect(() => () => journeyAbortRef.current?.abort(), []);
+
+  const activeJourneyBatchId = journeyBatch?.jobs.some((job) => ["queued", "running"].includes(job.status))
+    ? journeyBatch.id
+    : null;
+
+  useEffect(() => {
+    if (!activeJourneyBatchId) return;
+    let stopped = false;
+    let timer: number | null = null;
+    const poll = async () => {
+      if (stopped) return;
+      try {
+        const response = await fetch(`/api/integracoes/sighra/consultas/lote?id=${activeJourneyBatchId}`, { cache: "no-store" });
+        const body = await response.json();
+        if (!response.ok) throw new Error(body.erro || "Não foi possível acompanhar o lote.");
+        const jobs = body.jobs as JourneyBatchJob[];
+        if (stopped) return;
+        setJourneyBatch((current) => current?.id === activeJourneyBatchId ? { ...current, jobs } : current);
+        setJourneyBatchError(null);
+        if (jobs.some((job) => ["queued", "running"].includes(job.status))) {
+          timer = window.setTimeout(poll, 2_000);
+        }
+      } catch (error) {
+        if (stopped) return;
+        setJourneyBatchError(error instanceof Error ? error.message : "Não foi possível acompanhar o lote.");
+        timer = window.setTimeout(poll, 4_000);
+      }
+    };
+    timer = window.setTimeout(poll, 1_000);
+    return () => {
+      stopped = true;
+      if (timer !== null) window.clearTimeout(timer);
+    };
+  }, [activeJourneyBatchId]);
+
+  const journeyBatchItems = useMemo<JourneyBatchItem[]>(() => {
+    if (!journeyBatch) return [];
+    const matchedJobs = matchBatchJobs(journeyBatch.records, journeyBatch.jobs);
+    return journeyBatch.records.map((requested, index) => {
+      const job = matchedJobs[index];
+      let preview: JourneyPreview | null = null;
+      if (job?.status === "completed" && Array.isArray(job.result?.journey_events)) {
+        const result: JourneyProviderResult = {
+          provider: job.simulation === true ? "mock" : journeyProvider.kind,
+          requestedAt: job.created_at,
+          queryId: job.id,
+          events: job.result.journey_events.map(mapSighraJourneyEvent),
+        };
+        const resolved = resolveJourneyRecord(dispatches, requested, filters.date);
+        if (resolved.row) {
+          const freshRecord = snapshotJourneyRecord(resolved.row, requested.operationalDate);
+          preview = buildJourneyPreview(freshRecord, resolveJourneyForRecord(result.events, freshRecord));
+        } else {
+          preview = buildJourneyPreview(requested, {
+            status: "ambiguous",
+            pair: null,
+            message: "O registro mudou durante a consulta e precisa de conferência.",
+            reasons: [resolved.reason || "Registro incompatível."],
+          });
+        }
+      }
+      return { record: requested, job, preview, outcome: journeyBatchOutcome(job, preview) };
+    });
+  }, [dispatches, filters.date, journeyBatch, journeyProvider.kind]);
 
   useEffect(() => {
     if (!Object.values(cellSaveStates).some((state) => state.status === "saved")) return;
@@ -396,7 +474,7 @@ function AcionamentoContent() {
     };
   }, [unlockReminderSound]);
 
-  const playReminderSound = useCallback(() => {
+  const playFallbackReminderSound = useCallback(() => {
     const context = audioContextRef.current;
     if (!context || reminderVolume <= 0) return;
     void context.resume().then(() => {
@@ -415,6 +493,32 @@ function AcionamentoContent() {
       });
     }).catch(() => undefined);
   }, [reminderVolume]);
+
+  const playReminderSound = useCallback(() => {
+    if (reminderVolume <= 0) return;
+    const audio = reminderAudioRef.current || new Audio("/audio/alarme.mp3");
+    reminderAudioRef.current = audio;
+    audio.volume = reminderVolume / 100;
+    audio.pause();
+    audio.currentTime = 0;
+    let usedFallback = false;
+    const fallback = () => {
+      if (usedFallback) return;
+      usedFallback = true;
+      playFallbackReminderSound();
+    };
+    audio.onerror = fallback;
+    void audio.play().catch(fallback);
+  }, [playFallbackReminderSound, reminderVolume]);
+
+  const stopReminderSound = useCallback(() => {
+    const audio = reminderAudioRef.current;
+    if (!audio) return;
+    audio.pause();
+    audio.currentTime = 0;
+  }, []);
+
+  useEffect(() => () => reminderAudioRef.current?.pause(), []);
 
   const previewReminderSound = useCallback(() => {
     unlockReminderSound();
@@ -450,17 +554,19 @@ function AcionamentoContent() {
   }, [filters.date, unlockReminderSound]);
 
   const removeDispatchReminder = useCallback((dispatchId: string) => {
+    stopReminderSound();
     firedRemindersRef.current.delete(dispatchId);
     setReminders((current) => current.filter((reminder) => reminder.dispatchId !== dispatchId));
-  }, []);
+  }, [stopReminderSound]);
 
   const snoozeDispatchReminder = useCallback((dispatchId: string) => {
+    stopReminderSound();
     unlockReminderSound();
     firedRemindersRef.current.delete(dispatchId);
     setReminders((current) => current.map((reminder) => reminder.dispatchId === dispatchId
       ? { ...reminder, scheduledAt: new Date(Date.now() + 5 * 60_000).toISOString() }
       : reminder));
-  }, [unlockReminderSound]);
+  }, [stopReminderSound, unlockReminderSound]);
 
   useEffect(() => {
     if (!user) return;
@@ -673,6 +779,136 @@ function AcionamentoContent() {
       reason: reason || (preview?.resolution.status !== "safe" ? preview?.resolution.reasons.join(" ") : null),
     }, journeyProvider.kind);
   }, [journeyProvider]);
+
+  useEffect(() => {
+    for (const item of journeyBatchItems) {
+      if (!item.job || item.outcome === "pending" || journeyBatchAuditedRef.current.has(item.job.id)) continue;
+      journeyBatchAuditedRef.current.add(item.job.id);
+      if (item.job.status === "completed" && Array.isArray(item.job.result?.journey_events) && item.preview) {
+        const result: JourneyProviderResult = {
+          provider: item.job.simulation === true ? "mock" : journeyProvider.kind,
+          requestedAt: item.job.created_at,
+          queryId: item.job.id,
+          events: item.job.result.journey_events.map(mapSighraJourneyEvent),
+        };
+        void auditJourney(
+          item.preview.record,
+          item.outcome === "safe" || item.outcome === "unchanged" ? "preview" : "blocked",
+          result,
+          item.preview
+        );
+      } else {
+        void auditJourney(item.record, "failed", undefined, undefined, item.job.error || "Consulta em lote não concluída.");
+      }
+    }
+  }, [auditJourney, journeyBatchItems, journeyProvider.kind]);
+
+  const requestJourneyBatch = useCallback(async (recordIds: string[]) => {
+    if (journeyBatchRequesting || recordIds.length === 0) return;
+    const selected = [...new Set(recordIds)]
+      .map((id) => dispatchesRef.current.find((row) => row.id === id))
+      .filter((row): row is DispatchRowModel => Boolean(row && isJourneyEligible(row.dispatch_status) && row.driver.login_matricula?.trim()));
+    if (selected.length > 50) {
+      setSaveState({ status: "error", message: "Selecione no máximo 50 condutores por consulta em lote." });
+      return;
+    }
+    if (hasPendingDispatchEdits(pendingEditsRef.current) && !(await flushPendingEdits())) return;
+    const records = selected.map((row) => snapshotJourneyRecord(row, filters.date));
+    if (!records.length) return;
+    setJourneyBatchRequesting(true);
+    setJourneyBatchError(null);
+    journeyBatchAuditedRef.current.clear();
+    try {
+      const response = await fetch("/api/integracoes/sighra/consultas/lote", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ since: filters.date, logins: records.map((record) => record.login) }),
+      });
+      const body = await response.json();
+      if (!response.ok) throw new Error(body.erro || "Não foi possível iniciar a consulta em lote.");
+      for (const record of records) void auditJourney(record, "requested");
+      setJourneyDialog(null);
+      setJourneyBatch({ id: body.id, records, jobs: body.jobs as JourneyBatchJob[] });
+    } catch (error) {
+      setSaveState({
+        status: "error",
+        message: error instanceof Error ? error.message : "Não foi possível iniciar a consulta em lote.",
+      });
+    } finally {
+      setJourneyBatchRequesting(false);
+    }
+  }, [auditJourney, filters.date, flushPendingEdits, journeyBatchRequesting]);
+
+  const closeJourneyBatch = useCallback(() => {
+    setJourneyBatch(null);
+    setJourneyBatchError(null);
+  }, []);
+
+  const cancelJourneyBatch = useCallback(() => {
+    if (!journeyBatch) return;
+    const id = journeyBatch.id;
+    for (const item of journeyBatchItems.filter((candidate) => candidate.outcome === "pending")) {
+      void auditJourney(item.record, "canceled", undefined, undefined, "Consulta em lote cancelada pelo operador.");
+    }
+    setJourneyBatch(null);
+    setJourneyBatchError(null);
+    void fetch(`/api/integracoes/sighra/consultas/lote?id=${id}`, { method: "DELETE", keepalive: true });
+  }, [auditJourney, journeyBatch, journeyBatchItems]);
+
+  const retryJourneyBatchFailures = useCallback(() => {
+    const ids = journeyBatchItems
+      .filter((item) => item.outcome === "failed")
+      .map((item) => item.record.recordId);
+    setJourneyBatch(null);
+    setJourneyBatchError(null);
+    window.setTimeout(() => { void requestJourneyBatch(ids); }, 0);
+  }, [journeyBatchItems, requestJourneyBatch]);
+
+  const applyJourneyBatch = useCallback(async () => {
+    if (!journeyBatch || journeyBatchApplying) return;
+    const updates = new Map<string, Partial<DispatchRowModel>>();
+    const applied: Array<{ record: JourneyRecordSnapshot; result: JourneyProviderResult; preview: JourneyPreview }> = [];
+    for (const item of journeyBatchItems.filter((candidate) => candidate.outcome === "safe")) {
+      if (!item.job?.result?.journey_events) continue;
+      const result: JourneyProviderResult = {
+        provider: item.job.simulation === true ? "mock" : journeyProvider.kind,
+        requestedAt: item.job.created_at,
+        queryId: item.job.id,
+        events: item.job.result.journey_events.map(mapSighraJourneyEvent),
+      };
+      const resolved = resolveJourneyRecord(dispatchesRef.current, item.record, filters.date);
+      if (!resolved.row) {
+        void auditJourney(item.record, "blocked", result, item.preview || undefined, resolved.reason || undefined);
+        continue;
+      }
+      const freshRecord = snapshotJourneyRecord(resolved.row, item.record.operationalDate);
+      const preview = buildJourneyPreview(freshRecord, resolveJourneyForRecord(result.events, freshRecord));
+      if (!preview.canApply) {
+        void auditJourney(freshRecord, "blocked", result, preview, "Revalidação do lote bloqueou a aplicação.");
+        continue;
+      }
+      updates.set(freshRecord.recordId, preview.changes);
+      applied.push({ record: freshRecord, result, preview });
+    }
+    if (!updates.size) {
+      setJourneyBatchError("Nenhuma jornada continua segura para aplicação. Revise os resultados novamente.");
+      return;
+    }
+    setJourneyBatchApplying(true);
+    setJourneyBatchError(null);
+    try {
+      await handleUpdateBatch(updates);
+      await Promise.allSettled(applied.map(({ record, result, preview }) => auditJourney(record, "applied", result, preview)));
+      setJourneyBatch(null);
+      setSaveState({ status: "saved", message: `${updates.size} jornada(s) aplicada(s) com segurança.` });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Não foi possível aplicar as jornadas seguras.";
+      setJourneyBatchError(message);
+      for (const { record, result, preview } of applied) void auditJourney(record, "failed", result, preview, message);
+    } finally {
+      setJourneyBatchApplying(false);
+    }
+  }, [auditJourney, filters.date, handleUpdateBatch, journeyBatch, journeyBatchApplying, journeyBatchItems, journeyProvider.kind]);
 
   const requestJourney = useCallback(async (recordId: string) => {
     const initialRow = dispatchesRef.current.find((row) => row.id === recordId);
@@ -947,7 +1183,9 @@ function AcionamentoContent() {
             onPreviewReminderSound={previewReminderSound}
             journeyPilotEnabled={JOURNEY_FEATURE.pilotEnabled}
             journeyRequestingId={journeyRequestingId}
+            journeyBatchRequesting={journeyBatchRequesting || Boolean(journeyBatch)}
             onRequestJourney={(id) => { void requestJourney(id); }}
+            onRequestJourneyBatch={(ids) => { void requestJourneyBatch(ids); }}
           />
           {journeyDialog && (
             <JourneyPilotDialog
@@ -958,6 +1196,17 @@ function AcionamentoContent() {
               onApply={() => { void applyJourney(); }}
               onCancel={cancelJourney}
               onForceSearch={() => { const id = journeyDialog.requested.recordId; setJourneyDialog(null); void requestJourney(id); }}
+            />
+          )}
+          {journeyBatch && (
+            <JourneyBatchDialog
+              items={journeyBatchItems}
+              applying={journeyBatchApplying}
+              error={journeyBatchError}
+              onApplySafe={() => { void applyJourneyBatch(); }}
+              onCancel={cancelJourneyBatch}
+              onClose={closeJourneyBatch}
+              onRetryFailures={retryJourneyBatchFailures}
             />
           )}
           {dueReminders.length > 0 && (
