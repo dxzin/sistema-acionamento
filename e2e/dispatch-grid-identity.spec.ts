@@ -133,6 +133,20 @@ test("Ctrl+A após selecionar uma linha mantém a limpeza nessa linha", async ({
   ]);
 });
 
+test("Ctrl+C copia o conteúdo da linha e coluna selecionadas pelo cabeçalho", async ({ page }) => {
+  await page.context().grantPermissions(["clipboard-read", "clipboard-write"]);
+  await page.evaluate(() => navigator.clipboard.writeText("anterior"));
+  await page.getByTitle("Selecionar linha 1", { exact: true }).click();
+  await page.keyboard.press("ControlOrMeta+C");
+  await expect.poll(() => page.evaluate(() => navigator.clipboard.readText())).toContain("ANA");
+
+  await page.evaluate(() => navigator.clipboard.writeText("anterior"));
+  await page.getByTitle("Selecionar coluna A", { exact: true }).click();
+  await page.keyboard.press("ControlOrMeta+C");
+  await expect.poll(() => page.evaluate(async () => (await navigator.clipboard.readText()).replace(/\r\n/g, "\n")))
+    .toBe("ANA\nGABRIEL\nJOÃO");
+});
+
 test("Ctrl+A em uma caixa de Entrada seleciona só o texto da caixa", async ({ page }) => {
   const input = page.locator("tbody tr").filter({ hasText: "JOÃO" }).locator("td").nth(9).locator("input");
   await input.fill("08:15");
@@ -146,6 +160,15 @@ test("Ctrl+A em uma caixa de Entrada seleciona só o texto da caixa", async ({ p
   await expect(page.locator("#writes")).toHaveText("[]");
   await input.blur();
   await expect(page.locator("#writes")).toHaveText('[{"id":"joao","changes":{"entry_time":null}}]');
+});
+
+test("Ctrl+C em uma caixa copia somente o texto selecionado", async ({ page }) => {
+  await page.context().grantPermissions(["clipboard-read", "clipboard-write"]);
+  const input = page.locator("tbody tr").filter({ hasText: "JOÃO" }).locator("td").nth(9).locator("input");
+  await input.fill("08:15");
+  await page.keyboard.press("ControlOrMeta+A");
+  await page.keyboard.press("ControlOrMeta+C");
+  await expect.poll(() => page.evaluate(() => navigator.clipboard.readText())).toBe("08:15");
 });
 
 test("prévia do alarme usa o arquivo de áudio e o volume configurado", async ({ page }) => {

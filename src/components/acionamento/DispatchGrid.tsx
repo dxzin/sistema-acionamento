@@ -473,6 +473,7 @@ export function DispatchGrid({
   const [isSearching, setIsSearching] = useState<boolean>(false);
   const [columnFilters, setColumnFilters] = useState<Partial<Record<ColumnFilterKey, string[]>>>({});
   const tableRef = useRef<HTMLTableElement>(null);
+  const gridRef = useRef<HTMLDivElement>(null);
   const gridCanvasRef = useRef<HTMLDivElement>(null);
   const bottomScrollRef = useRef<HTMLDivElement>(null);
   const [selection, setSelection] = useState<DispatchGridSelection | null>(null);
@@ -963,6 +964,7 @@ export function DispatchGrid({
 
   const selectAllCells = () => {
     if (!processedDispatches.length) return;
+    gridRef.current?.focus();
     setSelection(captureGridSelection(processedDispatches,
       { rowId: processedDispatches[0].id, column: 0 },
       { rowId: processedDispatches[processedDispatches.length - 1].id, column: activeColumnLabels.length - 1 }));
@@ -970,6 +972,7 @@ export function DispatchGrid({
 
   const selectColumn = (column: number) => {
     if (!processedDispatches.length || column < 0) return;
+    gridRef.current?.focus();
     setSelection(captureGridSelection(processedDispatches,
       { rowId: processedDispatches[0].id, column },
       { rowId: processedDispatches[processedDispatches.length - 1].id, column }));
@@ -978,6 +981,7 @@ export function DispatchGrid({
   const selectRow = (row: number) => {
     const rowId = processedDispatches[row]?.id;
     if (!rowId) return;
+    gridRef.current?.focus();
     setSelection(captureGridSelection(processedDispatches,
       { rowId, column: 0 }, { rowId, column: activeColumnLabels.length - 1 }));
   };
@@ -1123,6 +1127,7 @@ export function DispatchGrid({
 
   return (
     <div
+      ref={gridRef}
       className={`excel-grid flex flex-1 flex-col overflow-hidden ${isExpanded ? "is-expanded fixed inset-0 z-[100] min-h-0 bg-white" : ""}`}
       tabIndex={0}
       onPaste={(event) => {
