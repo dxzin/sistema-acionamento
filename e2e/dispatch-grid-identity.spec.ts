@@ -14,6 +14,16 @@ test("consulta em lote envia de uma vez os condutores elegíveis visíveis", asy
   await expect(page.locator("#batch-requests")).toHaveText('[["ana","gabriel","joao"]]');
 });
 
+test("consulta em lote respeita uma única linha selecionada", async ({ page }) => {
+  await page.evaluate(() => (window as unknown as { makeJourneyEligible(): void }).makeJourneyEligible());
+  const joao = page.locator("tbody tr").filter({ hasText: "JOÃO" });
+  await joao.locator("td").first().click();
+  const button = page.getByRole("button", { name: "Buscar jornadas (1)" });
+  await expect(button).toBeEnabled();
+  await button.click();
+  await expect(page.locator("#batch-requests")).toHaveText('[["joao"]]');
+});
+
 test("exibe a cidade/base UB e LZ entre condutor e login", async ({ page }) => {
   const joaoCells = page.locator("tbody tr").filter({ hasText: "JOÃO" }).locator("td");
   const gabrielCells = page.locator("tbody tr").filter({ hasText: "GABRIEL" }).locator("td");
