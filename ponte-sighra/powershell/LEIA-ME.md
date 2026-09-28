@@ -6,7 +6,7 @@ Usa Windows PowerShell e exclusivamente `C:\SIGhRA_Monitor\libmysql.dll`, que ja
 
 Esta versao testa o banco, envia sinais e atende consultas da aba Consulta Sighra. Executa apenas SQL fixo de leitura para obter as ultimas 10 macros, o ultimo fim de jornada e as sequencias de inicio, fim e reinicio de viagem a partir da data consultada. A ponte nao altera a planilha; o operador confere a previa antes de aplicar a jornada.
 
-Na consulta da jornada, a placa pode vir somente da primeira ou segunda macro de reinicio de viagem depois do inicio e antes do fim. Se nenhuma delas tiver placa, a entrada e a saida continuam disponiveis para preenchimento. Para usar essa regra, atualize tambem `MySql-Nativo.ps1` na ponte em execucao.
+Na consulta da jornada, a placa pode vir somente da primeira ou segunda macro de reinicio de viagem depois do inicio e antes do fim. Se nenhuma delas tiver placa, a entrada e a saida continuam disponiveis para preenchimento. A ponte anterior ja permite usar essas placas quando o inicio da jornada aparece entre as ultimas 10 macros. Atualizar `MySql-Nativo.ps1` amplia a busca para jornadas cujo inicio ja saiu dessa lista; sem essa atualizacao, os horarios continuam disponiveis, mas a placa nao e inferida de uma janela incompleta.
 
 ## Atualizar uma ponte ja configurada
 
