@@ -5,6 +5,14 @@ node_modules/
 .next-optimized-local*/
 out/
 
+# Local copies, generated deliverables and analysis files
+/.codex-presentations/
+/empresa/
+/empresa.rar
+/entregas/
+/output/
+/tmp/
+
 # Environment variables and deployment metadata
 .env
 .env.*
@@ -20,6 +28,8 @@ referencias/*.xls
 ponte-sighra/powershell/config.local.json
 ponte-sighra/powershell/config.teste.local.json
 ponte-sighra/powershell/config.teste.simulado.local.json
+ponte-sighra/powershell/config.notebook-teste.local.json
+ponte-sighra/powershell/CHAVE-PAREAMENTO-TESTE.txt
 ponte-sighra/powershell/config.notebook-teste.local.json
 ponte-sighra/powershell/*.anterior
 *.tsbuildinfo
