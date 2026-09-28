@@ -1,91 +1,133 @@
-# O que já foi feito
+# O que já foi implementado
 
-## Situação por área
+> Atualizado em 28/09/2026 com base no código, nas telas e nos testes disponíveis no repositório.
 
-| Área | Situação | Entregas principais |
+## Situação atual por área
+
+| Área | Situação | O que está disponível |
 |---|---|---|
-| Infraestrutura | Concluída para homologação | Aplicação publicada, Supabase conectado, variáveis de produção configuradas |
-| Acionamento diário | Funcional, em testes | Edição inline, cálculos, cores, filtros, seleção e colagem em grade |
-| Escala mensal | Funcional, em testes | Horários, códigos diários, importação/exportação e navegação por teclado |
-| Condutores | Funcional | Cadastro, edição, matrícula, turno, horário e base |
-| Histórico | Parcial | Estrutura e consulta disponíveis; auditoria deve ser validada ponta a ponta |
-| Administração | Parcial | Estrutura de parâmetros e cadastros disponível |
-| Relatórios gerenciais | Funcional, em testes | Consolidação por período, região, status, jornada, destino e condutor |
+| Autenticação e acesso | Funcional | Login pelo Supabase, sessão protegida e separação entre operador, supervisor e administrador |
+| Acionamento diário | Funcional, em homologação | Grade operacional, edição e salvamento, filtros, cálculos, colaboração, exportação e alertas |
+| Escala mensal | Funcional, em homologação | Edição mensal, códigos e turnos A–G, importação e exportação `.xlsx` |
+| Condutores | Funcional | Consulta, cadastro e edição de matrícula, base, turno, horário e escala |
+| Histórico | Funcional | Pesquisa, filtros por período e operador, paginação e exportação CSV |
+| Relatórios | Funcional, em homologação | Indicadores por período e região, Excel e impressão/PDF |
+| Administração | Funcional para consulta | Parâmetros, bases, destinos e consumo do banco Supabase |
+| SIGhRA | Piloto controlado | Ponte pelo notebook, consulta de macros/fim de jornada e preenchimento assistido com prévia |
+| API para dashboard | Disponível | Consulta autenticada de escala, acionamento e disponibilidade após descanso |
 
-## Acionamento diário
+## Funções disponíveis no acionamento diário
 
-- Grade visual inspirada no Excel, com cabeçalhos fixos e larguras de coluna estáveis.
-- Abertura automática na data atual de Brasília.
-- Ordenação dos condutores por grupos de horário: 04h, 12h e 20h.
-- Filtro em todas as colunas, com pesquisa, seleção de vários valores, selecionar todos e limpar filtro.
-- Ocultar e reexibir colunas sem aumentar a largura das demais; preferência mantida no navegador.
-- Redimensionar as colunas operacionais arrastando sua divisão; larguras salvas no navegador e restauração pelo menu `Colunas`.
-- Campo `FROTA` livre para digitação, sem exigir cadastro prévio de uma lista de frotas.
-- Campos `DESTINO` e `DESTINO FINAL` livres para digitar e com sugestões opcionais.
-- Campo `STATUS` livre para digitação, com opções conhecidas e cores operacionais preservadas.
-- Status vazio permanece vazio: o sistema não deve decidir sozinho se um condutor foi acionado.
-- Cores mantidas como referência visual, incluindo `ACIONADO`, `ABONADO`, `APOIO` e `BALDEIO`.
-- Seleção de intervalo com arraste e Shift.
-- Seleção da grade inteira com `Ctrl+A`, de uma linha pelo número e de uma coluna pela letra.
-- Copiar, colar e limpar células; colagem de blocos e repetição do padrão copiado na seleção.
-- Preenchimento do intervalo para baixo com `Ctrl+D` e para a direita com `Ctrl+R`.
-- Localizar e substituir no intervalo selecionado ou nas linhas visíveis, salvando as alterações como uma única ação.
-- Menu de contexto com botão direito para copiar, limpar conteúdo e ocultar coluna.
+### Grade e preenchimento
+
+- Visual semelhante ao Excel, com cabeçalho fixo, colunas de identificação fixas e zoom entre 75% e 150%.
+- Edição direta de status, abono, local, entrada, frota, C/V, destino, destino final, saída e observação.
+- `FROTA`, `STATUS`, `C/V`, `DESTINO` e `DESTINO FINAL` aceitam texto livre.
+- Destino, destino final e local oferecem sugestões sem impedir novos valores.
+- Horários digitados como `HH:mm` são normalizados e salvos com segundos.
+- Salvamento automático com indicação por célula e manutenção local do rascunho em caso de erro.
+- Salvamento transacional em lote para colagens e alterações de várias células.
+- Proteção contra sobrescrever silenciosamente uma linha alterada por outra pessoa.
+
+### Filtros, organização e navegação
+
+- Filtro por data, região, texto, status e turno.
+- Filtros individuais em todas as colunas, com pesquisa, múltipla seleção, selecionar todos e limpar.
+- Opção `Vazio` no status e, na versão local de 21/09/2026, também em `LOCAL`, `ENTRADA`, `FROTA`, `C/V`, `DESTINO`, `DESTINO FINAL` e `SAÍDA`.
+- Ordenação de colunas e agrupamento operacional por horário.
+- Ocultar e reexibir colunas, redimensionar larguras e manter preferências no navegador.
+- Tema claro, escuro e automático, preservando as cores operacionais.
 - Navegação por Tab, Enter e setas.
-- Desfazer e refazer durante a sessão; uma colagem ou limpeza de intervalo é tratada como uma única ação.
-- Salvamento de destino, destino final e frota corrigido no ambiente publicado.
-- Sincronização em tempo real preparada para operadores simultâneos.
-- Sincronização automática de segurança para redes corporativas que bloqueiam o canal em tempo real, sem exigir o botão `Atualizar`.
-- Presença colaborativa mostra os logins online na mesma planilha e destaca a linha selecionada por outro operador.
-- Eventos em tempo real agrupados durante colagens grandes, evitando recargas concorrentes e valores aparentemente desaparecendo.
-- Em produção, uma falha no banco não mostra dados de demonstração: a grade fica vazia e apresenta um aviso explícito para evitar acionamentos fictícios.
-- A folha diária pode ser exportada diretamente para `.xlsx`; filtros de busca, status e turno determinam quais linhas entram no arquivo.
-- Uma faixa compacta sinaliza acionados sem entrada, jornadas abertas, abonos pendentes e jornadas acima de 11h10.
-- Falhas inesperadas de interface exibem uma tela de recuperação sem sugerir que os dados salvos foram perdidos.
 
-## Regras entre escala e acionamento
+### Recursos semelhantes ao Excel
 
-- Condutor marcado com `F` ou `FE` na escala não aparece no acionamento daquele dia.
-- Horário do condutor é exibido na escala mensal e usado no acionamento.
-- Uma folha diária nova inicia com o status em branco.
-- O campo `LOCAL` do dia atual herda somente o `DESTINO FINAL` preenchido no dia anterior.
-- Se o `DESTINO FINAL` anterior estiver vazio, o sistema aguarda o operador; não usa o `DESTINO` normal como substituto.
-- A origem do `LOCAL` é registrada: valores automáticos acompanham correções do dia anterior, enquanto ajustes manuais ficam protegidos.
+- Seleção de célula, linha, coluna e intervalo com arraste ou Shift. Dentro de uma caixa de edição, `Ctrl+A` seleciona apenas o texto da caixa; a grade inteira pode ser selecionada pelo canto `#`.
+- Copiar, colar e limpar células, inclusive blocos com várias linhas e colunas.
+- Repetição do padrão copiado quando a seleção de destino é maior.
+- Preenchimento para baixo com `Ctrl+D` e para a direita com `Ctrl+R`.
+- Desfazer e refazer durante a sessão; ações em lote contam como uma única operação.
+- Localizar e substituir na seleção ou nas linhas visíveis.
+- Menu de contexto para copiar, limpar conteúdo e ocultar coluna.
+- Exportação da folha visível para Excel, respeitando filtros ativos.
 
-## Dados de Setembro/2026 — SP
+### Cálculos e continuidade
 
-- A escala anterior foi substituída pelo arquivo `CONTROLE DE ALOCAÇÃO - ACIONAMENTO2.xlsx`.
-- Conferência realizada com 100 condutores e 30 dias, totalizando 3.000 posições de escala.
-- Foram incluídos três condutores que faltavam: Daniel Augusto Goes Arantes, Fabio Junior Paulino e Felipe Barbosa.
-- O carregamento da página foi corrigido para não parar no limite de 1.000 registros do banco.
-- Status gerados indevidamente em dias futuros foram limpos, preservando o que havia sido preenchido manualmente, como `BALDEIO`.
-- A continuidade do dia 11 foi corrigida e registros originados indevidamente do destino normal foram removidos.
+- Jornada normal, jornada com virada da meia-noite e jornada ainda em andamento.
+- Próxima previsão calculada com interjornada padrão de 11h10.
+- Edição isolada de entrada ou saída preserva o outro horário já registrado.
+- Nova folha diária inicia com status em branco.
+- Condutores em `F`, `FE` ou códigos de afastamento configurados não entram indevidamente no acionamento.
+- `LOCAL` herda somente o `DESTINO FINAL` do dia anterior; nunca usa o destino intermediário como substituto.
+- Valores automáticos acompanham correções do dia anterior, enquanto alterações manuais ficam protegidas.
+- Previsão do dia seguinte acompanha a saída anterior sem sobrescrever uma previsão ajustada manualmente.
+- Folhas podem ser fechadas para consulta e reabertas para correção, com registro da ação.
 
-## Ferramentas de manutenção criadas
+### Operação simultânea e avisos
 
-- Substituição e conferência da escala de Setembro/SP.
-- Limpeza de status automáticos em datas futuras.
-- Preenchimento de continuidade entre dias.
-- Correção do local do dia 11 usando apenas destino final.
-- Importação de folha diária.
-- Auditoria somente leitura de folgas, status futuros e continuidade entre dias.
-- Limpeza segura de registros vazios em dias de folga, preservando linhas históricas com preenchimento operacional.
+- Sincronização pelo Supabase Realtime entre operadores.
+- Consulta periódica de segurança quando a rede corporativa bloqueia WebSocket.
+- Presença de operadores online e indicação da linha em edição por outra pessoa.
+- Agrupamento de eventos durante colagens grandes para evitar recargas concorrentes.
+- Alertas de acionados sem entrada, jornadas abertas, abonos pendentes e jornadas acima de 11h10.
+- Indicadores de total, acionados, em trânsito, abonos, apoios, trocas, faltas e pendências.
+- Lembrete por condutor com horário, aviso visual, som, volume configurável e opção de adiar cinco minutos.
+- Os lembretes pertencem à sessão daquele navegador; ainda não são compartilhados entre computadores.
 
-## Validações técnicas realizadas
+## Escala mensal
 
-- Build de produção executado com sucesso após as alterações recentes.
-- Salvamento de destinos validado depois da configuração segura da chave de serviço no ambiente da Vercel.
-- Escala Setembro/2026 — SP comparada com o arquivo de origem sem divergências na conferência executada.
-- Senha de homologação removida do código enviado ao navegador; somente o e-mail da conta de teste é exibido.
-- Testes automáticos adicionados para jornada normal, jornada noturna, jornada em andamento, interjornada e continuidade baseada exclusivamente no destino final.
-- Edição isolada de entrada ou saída preserva o outro horário já salvo ao recalcular jornada e próxima previsão.
-- Previsão do acionamento sincronizada com a `PREV. PRÓX.` do dia anterior, preservando ajustes manuais do operador.
-- Framework atualizado para Next.js 16 LTS e React 19, eliminando os alertas críticos identificados na versão anterior.
-- Importação web migrada para ExcelJS e limitada a `.xlsx` de até 5 MB, 2.000 linhas e 100 colunas.
+- Grade mensal de 1 a 31 dias, com edição e navegação por teclado.
+- Turnos e horários de A a G sincronizados com o cadastro do condutor e com folhas futuras.
+- Filtros por região, mês, ano e texto.
+- Importação segura de `.xlsx` limitada a 5 MB, 2.000 linhas e 100 colunas.
+- Exportação da escala para `.xlsx`.
+- Alterações ficam pendentes na tela até o operador confirmar o salvamento.
+- Regras de ausência e códigos de escala integradas à geração do acionamento diário.
 
-## Relatórios gerenciais
+## Condutores e permissões
 
-- Consulta por período e região sem criar ou alterar folhas operacionais.
-- Indicadores de preenchimento, jornadas concluídas e em andamento, média de jornada e jornadas acima de 11h10.
-- Distribuição por status com as cores da operação, destinos mais usados e resumo por condutor.
-- Exportação do relatório em Excel e versão preparada para impressão/PDF.
+- Cadastro e edição de nome, matrícula, base, turno, horário e letras da escala.
+- Operadores podem consultar; supervisores e administradores podem cadastrar e alterar.
+- Operadores acessam as áreas operacionais: Acionamento, Escala, Condutores e Consulta SIGhRA.
+- Supervisores e administradores também acessam Histórico, Relatórios e Administração.
+- Rotas e operações sensíveis usam sessão autenticada; credenciais administrativas permanecem no servidor.
+
+## Histórico, relatórios e administração
+
+- Histórico de alterações com data/hora, operador, condutor, ação e campos modificados.
+- Pesquisa por condutor, operador ou conteúdo da alteração, filtros por período e operador e exportação CSV.
+- Relatório por período e região sem criar folhas operacionais.
+- Indicadores de preenchimento, jornadas concluídas/em andamento, média, excesso de 11h10, status, destinos e resumo por condutor.
+- Exportação do relatório para Excel e impressão preparada para PDF.
+- Administração exibe parâmetros de cálculo, bases e destinos cadastrados.
+- Medidor do consumo do banco Supabase, com alerta de aproximação do limite do plano.
+- Tela global de recuperação para falhas inesperadas de interface.
+
+## Integração SIGhRA
+
+- Ponte segura executada no notebook que possui acesso ao banco SIGhRA pela rede/VPN da empresa.
+- Indicador de estado da ponte no cabeçalho.
+- Consulta manual do último fim de jornada por login e data.
+- Exibição de macro, horário GPS, recebimento, placa, local, veículo e link para mapa quando há coordenadas.
+- Piloto de jornada dentro do acionamento: consulta, prévia, validações, confirmação humana e auditoria antes de preencher entrada/saída/frota/destino.
+- Consulta de até 50 jornadas em lote, com prévia e aplicação manual somente dos resultados seguros.
+- Modo de produção permanece desabilitado sem configuração explícita.
+- O modo automático existe apenas como contrato futuro; nenhum agendador automático está ativo.
+
+## Dados, manutenção e confiabilidade
+
+- Escala de Setembro/2026 de SP conferida com 100 condutores e 3.000 posições.
+- Correções para paginação acima de 1.000 registros, status futuros indevidos e continuidade baseada exclusivamente no destino final.
+- Ferramentas de importação, sincronização, auditoria somente leitura e limpeza segura de registros vazios.
+- Política inicial de backup/restauração e ponto de restauração documentados.
+- Testes automatizados para cálculos, continuidade, edição, seleção, lembretes, acesso, relatórios, importação, SIGhRA e serviços de banco.
+- Projeto atualizado para Next.js 16 e React 19.
+
+## O que está funcionando, mas ainda precisa de homologação operacional
+
+- Uso simultâneo em computadores reais e em redes corporativas diferentes.
+- Todos os campos editáveis após salvar, recarregar e trocar de data/região.
+- Colagens grandes com dados reais da operação.
+- Cálculos e continuidade em vários dias e na virada do mês.
+- Relatórios comparados com a planilha oficial.
+- Ponte SIGhRA no notebook definitivo, com VPN, retomada após queda e volume real de consultas.
+- Fechamento/reabertura e permissões usando contas individuais reais.

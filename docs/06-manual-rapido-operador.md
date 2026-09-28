@@ -29,7 +29,7 @@
 - Selecione várias células e cole um único valor para repeti-lo.
 - `Ctrl+D` preenche para baixo e `Ctrl+R` preenche para a direita.
 - `Delete` limpa o intervalo; `Ctrl+Z` desfaz e `Ctrl+Y` refaz.
-- Clique no número para selecionar uma linha, na letra para selecionar uma coluna e use `Ctrl+A` para selecionar a grade.
+- Clique no número para selecionar uma linha ou na letra para selecionar uma coluna. Dentro de uma caixa de edição, `Ctrl+A` seleciona somente o texto dessa caixa. Para selecionar a grade inteira, clique no canto `#`.
 - Use **Colunas** para ocultar/reexibir ou restaurar larguras.
 - Use **Exportar Excel** para baixar as linhas que estão visíveis. Se houver filtros ativos, apenas o resultado filtrado será exportado.
 

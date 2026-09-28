@@ -1,6 +1,6 @@
 # Central de documentação — Sistema de Acionamento
 
-> Atualizado em 11/09/2026. Esta pasta pode ser aberta diretamente como um cofre no Obsidian e também pode ser importada pelo Notion.
+> Atualizado em 28/09/2026. Esta pasta pode ser aberta diretamente como um cofre no Obsidian e também pode ser importada pelo Notion.
 
 ## Por onde começar
 
@@ -13,9 +13,9 @@
 
 ## Estado resumido
 
-O sistema já está publicado em [sistema-acionamento.vercel.app](https://sistema-acionamento.vercel.app/) e está em fase de teste operacional. A grade de acionamento, a escala mensal, os cadastros, o histórico e a administração já possuem telas funcionais. A Escala de Setembro/2026 de SP foi substituída pelo arquivo operacional mais recente e conferida integralmente.
+O sistema já está publicado em [sistema-acionamento.vercel.app](https://sistema-acionamento.vercel.app/) e está em fase de teste operacional. A grade de acionamento, a escala mensal, os cadastros, o histórico, os relatórios e a administração possuem telas funcionais. A integração SIGhRA está disponível como piloto controlado com consulta pelo notebook, prévia e confirmação humana. A Escala de Setembro/2026 de SP foi substituída pelo arquivo operacional mais recente e conferida integralmente.
 
-O foco atual é homologar o comportamento da grade como uma planilha Excel, reforçar os testes reais com operadores e preparar a entrada oficial em produção.
+O foco atual é homologar a operação em vários computadores, concluir o piloto SIGhRA, validar as demais regiões e preparar usuários individuais, treinamento e entrada oficial em produção. A lista atualizada está em [[04-pendencias-e-roadmap]].
 
 ## Documentos técnicos existentes
 
