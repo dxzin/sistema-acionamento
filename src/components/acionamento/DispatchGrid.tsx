@@ -496,6 +496,7 @@ export function DispatchGrid({
   const bottomScrollRef = useRef<HTMLDivElement>(null);
   const headerSelectionRef = useRef<{ kind: "row" | "column"; anchor: number } | null>(null);
   const copiedCellRef = useRef<{ text: string; column: number } | null>(null);
+  const copiedGridRangeRef = useRef<{ text: string; left: number; rows: number; columns: number } | null>(null);
   const [selection, setSelection] = useState<DispatchGridSelection | null>(null);
   const [editingRow, setEditingRow] = useState<{ id: string; index: number } | null>(null);
   const [isSelecting, setIsSelecting] = useState(false);
@@ -945,6 +946,12 @@ export function DispatchGrid({
     }).join("\n");
     copiedCellRef.current = selectionBounds.top === selectionBounds.bottom && selectionBounds.left === selectionBounds.right
       ? { text, column: selectionBounds.left } : null;
+    copiedGridRangeRef.current = {
+      text,
+      left: selectionBounds.left,
+      rows: selectionBounds.bottom - selectionBounds.top + 1,
+      columns: selectionBounds.right - selectionBounds.left + 1,
+    };
     await navigator.clipboard.writeText(text);
   };
 
@@ -1135,7 +1142,9 @@ export function DispatchGrid({
     const selectedRows = selectionBounds.bottom - selectionBounds.top + 1;
     const selectedColumns = selectionBounds.right - selectionBounds.left + 1;
     const sourceColumns = Math.max(...matrix.map((row) => row.length));
-    const fullSheetWithoutHeaders = !hasHeaders && selectionBounds.left === 0 &&
+    const copiedGridRange = copiedGridRangeRef.current?.text.replace(/\r\n?/g, "\n") === clipboardText.replace(/\r\n?/g, "\n")
+      ? copiedGridRangeRef.current : null;
+    const fullSheetWithoutHeaders = !copiedGridRange && !hasHeaders && selectionBounds.left === 0 &&
       sourceColumns === EXCEL_EXPORT_COLUMNS.length && sourceRows.every((row) => row.length === sourceColumns);
     const singleValue = !hasHeaders && sourceRows.length === 1 && sourceColumns === 1;
     const copiedColumn = singleValue && selectedColumns === activeFilterColumns.length &&
@@ -1238,6 +1247,7 @@ export function DispatchGrid({
         const position = cellPosition(target);
         if (!position || !(target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement)) return;
         const text = target.value.slice(target.selectionStart || 0, target.selectionEnd || 0);
+        copiedGridRangeRef.current = null;
         copiedCellRef.current = text ? { text, column: position.column } : null;
       }}
       onPaste={(event) => {

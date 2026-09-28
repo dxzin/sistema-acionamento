@@ -133,6 +133,22 @@ test("Ctrl+A após selecionar uma linha mantém a limpeza nessa linha", async ({
   ]);
 });
 
+test("copia várias linhas da própria grade e cola em outros condutores", async ({ page }) => {
+  await page.goto("/copy-rows");
+  await page.context().grantPermissions(["clipboard-read", "clipboard-write"]);
+  await page.evaluate(() => (window as unknown as { prepareMultiRowCopy(): void }).prepareMultiRowCopy());
+  await page.getByTitle("Selecionar linha 1", { exact: true }).click();
+  await page.getByTitle("Selecionar linha 2", { exact: true }).click({ modifiers: ["Shift"] });
+  await page.keyboard.press("ControlOrMeta+C");
+  await page.getByTitle("Selecionar linha 4", { exact: true }).click();
+  await page.getByTitle("Selecionar linha 5", { exact: true }).click({ modifiers: ["Shift"] });
+  await page.keyboard.press("ControlOrMeta+V");
+  await expect.poll(async () => JSON.parse(await page.locator("#writes").innerText())).toEqual([
+    { id: "maria", changes: { dispatch_status: "ACIONADO", destination_name: "UBERABA", final_destination_name: "BAURU" } },
+    { id: "pedro", changes: { dispatch_status: "APOIO", destination_name: "CASTILHO", final_destination_name: "LENÇÓIS" } },
+  ]);
+});
+
 test("cola uma cidade nas células de destino de vários condutores", async ({ page }) => {
   await page.setViewportSize({ width: 2100, height: 900 });
   await page.context().grantPermissions(["clipboard-read", "clipboard-write"]);
