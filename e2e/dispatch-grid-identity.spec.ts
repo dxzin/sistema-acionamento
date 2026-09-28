@@ -386,6 +386,17 @@ test("Ctrl+A em uma caixa de Entrada seleciona só o texto da caixa", async ({ p
   await expect(page.locator("#writes")).toHaveText('[{"id":"joao","changes":{"entry_time":null}}]');
 });
 
+test("Delete após um clique limpa todo o conteúdo da célula", async ({ page }) => {
+  await page.evaluate(() => (window as unknown as { setAnaDestination(): void }).setAnaDestination());
+  const destination = page.getByRole("textbox", { name: "Destino de ANA" });
+  await destination.click();
+  await destination.evaluate(element => (element as HTMLInputElement).setSelectionRange(2, 2));
+  await page.keyboard.press("Delete");
+  await expect.poll(async () => JSON.parse(await page.locator("#writes").innerText())).toEqual([
+    { id: "ana", changes: { destination_name: "" } },
+  ]);
+});
+
 test("Ctrl+C em uma caixa copia somente o texto selecionado", async ({ page }) => {
   await page.context().grantPermissions(["clipboard-read", "clipboard-write"]);
   const input = page.locator("tbody tr").filter({ hasText: "JOÃO" }).locator("td").nth(9).locator("input");

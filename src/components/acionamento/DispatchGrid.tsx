@@ -1275,7 +1275,7 @@ export function DispatchGrid({
             : false;
         const nativeTextShortcut = (event.ctrlKey || event.metaKey) &&
           (["a", "z", "y"].includes(key) || (key === "c" && hasSelectedText));
-        if (editingText && (nativeTextShortcut || event.key === "Delete")) {
+        if (editingText && (nativeTextShortcut || (event.key === "Delete" && hasSelectedText))) {
           return;
         }
         if ((event.ctrlKey || event.metaKey) && key === "c") {
