@@ -1268,7 +1268,14 @@ export function DispatchGrid({
         const editingText = event.target instanceof HTMLInputElement ||
           event.target instanceof HTMLTextAreaElement ||
           (event.target instanceof HTMLElement && event.target.isContentEditable);
-        if (editingText && (((event.ctrlKey || event.metaKey) && ["a", "c", "z", "y"].includes(key)) || event.key === "Delete")) {
+        const hasSelectedText = event.target instanceof HTMLInputElement || event.target instanceof HTMLTextAreaElement
+          ? (event.target.selectionEnd ?? 0) > (event.target.selectionStart ?? 0)
+          : event.target instanceof HTMLElement && event.target.isContentEditable
+            ? !window.getSelection()?.isCollapsed
+            : false;
+        const nativeTextShortcut = (event.ctrlKey || event.metaKey) &&
+          (["a", "z", "y"].includes(key) || (key === "c" && hasSelectedText));
+        if (editingText && (nativeTextShortcut || event.key === "Delete")) {
           return;
         }
         if ((event.ctrlKey || event.metaKey) && key === "c") {

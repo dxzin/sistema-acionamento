@@ -155,14 +155,20 @@ test("várias linhas de Status até Destino final mantêm valores e colunas ao c
   await page.context().grantPermissions(["clipboard-read", "clipboard-write"]);
   await page.evaluate(() => (window as unknown as { prepareMultiRowCopy(): void }).prepareMultiRowCopy());
   const sourceRows = page.locator("tbody tr");
-  const status = await sourceRows.first().locator("td").nth(5).boundingBox();
-  const finalDestination = await sourceRows.nth(1).locator("td").nth(12).boundingBox();
+  const statusInput = sourceRows.first().getByLabel("Status do acionamento");
+  const status = await statusInput.boundingBox();
+  const finalDestination = await sourceRows.nth(1).getByRole("textbox", { name: "Destino final de GABRIEL" }).boundingBox();
   if (!status || !finalDestination) throw new Error("Trecho da linha não encontrado");
-  await page.mouse.move(status.x + 10, status.y + 10);
+  await page.mouse.move(status.x + status.width / 2, status.y + status.height / 2);
   await page.mouse.down();
-  await page.mouse.move(finalDestination.x + 10, finalDestination.y + 10, { steps: 8 });
+  await page.mouse.move(finalDestination.x + finalDestination.width / 2, finalDestination.y + finalDestination.height / 2, { steps: 8 });
   await page.mouse.up();
+  await statusInput.evaluate(element => (element as HTMLInputElement).setSelectionRange(0, 0));
+  await expect(page.locator("tbody td.excel-range-selected")).toHaveCount(16);
+  await expect(statusInput).toBeFocused();
   await page.keyboard.press("ControlOrMeta+C");
+  await expect.poll(() => page.evaluate(async () => (await navigator.clipboard.readText()).replace(/\r\n/g, "\n")))
+    .toBe("ACIONADO\t\t\t\t\t\tUBERABA\tBAURU\nAPOIO\t\t\t\t\t\tCASTILHO\tLENÇÓIS");
   await page.getByTitle("Selecionar linha 4", { exact: true }).click();
   await page.getByTitle("Selecionar linha 5", { exact: true }).click({ modifiers: ["Shift"] });
   await page.keyboard.press("ControlOrMeta+V");
