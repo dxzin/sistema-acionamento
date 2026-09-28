@@ -133,6 +133,138 @@ test("Ctrl+A após selecionar uma linha mantém a limpeza nessa linha", async ({
   ]);
 });
 
+test("cola uma cidade nas células de destino de vários condutores", async ({ page }) => {
+  await page.setViewportSize({ width: 2100, height: 900 });
+  await page.context().grantPermissions(["clipboard-read", "clipboard-write"]);
+  await page.evaluate(() => navigator.clipboard.writeText("UBERABA"));
+  const cells = page.locator("tbody tr td:nth-child(13)");
+  const first = await cells.nth(0).boundingBox();
+  const last = await cells.nth(2).boundingBox();
+  if (!first || !last) throw new Error("Células de destino não encontradas");
+  await page.mouse.move(first.x + 10, first.y + 10);
+  await page.mouse.down();
+  await page.mouse.move(last.x + 10, last.y + 10, { steps: 8 });
+  await page.mouse.up();
+  await expect(page.locator("tbody td.excel-range-selected")).toHaveCount(3);
+  await page.keyboard.press("ControlOrMeta+V");
+  await expect.poll(async () => JSON.parse(await page.locator("#writes").innerText())).toEqual([
+    { id: "ana", changes: { destination_name: "UBERABA" } },
+    { id: "gabriel", changes: { destination_name: "UBERABA" } },
+    { id: "joao", changes: { destination_name: "UBERABA" } },
+  ]);
+});
+
+test("repete Destino e Destino final copiados juntos em várias linhas", async ({ page }) => {
+  await page.setViewportSize({ width: 2100, height: 900 });
+  const first = await page.locator("tbody tr td:nth-child(13)").first().boundingBox();
+  const last = await page.locator("tbody tr td:nth-child(14)").nth(2).boundingBox();
+  if (!first || !last) throw new Error("Células de destino não encontradas");
+  await page.mouse.move(first.x + 10, first.y + 10);
+  await page.mouse.down();
+  await page.mouse.move(last.x + 10, last.y + 10, { steps: 8 });
+  await page.mouse.up();
+  await expect(page.locator("tbody td.excel-range-selected")).toHaveCount(6);
+  await page.locator(".excel-grid").evaluate(element => {
+    const data = new DataTransfer(); data.setData("text/plain", "UBERABA\tCASTILHO");
+    element.dispatchEvent(new ClipboardEvent("paste", { bubbles: true, cancelable: true, clipboardData: data }));
+  });
+  await expect.poll(async () => JSON.parse(await page.locator("#writes").innerText())).toEqual([
+    { id: "ana", changes: { destination_name: "UBERABA", final_destination_name: "CASTILHO" } },
+    { id: "gabriel", changes: { destination_name: "UBERABA", final_destination_name: "CASTILHO" } },
+    { id: "joao", changes: { destination_name: "UBERABA", final_destination_name: "CASTILHO" } },
+  ]);
+});
+
+test("bloco menor não repete a primeira linha nas linhas restantes", async ({ page }) => {
+  await page.setViewportSize({ width: 2100, height: 900 });
+  const cells = page.locator("tbody tr td:nth-child(13)");
+  const first = await cells.nth(0).boundingBox();
+  const last = await cells.nth(2).boundingBox();
+  if (!first || !last) throw new Error("Células de destino não encontradas");
+  await page.mouse.move(first.x + 10, first.y + 10);
+  await page.mouse.down();
+  await page.mouse.move(last.x + 10, last.y + 10, { steps: 8 });
+  await page.mouse.up();
+  await expect(page.locator("tbody td.excel-range-selected")).toHaveCount(3);
+  await page.locator(".excel-grid").evaluate(element => {
+    const data = new DataTransfer(); data.setData("text/plain", "UBERABA\nCASTILHO");
+    element.dispatchEvent(new ClipboardEvent("paste", { bubbles: true, cancelable: true, clipboardData: data }));
+  });
+  await expect.poll(async () => JSON.parse(await page.locator("#writes").innerText())).toEqual([
+    { id: "ana", changes: { destination_name: "UBERABA" } },
+    { id: "gabriel", changes: { destination_name: "CASTILHO" } },
+  ]);
+});
+
+test("planilha completa do Excel usa a ordem das linhas e pede confirmação", async ({ page }) => {
+  await page.locator("tbody tr").first().locator("td").nth(1).click();
+  await page.locator(".excel-grid").evaluate(element => {
+    const data = new DataTransfer();
+    data.setData("text/plain", "CONDUTOR\tLOGIN\tDESTINO\tDESTINO FINAL\nANA\tana\tUBERABA\tCASTILHO\nGABRIEL\tgabriel\tLENÇÓIS\tBAURU\n");
+    element.dispatchEvent(new ClipboardEvent("paste", { bubbles: true, cancelable: true, clipboardData: data }));
+  });
+  await expect(page.getByRole("dialog", { name: "Conferir colagem do Excel" })).toContainText("2 linha(s), 4 célula(s)");
+  await expect(page.locator("#writes")).toHaveText("[]");
+  await page.getByRole("button", { name: "Aplicar colagem" }).click();
+  await expect.poll(async () => JSON.parse(await page.locator("#writes").innerText())).toEqual([
+    { id: "ana", changes: { destination_name: "UBERABA", final_destination_name: "CASTILHO" } },
+    { id: "gabriel", changes: { destination_name: "LENÇÓIS", final_destination_name: "BAURU" } },
+  ]);
+});
+
+test("cabeçalhos do Excel alinham colunas mesmo com Cidade visível na grade", async ({ page }) => {
+  await page.locator("tbody tr").first().locator("td").nth(1).click();
+  await page.locator(".excel-grid").evaluate(element => {
+    const data = new DataTransfer();
+    data.setData("text/plain", "CONDUTOR\tLOGIN\tHORÁRIO\tPREVISÃO\tSTATUS\tMOTIVO DO ABONO / APROVAÇÃO\tLOCAL\tENTRADA\tFROTA\tC/V\tDESTINO\tDESTINO FINAL\tSAÍDA\tOBSERVAÇÃO\tDIA DE ESCALA\tPREV. PRÓX. DIA\tTEMPO DE JORNADA\nANA\tana\t04:00\t03:30\tACIONADO\t\tUBERABA\t07:00\tABC1234\tC\tBAURU\tCASTILHO\t\tNota\t1\t\t\n");
+    element.dispatchEvent(new ClipboardEvent("paste", { bubbles: true, cancelable: true, clipboardData: data }));
+  });
+  await page.getByRole("button", { name: "Aplicar colagem" }).click();
+  await expect.poll(async () => JSON.parse(await page.locator("#writes").innerText())).toEqual([
+    { id: "ana", changes: {
+      forecast_start_time: "03:30", dispatch_status: "ACIONADO", origin_name: "UBERABA",
+      entry_time: "07:00:00", fleet_code: "ABC1234", cargo_status: "C",
+      destination_name: "BAURU", final_destination_name: "CASTILHO", observations: "Nota",
+    } },
+  ]);
+});
+
+test("linhas completas do Excel sem cabeçalho também seguem a ordem", async ({ page }) => {
+  await page.locator("tbody tr").first().locator("td").nth(1).click();
+  await page.locator(".excel-grid").evaluate(element => {
+    const data = new DataTransfer();
+    const line = ["ANA", "ana", "04:00", "", "ACIONADO", "", "", "", "", "", "UBERABA", "CASTILHO", "", "", "", "", ""];
+    data.setData("text/plain", line.join("\t"));
+    element.dispatchEvent(new ClipboardEvent("paste", { bubbles: true, cancelable: true, clipboardData: data }));
+  });
+  await expect(page.getByRole("dialog", { name: "Conferir colagem do Excel" })).toBeVisible();
+  await page.getByRole("button", { name: "Aplicar colagem" }).click();
+  await expect.poll(async () => JSON.parse(await page.locator("#writes").innerText())).toEqual([
+    { id: "ana", changes: { dispatch_status: "ACIONADO", destination_name: "UBERABA", final_destination_name: "CASTILHO" } },
+  ]);
+});
+
+test("planilha inteira com login desalinhado não altera condutores", async ({ page }) => {
+  await page.locator("tbody tr").first().locator("td").nth(1).click();
+  await page.locator(".excel-grid").evaluate(element => {
+    const data = new DataTransfer();
+    data.setData("text/plain", "CONDUTOR\tLOGIN\tDESTINO\tDESTINO FINAL\nJOÃO\tjoao\tUBERABA\tCASTILHO\n");
+    element.dispatchEvent(new ClipboardEvent("paste", { bubbles: true, cancelable: true, clipboardData: data }));
+  });
+  await expect(page.getByRole("status").filter({ hasText: "Alinhe as linhas" })).toContainText("Alinhe as linhas antes de colar");
+  await expect(page.locator("#writes")).toHaveText("[]");
+});
+
+test("valor único em linha inteira não preenche colunas indevidas", async ({ page }) => {
+  await page.getByTitle("Selecionar linha 1", { exact: true }).click();
+  await page.locator(".excel-grid").evaluate(element => {
+    const data = new DataTransfer(); data.setData("text/plain", "UBERABA");
+    element.dispatchEvent(new ClipboardEvent("paste", { bubbles: true, cancelable: true, clipboardData: data }));
+  });
+  await expect(page.getByRole("status").filter({ hasText: "Selecione somente as colunas" })).toContainText("Selecione somente as colunas");
+  await expect(page.locator("#writes")).toHaveText("[]");
+});
+
 test("Ctrl+C copia o conteúdo da linha e coluna selecionadas pelo cabeçalho", async ({ page }) => {
   await page.context().grantPermissions(["clipboard-read", "clipboard-write"]);
   await page.evaluate(() => navigator.clipboard.writeText("anterior"));

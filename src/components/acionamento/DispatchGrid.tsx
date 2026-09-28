@@ -6,6 +6,7 @@ import { DispatchStatus, CargoStatus } from "@/types/database";
 import { normalizeClockTime } from "@/lib/calculations/jornada";
 import { isJourneyEligible } from "@/lib/sighra/journey";
 import { captureGridSelection, DispatchGridSelection, gridSelectionBounds, resolveGridSelectionRows } from "@/lib/editing/dispatch-grid-selection";
+import { parseGridClipboard } from "@/lib/editing/dispatch-grid-clipboard";
 import { ArrowUpDown, Bell, BellRing, Check, ChevronDown, Columns3, Copy, Clock, Eye, EyeOff, ListChecks, Loader2, Maximize2, Minimize2, Minus, Plus, RefreshCw, Search, Trash2, Volume2, VolumeX, X } from "lucide-react";
 
 interface DispatchGridProps {
@@ -67,6 +68,23 @@ const COLUMN_LABELS = [
 ];
 const ROW_NUMBER_WIDTH = 44;
 const COLUMN_WIDTHS = [230, 78, 86, 92, 90, 135, 230, 100, 90, 100, 55, 120, 120, 90, 180, 80, 95, 110];
+
+const EXCEL_HEADERS: Record<string, ColumnFilterKey> = {
+  CONDUTOR: "driver", CIDADE: "city", LOGIN: "login", HORARIO: "schedule",
+  PREVISAO: "forecast", STATUS: "status", MOTIVO_DO_ABONO_APROVACAO: "reason",
+  LOCAL: "origin", ENTRADA: "entry", FROTA: "fleet", C_V: "cargo",
+  DESTINO: "destination", DESTINO_FINAL: "finalDestination", SAIDA: "exit",
+  OBSERVACAO: "observations", DIA_DE_ESCALA: "scale",
+  PREV_PROX_DIA: "nextForecast", TEMPO_DE_JORNADA: "workedTime",
+};
+const EXCEL_EXPORT_COLUMNS: ColumnFilterKey[] = [
+  "driver", "login", "schedule", "forecast", "status", "reason", "origin", "entry",
+  "fleet", "cargo", "destination", "finalDestination", "exit", "observations",
+  "scale", "nextForecast", "workedTime",
+];
+
+const normalizeExcelHeader = (value: string) => value.trim().normalize("NFD")
+  .replace(/[\u0300-\u036f]/g, "").toUpperCase().replace(/[^A-Z0-9]+/g, "_").replace(/^_|_$/g, "");
 
 function getColumnValue(row: DispatchRowModel, key: ColumnFilterKey): string {
   const values: Record<ColumnFilterKey, string | null | undefined> = {
@@ -479,6 +497,14 @@ export function DispatchGrid({
   const [selection, setSelection] = useState<DispatchGridSelection | null>(null);
   const [editingRow, setEditingRow] = useState<{ id: string; index: number } | null>(null);
   const [isSelecting, setIsSelecting] = useState(false);
+  const [pasteFeedback, setPasteFeedback] = useState<string | null>(null);
+  const [pendingExcelPaste, setPendingExcelPaste] = useState<{
+    updates: Map<string, Partial<DispatchRowModel>>;
+    rows: number;
+    fields: number;
+    columns: string[];
+    records: { id: string; login: string; sheetId: string; updatedAt?: string }[];
+  } | null>(null);
   const [hiddenColumns, setHiddenColumns] = useState<number[]>([]);
   const activeFilterColumns = useMemo(
     () => showCity ? FILTER_COLUMNS : FILTER_COLUMNS.filter((key) => key !== "city"),
@@ -1085,44 +1111,109 @@ export function DispatchGrid({
       if (selection) event.preventDefault();
       return;
     }
-    const matrix = event.clipboardData.getData("text/plain").replace(/\r/g, "").split("\n")
-      .filter((line, index, rows) => line.length > 0 || index < rows.length - 1)
-      .map((line) => line.split("\t"));
+    const clipboardText = event.clipboardData.getData("text/plain");
+    if (!clipboardText.trim()) {
+      event.preventDefault();
+      setPasteFeedback("A área de transferência está vazia. Nenhuma célula foi alterada.");
+      return;
+    }
+    const matrix = parseGridClipboard(clipboardText);
     if (!matrix.length) return;
 
-    const singleValue = matrix.length === 1 && matrix[0].length === 1;
-    const selectedCount = (selectionBounds.bottom - selectionBounds.top + 1) *
-      (selectionBounds.right - selectionBounds.left + 1);
-    // Uma célula simples continua usando a edição normal. Um bloco copiado,
-    // mesmo colado a partir de uma única célula inicial, deve ser distribuído.
-    if (selectedCount === 1 && singleValue) return;
-
+    const headerKeys = matrix[0].map((value) => EXCEL_HEADERS[normalizeExcelHeader(value)] || null);
+    const hasHeaders = headerKeys.includes("driver") && headerKeys.includes("login") &&
+      headerKeys.filter(Boolean).length >= 3;
+    const sourceRows = hasHeaders ? matrix.slice(1) : matrix;
+    const selectedRows = selectionBounds.bottom - selectionBounds.top + 1;
+    const selectedColumns = selectionBounds.right - selectionBounds.left + 1;
+    const sourceColumns = Math.max(...matrix.map((row) => row.length));
+    const fullSheetWithoutHeaders = !hasHeaders && selectionBounds.left === 0 &&
+      sourceColumns === EXCEL_EXPORT_COLUMNS.length && sourceRows.every((row) => row.length === sourceColumns);
+    const singleValue = !hasHeaders && sourceRows.length === 1 && sourceColumns === 1;
+    if (selectedRows === 1 && selectedColumns === 1 && singleValue) return;
     event.preventDefault();
-    const updatesByRow = new Map<string, Partial<DispatchRowModel>>();
-    const sourceColumnCount = Math.max(...matrix.map((row) => row.length));
-    const targetIsRange = selectedCount > 1;
-    const lastRow = targetIsRange
-      ? selectionBounds.bottom
-      : Math.min(selectionDispatches.length - 1, selectionBounds.top + matrix.length - 1);
-    const lastColumn = targetIsRange
-      ? selectionBounds.right
-      : selectionBounds.left + sourceColumnCount - 1;
+    setPendingExcelPaste(null);
+    setPasteFeedback(null);
 
-    for (let rowIndex = selectionBounds.top; rowIndex <= lastRow; rowIndex++) {
-      const row = selectionDispatches[rowIndex];
+    if (hasHeaders && selectionBounds.left !== 0) {
+      setPasteFeedback("Para colar a planilha inteira, selecione a primeira célula ou a linha inicial pela coluna A.");
+      return;
+    }
+    if (singleValue && selectedColumns === activeFilterColumns.length) {
+      setPasteFeedback("Selecione somente as colunas que devem receber esse valor, como Destino ou Destino final.");
+      return;
+    }
+    if (!hasHeaders && !singleValue &&
+        ((selectedRows > 1 && sourceRows.length > selectedRows) ||
+         (selectedColumns > 1 && sourceColumns > selectedColumns))) {
+      setPasteFeedback("O bloco copiado é maior que a seleção. Selecione a primeira célula ou amplie a área de destino.");
+      return;
+    }
+    const repeatOneRow = !hasHeaders && !fullSheetWithoutHeaders && sourceRows.length === 1 && selectedRows > 1;
+    const rowCount = singleValue || repeatOneRow ? selectedRows
+      : selectedRows === 1 ? sourceRows.length : Math.min(selectedRows, sourceRows.length);
+    const columnCount = singleValue ? selectedColumns : selectedColumns === 1 ? sourceColumns : Math.min(selectedColumns, sourceColumns);
+    if (!sourceRows.length || rowCount > selectionDispatches.length - selectionBounds.top ||
+        (!hasHeaders && columnCount > activeFilterColumns.length - selectionBounds.left) ||
+        (hasHeaders && selectedRows > 1 && sourceRows.length > selectedRows)) {
+      setPasteFeedback("A planilha copiada ultrapassa as linhas ou colunas disponíveis. Nenhuma célula foi alterada.");
+      return;
+    }
+
+    const updatesByRow = new Map<string, Partial<DispatchRowModel>>();
+    const changedColumns = new Set<string>();
+    const records: { id: string; login: string; sheetId: string; updatedAt?: string }[] = [];
+    for (let offset = 0; offset < rowCount; offset++) {
+      const row = selectionDispatches[selectionBounds.top + offset];
       if (!row) continue;
-      for (let column = selectionBounds.left; column <= lastColumn; column++) {
-        const sourceRow = (rowIndex - selectionBounds.top) % matrix.length;
-        const sourceColumn = (column - selectionBounds.left) % sourceColumnCount;
-        const value = matrix[sourceRow]?.[sourceColumn];
-        if (value === undefined) continue;
-        const updates = updateForPastedCell(column, value);
-        if (updates) updatesByRow.set(row.id, { ...(updatesByRow.get(row.id) || {}), ...updates });
+      const source = sourceRows[singleValue || repeatOneRow ? 0 : offset];
+      if (hasHeaders || fullSheetWithoutHeaders) {
+        const loginColumn = hasHeaders ? headerKeys.indexOf("login") : 1;
+        const sourceLogin = source?.[loginColumn]?.trim().replace(/^0+(?=\d)/, "");
+        const targetLogin = row.driver.login_matricula.trim().replace(/^0+(?=\d)/, "");
+        if (sourceLogin !== targetLogin) {
+          setPasteFeedback(`A linha ${offset + 1} do Excel tem login ${sourceLogin || "vazio"}, mas a grade mostra ${targetLogin}. Alinhe as linhas antes de colar.`);
+          return;
+        }
       }
+      const updates: Partial<DispatchRowModel> = {};
+      for (let sourceColumn = 0; sourceColumn < (hasHeaders ? headerKeys.length : columnCount); sourceColumn++) {
+        const key = hasHeaders ? headerKeys[sourceColumn] : fullSheetWithoutHeaders
+          ? EXCEL_EXPORT_COLUMNS[sourceColumn] : activeFilterColumns[selectionBounds.left + sourceColumn];
+        const column = key ? activeFilterColumns.indexOf(key) : -1;
+        if (column < 0) continue;
+        const value = source?.[singleValue ? 0 : sourceColumn];
+        if (value === undefined) continue;
+        const next = updateForPastedCell(column, (hasHeaders || fullSheetWithoutHeaders) && key === "reason"
+          ? value.split(" — ")[0] : value);
+        if (!next) continue;
+        for (const [field, fieldValue] of Object.entries(next)) {
+          const current = valueBeforeUpdate(row, field as keyof DispatchRowModel);
+          if (String(current ?? "").trim().toUpperCase() !== String(fieldValue ?? "").trim().toUpperCase()) {
+            Object.assign(updates, { [field]: fieldValue });
+            changedColumns.add(activeColumnLabels[column]);
+          }
+        }
+      }
+      if (Object.keys(updates).length) {
+        updatesByRow.set(row.id, updates);
+        records.push({ id: row.id, login: row.driver.login_matricula, sheetId: row.daily_sheet_id, updatedAt: row.updated_at });
+      }
+    }
+    if (!updatesByRow.size) {
+      setPasteFeedback("Nenhuma diferença editável encontrada no bloco copiado.");
+      return;
+    }
+    const fields = Array.from(updatesByRow.values()).reduce((total, updates) => total + Object.keys(updates).length, 0);
+    if (hasHeaders || fullSheetWithoutHeaders || rowCount > 10) {
+      setPendingExcelPaste({ updates: updatesByRow, rows: updatesByRow.size, fields, columns: [...changedColumns], records });
+      return;
     }
     // Uma única gravação por condutor evita que atualizações simultâneas da
     // mesma linha se sobrescrevam quando o bloco contém várias colunas.
-    await commitBatch(updatesByRow);
+    setPasteFeedback(await commitBatch(updatesByRow)
+      ? `${updatesByRow.size} linha(s) e ${fields} célula(s) coladas.`
+      : "A colagem não foi salva. Confira o aviso de salvamento e tente novamente.");
   };
 
   return (
@@ -1426,6 +1517,34 @@ export function DispatchGrid({
           </div>
         )}
       </div>
+      {pasteFeedback && (
+        <div role="status" className="flex items-center justify-between border-b border-slate-300 bg-amber-50 px-3 py-1.5 text-xs text-slate-800">
+          <span>{pasteFeedback}</span>
+          <button type="button" onClick={() => setPasteFeedback(null)} aria-label="Fechar aviso de colagem"><X className="h-3.5 w-3.5" /></button>
+        </div>
+      )}
+      {pendingExcelPaste && (
+        <div role="dialog" aria-label="Conferir colagem do Excel" className="flex flex-wrap items-center gap-2 border-b border-emerald-300 bg-emerald-50 px-3 py-2 text-xs text-slate-800">
+          <span>Excel: {pendingExcelPaste.rows} linha(s), {pendingExcelPaste.fields} célula(s). Colunas: {pendingExcelPaste.columns.join(", ")}. Confira a ordem dos logins antes de aplicar.</span>
+          <button type="button" className="border border-emerald-700 bg-emerald-700 px-2 py-1 font-bold text-white" onClick={async () => {
+            const pending = pendingExcelPaste;
+            setPendingExcelPaste(null);
+            const currentById = new Map(dispatches.map((row) => [row.id, row]));
+            if (pending.records.some((record) => {
+              const current = currentById.get(record.id);
+              return !current || current.driver.login_matricula !== record.login ||
+                current.daily_sheet_id !== record.sheetId || current.updated_at !== record.updatedAt;
+            })) {
+              setPasteFeedback("A grade mudou após a prévia. Copie e cole novamente para conferir os condutores.");
+              return;
+            }
+            setPasteFeedback(await commitBatch(pending.updates)
+              ? `${pending.rows} linha(s) e ${pending.fields} célula(s) coladas.`
+              : "A colagem não foi salva. Confira o aviso de salvamento e tente novamente.");
+          }}>Aplicar colagem</button>
+          <button type="button" className="border border-slate-400 bg-white px-2 py-1" onClick={() => setPendingExcelPaste(null)}>Cancelar</button>
+        </div>
+      )}
       {/* Contêiner com rolagem horizontal e vertical */}
       <div
         ref={gridCanvasRef}
