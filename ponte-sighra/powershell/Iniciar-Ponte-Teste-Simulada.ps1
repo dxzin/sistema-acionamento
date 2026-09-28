@@ -36,9 +36,10 @@ do {
     $queue = Invoke-RestMethod -Method Post -Uri ($baseUrl + '/api/integracoes/sighra/tarefas') -Headers $headers
     if ($queue.job) {
         $start = New-Macro $queue.job 'INICIO DE JORNADA' '04:05:00' ('sim-' + $queue.job.id + '-inicio')
+        $restart = New-Macro $queue.job 'REINICIO DE VIAGEM' '04:20:00' ('sim-' + $queue.job.id + '-reinicio')
         $end = New-Macro $queue.job 'FIM DE JORNADA' '12:10:00' ('sim-' + $queue.job.id + '-fim')
         $answer = @{ id = $queue.job.id; lease_token = $queue.job.lease_token; result = @{
-            macros = @($end, $start); last_end = $end; journey_events = @($start, $end)
+            macros = @($end, $start); last_end = $end; journey_events = @($start, $end); restart_events = @($restart)
         } } | ConvertTo-Json -Depth 8 -Compress
         Invoke-RestMethod -Method Patch -Uri ($baseUrl + '/api/integracoes/sighra/tarefas') -Headers $headers -ContentType 'application/json' -Body $answer | Out-Null
         Write-SimulationLog ('Consulta simulada respondida para o login ' + $queue.job.login + '.')

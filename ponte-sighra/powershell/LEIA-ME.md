@@ -4,7 +4,9 @@ Para o PC da torre que fica ligado 24 horas, siga [TUTORIAL-TORRE.md](TUTORIAL-T
 
 Usa Windows PowerShell e exclusivamente `C:\SIGhRA_Monitor\libmysql.dll`, que ja existe no PC. Nao instala Node.js, ODBC, DLLs ou outros programas. `Instalar-Ponte.ps1` apenas configura a ponte; o nome foi mantido para compatibilidade.
 
-Esta versao testa o banco, envia sinais e atende consultas da aba Consulta Sighra. Executa apenas SQL fixo de leitura para obter as ultimas 10 macros e o ultimo fim de jornada nos ultimos 30 dias. Nao envia mensagens completas de macros nem preenche jornadas automaticamente.
+Esta versao testa o banco, envia sinais e atende consultas da aba Consulta Sighra. Executa apenas SQL fixo de leitura para obter as ultimas 10 macros, o ultimo fim de jornada e as sequencias de inicio, fim e reinicio de viagem a partir da data consultada. A ponte nao altera a planilha; o operador confere a previa antes de aplicar a jornada.
+
+Na consulta da jornada, a placa pode vir somente da primeira ou segunda macro de reinicio de viagem depois do inicio e antes do fim. Se nenhuma delas tiver placa, a entrada e a saida continuam disponiveis para preenchimento. Para usar essa regra, atualize tambem `MySql-Nativo.ps1` na ponte em execucao.
 
 ## Atualizar uma ponte ja configurada
 

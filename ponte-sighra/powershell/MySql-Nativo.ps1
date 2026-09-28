@@ -158,7 +158,9 @@ function Get-SighraDriverMacros($Config, [Security.SecureString]$Password, $Job)
         # O piloto precisa da sequência, em ordem cronológica, para parear cada início com o fim posterior.
         $journeyFilter = "UPPER(TRIM(lmac_nome)) IN ('INÍCIO DE JORNADA', 'INICIO DE JORNADA', 'INÍCIO DE JORNADA GA', 'INICIO DE JORNADA GA', 'FIM DE JORNADA', 'FIM DE JORNADA GA')"
         $journeyEvents = @(Read-SighraMacros $connection "SELECT $columns FROM (SELECT $eventColumns FROM log_macro WHERE $filter AND $journeyFilter AND lmac_data_gps >= '$($Job.since_date)' ORDER BY lmac_data_gps DESC LIMIT 40) m $joins ORDER BY m.lmac_data_gps ASC")
-        return @{ macros = $macros; last_end = $(if ($ends.Count) { $ends[0] } else { $null }); journey_events = $journeyEvents }
+        $restartFilter = "UPPER(TRIM(lmac_nome)) IN ('REINÍCIO DE VIAGEM', 'REINICIO DE VIAGEM', 'REINÍCIO DE VIAGEM GA', 'REINICIO DE VIAGEM GA')"
+        $restartEvents = @(Read-SighraMacros $connection "SELECT $columns FROM (SELECT $eventColumns FROM log_macro WHERE $filter AND $restartFilter AND lmac_data_gps >= '$($Job.since_date)' ORDER BY lmac_data_gps ASC LIMIT 80) m $joins ORDER BY m.lmac_data_gps ASC")
+        return @{ macros = $macros; last_end = $(if ($ends.Count) { $ends[0] } else { $null }); journey_events = $journeyEvents; restart_events = $restartEvents }
     } finally {
         if ($passwordPtr -ne [IntPtr]::Zero) { [Runtime.InteropServices.Marshal]::ZeroFreeGlobalAllocAnsi($passwordPtr) }
         if ($connection -ne [IntPtr]::Zero) { [SighraBridgeNative]::mysql_close($connection) }

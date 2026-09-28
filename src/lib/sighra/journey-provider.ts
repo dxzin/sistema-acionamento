@@ -63,7 +63,8 @@ export class SighraJourneyProvider implements JourneyProvider {
     if (!Array.isArray(result?.journey_events)) {
       throw new Error("A ponte ainda não fornece a sequência completa da jornada. Atualize o script local da ponte antes de usar o piloto.");
     }
-    return { provider: job.simulation === true ? "mock" : this.kind, requestedAt, queryId: job.id, events: result.journey_events.map(mapSighraJourneyEvent) };
+    return { provider: job.simulation === true ? "mock" : this.kind, requestedAt, queryId: job.id,
+      events: [...result.journey_events, ...(result.restart_events || [])].map(mapSighraJourneyEvent) };
   }
 }
 

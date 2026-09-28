@@ -29,12 +29,12 @@ function detail(item: JourneyBatchItem) {
   if (!item.preview) return "Sem resultado disponível.";
   if (item.preview.conflicts.length) {
     return item.preview.conflicts.map((conflict) =>
-      `${conflict.field === "entry_time" ? "Entrada" : "Saída"}: atual ${clock(conflict.current)} · SIGhRA ${clock(conflict.sighra)}`
+      `${conflict.field === "entry_time" ? "Entrada" : conflict.field === "exit_time" ? "Saída" : "Placa"}: atual ${conflict.field === "fleet_code" ? conflict.current : clock(conflict.current)} · SIGhRA ${conflict.field === "fleet_code" ? conflict.sighra : clock(conflict.sighra)}`
     ).join("; ");
   }
   if (item.preview.resolution.status !== "safe") return item.preview.resolution.message;
-  if (item.outcome === "unchanged") return "Os horários encontrados já estão registrados.";
-  return `Entrada ${clock(item.preview.changes.entry_time)} · Saída ${clock(item.preview.changes.exit_time)}`;
+  if (item.outcome === "unchanged") return "Os dados encontrados já estão registrados.";
+  return `Entrada ${clock(item.preview.changes.entry_time)} · Saída ${clock(item.preview.changes.exit_time)} · Placa ${item.preview.changes.fleet_code || "—"}`;
 }
 
 export function JourneyBatchDialog({ items, applying, error, onApplySafe, onCancel, onClose, onRetryFailures }: JourneyBatchDialogProps) {

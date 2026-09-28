@@ -50,6 +50,13 @@ test("sequência de jornada preserva IDs e ordem cronológica", () => {
   assert.deepEqual(result.journey_events?.map(item => item.id), ["macro-start", "macro-end"]);
   assert.throws(() => parseResult({ macros: [], last_end: null, journey_events: Array(41).fill(start) }, "30049", "2026-08-18"));
 });
+
+test("resposta aceita reinícios da jornada e rejeita outros tipos nesta lista", () => {
+  const restart = { ...end, id: "restart", name: "REINÍCIO DE VIAGEM", plate: "ABC1D23" };
+  const result = parseResult({ macros: [], last_end: null, journey_events: [], restart_events: [restart] }, "30049", "2026-09-16");
+  assert.equal(result.restart_events?.[0].plate, "ABC1D23");
+  assert.throws(() => parseResult({ macros: [], last_end: null, restart_events: [end] }, "30049", "2026-09-16"));
+});
 test("endpoints da fila bloqueiam chamada sem chave antes de acessar dados", async () => {
   const request = () => new Request("http://localhost/api/integracoes/sighra/tarefas", { method: "POST" });
   assert.equal((await POST(request())).status, 401);

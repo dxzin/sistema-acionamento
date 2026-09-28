@@ -157,6 +157,57 @@ test("valor manual divergente impede aplicação silenciosa", () => {
   assert.deepEqual(preview.conflicts, [{ field: "exit_time", current: "09:20:00", sighra: "09:15:00" }]);
 });
 
+test("placa vem somente do primeiro ou segundo reinício após o início da jornada", () => {
+  const record = snapshotJourneyRecord(row(), "2026-09-19");
+  const events = [
+    { ...event("anterior", "start", "2026-09-19T03:00:00"), type: "intermediate" as const, name: "REINÍCIO DE VIAGEM", plate: "ANT1A11" },
+    { ...event("start", "start", "2026-09-19T04:00:00"), plate: "INI1A11" },
+    { ...event("primeiro", "start", "2026-09-19T04:10:00"), type: "intermediate" as const, name: "REINÍCIO DE VIAGEM", plate: null },
+    { ...event("segundo", "start", "2026-09-19T04:20:00"), type: "intermediate" as const, name: "REINICIO DE VIAGEM", plate: "SEG1A22" },
+    { ...event("terceiro", "start", "2026-09-19T04:30:00"), type: "intermediate" as const, name: "REINICIO DE VIAGEM", plate: "TER1A33" },
+    { ...event("end", "end", "2026-09-19T12:00:00"), plate: "FIM1A44" },
+  ];
+  const preview = buildJourneyPreview(record, resolveJourneyForRecord(events, record));
+  assert.equal(preview.resolution.status, "safe");
+  assert.deepEqual(preview.changes, { entry_time: "04:00:00", exit_time: "12:00:00", fleet_code: "SEG1A22" });
+});
+
+test("sem reinício de viagem, início e fim continuam aplicáveis sem placa", () => {
+  const record = snapshotJourneyRecord(row(), "2026-09-19");
+  const preview = buildJourneyPreview(record, resolveJourneyForRecord([
+    { ...event("start", "start", "2026-09-19T04:00:00"), plate: "INI1A11" },
+    { ...event("end", "end", "2026-09-19T12:00:00"), plate: "FIM1A44" },
+  ], record));
+  assert.deepEqual(preview.changes, { entry_time: "04:00:00", exit_time: "12:00:00" });
+  assert.equal(preview.canApply, true);
+});
+
+test("não usa a terceira macro de reinício nem uma macro posterior ao fim", () => {
+  const record = snapshotJourneyRecord(row(), "2026-09-19");
+  const restarts = ["04:10:00", "04:20:00", "04:30:00", "12:10:00"].map((time, index) => ({
+    ...event(`restart-${index}`, "start", `2026-09-19T${time}`),
+    type: "intermediate" as const, name: "REINICIO DE VIAGEM", plate: index < 2 ? null : "ABC1D23",
+  }));
+  const preview = buildJourneyPreview(record, resolveJourneyForRecord([
+    event("start", "start", "2026-09-19T04:00:00"),
+    ...restarts,
+    event("end", "end", "2026-09-19T12:00:00"),
+  ], record));
+  assert.deepEqual(preview.changes, { entry_time: "04:00:00", exit_time: "12:00:00" });
+});
+
+test("placa manual divergente não é sobrescrita pela consulta", () => {
+  const dispatch = row();
+  dispatch.fleet_code = "MAN1A11";
+  const record = snapshotJourneyRecord(dispatch, "2026-09-19");
+  const preview = buildJourneyPreview(record, resolveJourneyForRecord([
+    event("start", "start", "2026-09-19T04:00:00"),
+    { ...event("restart", "start", "2026-09-19T04:10:00"), type: "intermediate", name: "REINICIO DE VIAGEM", plate: "SIG1A22" },
+  ], record));
+  assert.equal(preview.canApply, false);
+  assert.deepEqual(preview.conflicts, [{ field: "fleet_code", current: "MAN1A11", sighra: "SIG1A22" }]);
+});
+
 test("resposta atrasada resolve o João pelo recordId após reordenação", () => {
   const joao = row("abc", "JOÃO", "45778");
   const gabriel = row("xyz", "GABRIEL", "99001");
