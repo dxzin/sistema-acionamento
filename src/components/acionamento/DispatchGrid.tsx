@@ -756,15 +756,15 @@ export function DispatchGrid({
 
   const selectionBounds = gridSelectionBounds(selection);
   const selectionDispatches = resolveGridSelectionRows(selection, processedDispatches);
-  const hasJourneyBatchSelection = Boolean(selectionBounds);
-  const journeyBatchDispatches = useMemo(() => {
-    const candidates = hasJourneyBatchSelection && selectionBounds
-      ? selectionDispatches.slice(selectionBounds.top, selectionBounds.bottom + 1)
-      : processedDispatches;
-    return candidates.filter((row): row is DispatchRowModel => Boolean(
-      row && isJourneyEligible(row.dispatch_status) && row.driver.login_matricula?.trim()
-    ));
-  }, [hasJourneyBatchSelection, processedDispatches, selectionBounds, selectionDispatches]);
+  const selectedJourneyDispatches = selectionBounds
+    ? selectionDispatches.slice(selectionBounds.top, selectionBounds.bottom + 1)
+      .filter((row): row is DispatchRowModel => Boolean(row))
+    : [];
+  // A seleção pode guardar IDs de uma folha ou filtro anterior. Se nenhum deles
+  // está visível agora, o lote deve voltar a usar as linhas exibidas na grade.
+  const hasJourneyBatchSelection = selectedJourneyDispatches.length > 0;
+  const journeyBatchDispatches = (hasJourneyBatchSelection ? selectedJourneyDispatches : processedDispatches)
+    .filter((row) => isJourneyEligible(row.dispatch_status) && Boolean(row.driver.login_matricula?.trim()));
 
   useEffect(() => {
     const table = tableRef.current;

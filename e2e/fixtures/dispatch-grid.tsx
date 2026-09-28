@@ -27,6 +27,11 @@ function Harness() {
   Object.assign(window, {
     refreshGrid: () => setRows(current => [...current].reverse()),
     removeJoao: () => setRows(current => current.filter(item => item.id !== "joao")),
+    replaceGrid: () => setRows([row("novo1", "NOVO UM"), row("novo2", "NOVO DOIS")].map((item, index) => ({
+      ...item,
+      dispatch_status: "ACIONADO",
+      driver: { ...item.driver, login_matricula: String(200 + index) },
+    }))),
     insertDriver: () => setRows(current => [row("novo", "NOVO CONDUTOR"), ...current]),
     changeJoaoShift: () => setRows(current => current.map(item => item.id === "joao"
       ? { ...item, driver: { ...item.driver, default_start_time: "00:00:00" } } : item)),

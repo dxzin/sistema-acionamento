@@ -24,6 +24,15 @@ test("consulta em lote respeita uma única linha selecionada", async ({ page }) 
   await expect(page.locator("#batch-requests")).toHaveText('[["joao"]]');
 });
 
+test("consulta em lote usa linhas visíveis quando a seleção antiga desaparece", async ({ page }) => {
+  await page.locator("tbody tr").filter({ hasText: "JOÃO" }).locator("td").first().click();
+  await page.evaluate(() => (window as unknown as { replaceGrid(): void }).replaceGrid());
+  const button = page.getByRole("button", { name: "Buscar jornadas (2)" });
+  await expect(button).toBeEnabled();
+  await button.click();
+  await expect(page.locator("#batch-requests")).toHaveText('[["novo1","novo2"]]');
+});
+
 test("exibe a cidade/base UB e LZ entre condutor e login", async ({ page }) => {
   const joaoCells = page.locator("tbody tr").filter({ hasText: "JOÃO" }).locator("td");
   const gabrielCells = page.locator("tbody tr").filter({ hasText: "GABRIEL" }).locator("td");
