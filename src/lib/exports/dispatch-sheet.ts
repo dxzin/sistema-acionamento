@@ -1,12 +1,12 @@
 import { DispatchRowModel } from "@/types/domain";
 
 const HEADERS = [
-  "CONDUTOR", "LOGIN", "HORÁRIO", "PREVISÃO", "STATUS", "MOTIVO DO ABONO / APROVAÇÃO",
+  "CONDUTOR", "CIDADE", "LOGIN", "HORÁRIO", "PREVISÃO", "STATUS", "MOTIVO DO ABONO / APROVAÇÃO",
   "LOCAL", "ENTRADA", "FROTA", "C/V", "DESTINO", "DESTINO FINAL", "SAÍDA", "OBSERVAÇÃO",
   "DIA DE ESCALA", "PREV. PRÓX. DIA", "TEMPO DE JORNADA",
 ];
 
-const WIDTHS = [38, 13, 13, 13, 18, 34, 18, 13, 15, 9, 18, 20, 13, 30, 14, 18, 20];
+const WIDTHS = [38, 14, 13, 13, 13, 18, 34, 18, 13, 15, 9, 18, 20, 13, 30, 14, 18, 20];
 
 const STATUS_STYLES: Record<string, { fill: string; font: string }> = {
   ACIONADO: { fill: "FFC6EFCE", font: "FF006100" },
@@ -20,6 +20,7 @@ const STATUS_STYLES: Record<string, { fill: string; font: string }> = {
 function rowValues(row: DispatchRowModel) {
   return [
     row.driver.name,
+    row.base?.code || "",
     row.driver.login_matricula,
     row.driver.default_start_time || "",
     row.forecast_start_time || "",
@@ -49,11 +50,11 @@ function addDispatchWorksheet(
   date: string
 ) {
   const sheet = workbook.addWorksheet(`Acionamento ${date}`, {
-    views: [{ state: "frozen", xSplit: 2, ySplit: 1 }],
+    views: [{ state: "frozen", xSplit: 3, ySplit: 1 }],
   });
   sheet.addRow(HEADERS);
   rows.forEach((row) => sheet.addRow(rowValues(row)));
-  sheet.autoFilter = `A1:Q${Math.max(1, rows.length + 1)}`;
+  sheet.autoFilter = `A1:R${Math.max(1, rows.length + 1)}`;
   sheet.columns.forEach((column, index) => { column.width = WIDTHS[index]; });
   sheet.getRow(1).height = 24;
 
@@ -75,10 +76,10 @@ function addDispatchWorksheet(
     });
     if (rowNumber > 1) {
       excelRow.height = 21;
-      [3, 4, 8, 9, 10, 13, 15, 16, 17].forEach((column) => {
+      [2, 3, 4, 5, 9, 10, 11, 14, 16, 17, 18].forEach((column) => {
         excelRow.getCell(column).alignment = { vertical: "middle", horizontal: "center" };
       });
-      const statusCell = excelRow.getCell(5);
+      const statusCell = excelRow.getCell(6);
       const style = STATUS_STYLES[String(statusCell.value || "").trim().toLocaleUpperCase("pt-BR")];
       if (style) {
         statusCell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: style.fill } };

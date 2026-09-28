@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import ExcelJS from "exceljs";
 import { dispatchExportDates, exportDispatchSheets } from "../src/lib/exports/dispatch-sheet";
+import type { DispatchRowModel } from "../src/types/domain";
 
 test("monta todas as datas do período sem atravessar o limite mensal", () => {
   assert.deepEqual(dispatchExportDates("2026-09-27", "2026-09-30"), [
@@ -37,7 +38,10 @@ test("gera um arquivo com uma aba para cada dia selecionado", async () => {
 
   try {
     await exportDispatchSheets([
-      { date: "2026-09-27", rows: [] },
+      { date: "2026-09-27", rows: [{
+        driver: { name: "CONDUTOR TESTE", login_matricula: "123" },
+        base: { code: "UBERABA" },
+      } as unknown as DispatchRowModel] },
       { date: "2026-09-28", rows: [] },
     ], "SP");
     assert.equal(downloadedName, "acionamento_SP_2026-09-27_a_2026-09-28.xlsx");
@@ -49,6 +53,8 @@ test("gera um arquivo com uma aba para cada dia selecionado", async () => {
       "Acionamento 2026-09-27", "Acionamento 2026-09-28",
     ]);
     assert.equal(workbook.worksheets[0].getCell("A1").value, "CONDUTOR");
+    assert.equal(workbook.worksheets[0].getCell("B1").value, "CIDADE");
+    assert.equal(workbook.worksheets[0].getCell("B2").value, "UBERABA");
   } finally {
     URL.createObjectURL = originalCreateObjectURL;
     URL.revokeObjectURL = originalRevokeObjectURL;
