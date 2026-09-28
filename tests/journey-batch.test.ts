@@ -26,6 +26,18 @@ test("lote separa pendentes, seguros, inalterados, revisão e falhas", () => {
   assert.equal(journeyBatchOutcome(job("1", "failed"), null), "failed");
 });
 
+test("fim isolado após entrada preenchida exige confirmação individual", () => {
+  const end = { id: "fim", login: "1", name: "FIM DE JORNADA", type: "end" as const,
+    occurredAt: "2026-09-25T15:05:00", receivedAt: null, vehicle: null };
+  const endOnly: JourneyPreview = {
+    ...preview(true),
+    resolution: { status: "manual_end", pair: null, end, reasons: [], message: "Conferir saída" },
+    changes: { exit_time: "15:05:00" },
+  };
+  assert.equal(endOnly.canApply, true);
+  assert.equal(journeyBatchOutcome(job("1", "completed"), endOnly), "review");
+});
+
 test("resumo do lote informa progresso e cada resultado", () => {
   const outcomes: JourneyBatchItem["outcome"][] = ["safe", "safe", "pending", "review", "failed", "unchanged"];
   const items = outcomes.map((outcome, index) => ({ record: record(String(index + 1)), job: null, preview: null, outcome }));

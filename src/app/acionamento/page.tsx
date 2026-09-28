@@ -762,6 +762,7 @@ function AcionamentoContent() {
     reason?: string
   ) => {
     const pair = preview?.resolution.status === "safe" ? preview.resolution.pair : null;
+    const manualEnd = preview?.resolution.status === "manual_end" ? preview.resolution.end : null;
     return recordJourneyAudit({
       recordId: record.recordId,
       login: record.login,
@@ -772,11 +773,12 @@ function AcionamentoContent() {
       outcome,
       result: preview?.resolution.status || null,
       startTimestamp: pair?.start.occurredAt || null,
-      endTimestamp: pair?.end?.occurredAt || null,
+      endTimestamp: pair?.end?.occurredAt || manualEnd?.occurredAt || null,
       startMacroId: pair?.start.id || null,
-      endMacroId: pair?.end?.id || null,
+      endMacroId: pair?.end?.id || manualEnd?.id || null,
       queryId: result?.queryId || null,
-      reason: reason || (preview?.resolution.status !== "safe" ? preview?.resolution.reasons.join(" ") : null),
+      reason: reason || (preview?.resolution.status === "manual_end" ? "Saída conferida com entrada já preenchida."
+        : preview?.resolution.status !== "safe" ? preview?.resolution.reasons.join(" ") : null),
     }, journeyProvider.kind);
   }, [journeyProvider]);
 
@@ -946,7 +948,7 @@ function AcionamentoContent() {
       const freshRecord = snapshotJourneyRecord(resolved.row, requested.operationalDate);
       const preview = buildJourneyPreview(freshRecord, resolveJourneyForRecord(result.events, freshRecord));
       setJourneyDialog({ requested, result, preview });
-      void auditJourney(freshRecord, preview.resolution.status === "safe" ? "preview" : "blocked", result, preview);
+      void auditJourney(freshRecord, preview.resolution.status === "safe" || preview.resolution.status === "manual_end" ? "preview" : "blocked", result, preview);
     } catch (error) {
       if (controller.signal.aborted) return;
       const message = error instanceof Error ? error.message : "Não foi possível consultar a jornada.";

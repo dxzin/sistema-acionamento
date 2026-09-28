@@ -20,6 +20,7 @@ const formatClock = (value: string) => value.slice(0, 5);
 
 export function JourneyPilotDialog({ preview, provider, saving, error, onApply, onCancel, onForceSearch }: JourneyPilotDialogProps) {
   const pair = preview.resolution.status === "safe" ? preview.resolution.pair : null;
+  const manualEnd = preview.resolution.status === "manual_end" ? preview.resolution.end : null;
   return (
     <div className="fixed inset-0 z-[150] flex items-center justify-center bg-slate-950/45 p-4" role="presentation">
       <section
@@ -67,6 +68,20 @@ export function JourneyPilotDialog({ preview, provider, saving, error, onApply, 
               </div>
             </div>
           )}
+          {manualEnd && (
+            <div className="grid grid-cols-2 gap-3">
+              <div className="border border-slate-200 p-3">
+                <span className="text-[10px] font-bold uppercase text-slate-500">Entrada da planilha</span>
+                <p className="mt-1 font-mono text-base font-bold">{formatDate(preview.record.operationalDate)} {formatClock(preview.record.entryTime || "")}</p>
+                <p className="mt-1 text-[10px] text-slate-500">Mantida como foi preenchida; sem macro de início SIGhRa.</p>
+              </div>
+              <div className="border border-slate-200 p-3">
+                <span className="text-[10px] font-bold uppercase text-slate-500">Fim SIGhRa</span>
+                <p className="mt-1 font-mono text-base font-bold">{formatTimestamp(manualEnd.occurredAt)}</p>
+                <p className="mt-1 truncate font-mono text-[9px] text-slate-500" title={manualEnd.id}>Macro {manualEnd.id}</p>
+              </div>
+            </div>
+          )}
           {pair && <p className="border border-slate-200 bg-slate-50 p-2 text-xs">
             Placa: {pair.restart?.plate ? <><b>{pair.restart.plate}</b> · macro de reinício de viagem {formatTimestamp(pair.restart.occurredAt)}</> : "sem placa nas duas primeiras macros de reinício; os horários podem ser aplicados."}
           </p>}
@@ -85,6 +100,9 @@ export function JourneyPilotDialog({ preview, provider, saving, error, onApply, 
 
           {pair && !preview.canApply && preview.conflicts.length === 0 && preview.resolution.status === "safe" && (
             <p className="border border-slate-200 bg-slate-50 p-2 text-xs">Os valores encontrados já estão preenchidos; não há alteração a aplicar.</p>
+          )}
+          {manualEnd && !preview.canApply && preview.conflicts.length === 0 && (
+            <p className="border border-slate-200 bg-slate-50 p-2 text-xs">A saída encontrada já está preenchida; não há alteração a aplicar.</p>
           )}
           {error && <p role="alert" className="border border-rose-300 bg-rose-50 p-2 text-xs font-semibold text-rose-800">{error}</p>}
         </div>

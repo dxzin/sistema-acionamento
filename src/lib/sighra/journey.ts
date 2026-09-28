@@ -40,6 +40,7 @@ export interface JourneyPair {
 
 export type JourneyResolution =
   | { status: "safe"; pair: JourneyPair; message: string }
+  | { status: "manual_end"; pair: null; end: JourneyEvent; message: string; reasons: string[] }
   | { status: "not_found" | "ambiguous"; pair: null; message: string; reasons: string[] };
 
 export interface JourneyFieldConflict {
@@ -189,6 +190,40 @@ export function resolveJourneyForRecord(events: JourneyEvent[], record: JourneyR
     [...unique.values()].sort((a, b) => a.occurredAt.localeCompare(b.occurredAt))
   );
   const starts = ordered.filter((event) => event.type === "start" && event.occurredAt.slice(0, 10) === record.operationalDate);
+  // Uma entrada já preenchida pode representar uma carona sem macro de início.
+  // Um fim anterior ao próximo início SIGhRa pode fechar somente essa entrada.
+  const manualStart = record.entryTime && /^([01]\d|2[0-3]):[0-5]\d/.test(record.entryTime)
+    ? `${record.operationalDate}T${record.entryTime.slice(0, 5)}:00`
+    : null;
+  let earlierStartOpen = false;
+  if (manualStart) {
+    for (const event of ordered) {
+      if (event.occurredAt.slice(0, 16) > manualStart.slice(0, 16)) break;
+      if (event.type === "start") earlierStartOpen = true;
+      if (event.type === "end") earlierStartOpen = false;
+    }
+  }
+  if (manualStart && !earlierStartOpen) {
+    const nextStart = ordered.find((event) => event.type === "start" && event.occurredAt > manualStart);
+    const deadline = Date.parse(manualStart) + 36 * 60 * 60 * 1000;
+    const ends = ordered.filter((event) => event.type === "end" &&
+      event.occurredAt.slice(0, 16) > manualStart.slice(0, 16) &&
+      Date.parse(event.occurredAt) <= deadline &&
+      (!nextStart || event.occurredAt < nextStart.occurredAt));
+    if (ends.length === 1) {
+      return {
+        status: "manual_end", pair: null, end: ends[0], reasons: [],
+        message: "Fim encontrado após a entrada já preenchida. Confira antes de aplicar somente a saída.",
+      };
+    }
+    if (ends.length > 1) {
+      return {
+        status: "ambiguous", pair: null,
+        message: "Jornada não identificada com segurança. Necessária conferência manual.",
+        reasons: ["Há mais de um fim de jornada após a entrada preenchida."],
+      };
+    }
+  }
   if (starts.length > 1) {
     return {
       status: "ambiguous",
@@ -235,6 +270,14 @@ export function resolveJourneyForRecord(events: JourneyEvent[], record: JourneyR
 }
 
 export function buildJourneyPreview(record: JourneyRecordSnapshot, resolution: JourneyResolution): JourneyPreview {
+  if (resolution.status === "manual_end") {
+    const exit = clockTime(resolution.end.occurredAt);
+    const conflicts: JourneyFieldConflict[] = record.exitTime && record.exitTime !== exit
+      ? [{ field: "exit_time", current: record.exitTime, sighra: exit }]
+      : [];
+    const changes: JourneyPreview["changes"] = record.exitTime ? {} : { exit_time: exit };
+    return { record, resolution, conflicts, changes, canApply: conflicts.length === 0 && !record.exitTime };
+  }
   if (resolution.status !== "safe") return { record, resolution, conflicts: [], changes: {}, canApply: false };
   const entry = clockTime(resolution.pair.start.occurredAt);
   const exit = resolution.pair.end ? clockTime(resolution.pair.end.occurredAt) : null;

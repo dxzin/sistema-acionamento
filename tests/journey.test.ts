@@ -80,6 +80,105 @@ test("fim órfão e sequência com múltiplos inícios são ambíguos", () => {
   ], record).status, "ambiguous");
 });
 
+test("entrada preenchida permite aplicar somente o fim posterior quando falta macro de início", () => {
+  const dispatch = row();
+  dispatch.entry_time = "02:21:00";
+  const record = snapshotJourneyRecord(dispatch, "2026-09-27");
+  const preview = buildJourneyPreview(record, resolveJourneyForRecord([
+    event("fim-anterior", "end", "2026-09-27T02:21:15"),
+    { ...event("reinicio", "start", "2026-09-27T08:48:59"), type: "intermediate", name: "REINICIO DE VIAGEM", plate: "ABC1D23" },
+    event("fim-atual", "end", "2026-09-27T15:05:05"),
+  ], record));
+  assert.equal(preview.resolution.status, "manual_end");
+  assert.deepEqual(preview.changes, { exit_time: "15:05:00" });
+  assert.equal(preview.canApply, true);
+});
+
+test("fim isolado exige entrada preenchida e não altera saída manual divergente", () => {
+  const dispatch = row();
+  const finish = event("fim", "end", "2026-09-27T15:05:05");
+  assert.equal(resolveJourneyForRecord([finish], snapshotJourneyRecord(dispatch, "2026-09-27")).status, "ambiguous");
+  dispatch.entry_time = "04:00:00";
+  dispatch.exit_time = "15:10:00";
+  const record = snapshotJourneyRecord(dispatch, "2026-09-27");
+  const preview = buildJourneyPreview(record, resolveJourneyForRecord([finish], record));
+  assert.equal(preview.canApply, false);
+  assert.deepEqual(preview.conflicts, [{ field: "exit_time", current: "15:10:00", sighra: "15:05:00" }]);
+  dispatch.exit_time = "15:05:00";
+  const filledRecord = snapshotJourneyRecord(dispatch, "2026-09-27");
+  const filledPreview = buildJourneyPreview(filledRecord, resolveJourneyForRecord([finish], filledRecord));
+  assert.equal(filledPreview.resolution.status, "manual_end");
+  assert.deepEqual(filledPreview.changes, {});
+  assert.equal(filledPreview.canApply, false);
+});
+
+test("dois fins posteriores à entrada continuam exigindo conferência", () => {
+  const dispatch = row();
+  dispatch.entry_time = "04:00:00";
+  const record = snapshotJourneyRecord(dispatch, "2026-09-27");
+  assert.equal(resolveJourneyForRecord([
+    event("fim-um", "end", "2026-09-27T09:00:00"),
+    event("fim-dois", "end", "2026-09-27T15:05:05"),
+  ], record).status, "ambiguous");
+});
+
+test("entrada manual à noite aceita fim único no dia seguinte", () => {
+  const dispatch = row();
+  dispatch.entry_time = "20:00:00";
+  const record = snapshotJourneyRecord(dispatch, "2026-09-27");
+  const preview = buildJourneyPreview(record, resolveJourneyForRecord([
+    event("fim", "end", "2026-09-28T08:10:00"),
+  ], record));
+  assert.equal(preview.resolution.status, "manual_end");
+  assert.deepEqual(preview.changes, { exit_time: "08:10:00" });
+});
+
+test("fim depois do início SIGhRa de outra jornada não fecha a entrada manual", () => {
+  const dispatch = row();
+  dispatch.entry_time = "20:00:00";
+  const record = snapshotJourneyRecord(dispatch, "2026-09-27");
+  assert.equal(resolveJourneyForRecord([
+    event("novo-inicio", "start", "2026-09-28T04:00:00"),
+    event("fim-novo", "end", "2026-09-28T12:00:00"),
+  ], record).status, "ambiguous");
+});
+
+test("fim da carona antes de novo início SIGhRa preenche só a saída anterior", () => {
+  const dispatch = row();
+  dispatch.entry_time = "04:00:00";
+  const record = snapshotJourneyRecord(dispatch, "2026-09-27");
+  const preview = buildJourneyPreview(record, resolveJourneyForRecord([
+    event("fim-carona", "end", "2026-09-27T15:05:05"),
+    event("novo-inicio", "start", "2026-09-27T20:00:00"),
+    event("fim-novo", "end", "2026-09-28T08:00:00"),
+  ], record));
+  assert.equal(preview.resolution.status, "manual_end");
+  assert.deepEqual(preview.changes, { exit_time: "15:05:00" });
+});
+
+test("jornada SIGhRa encerrada antes da entrada manual não captura o fim da carona", () => {
+  const dispatch = row();
+  dispatch.entry_time = "04:00:00";
+  const record = snapshotJourneyRecord(dispatch, "2026-09-27");
+  const preview = buildJourneyPreview(record, resolveJourneyForRecord([
+    event("inicio-antigo", "start", "2026-09-27T00:30:00"),
+    event("fim-antigo", "end", "2026-09-27T02:21:15"),
+    event("fim-carona", "end", "2026-09-27T15:05:05"),
+  ], record));
+  assert.equal(preview.resolution.status, "manual_end");
+  assert.deepEqual(preview.changes, { exit_time: "15:05:00" });
+});
+
+test("início SIGhRa ainda aberto na hora da entrada impede fim isolado", () => {
+  const dispatch = row();
+  dispatch.entry_time = "04:00:00";
+  const record = snapshotJourneyRecord(dispatch, "2026-09-27");
+  assert.notEqual(resolveJourneyForRecord([
+    event("inicio", "start", "2026-09-27T03:00:00"),
+    event("fim", "end", "2026-09-27T15:05:05"),
+  ], record).status, "manual_end");
+});
+
 test("fim da jornada anterior antes do início selecionado não contamina o novo par", () => {
   const record = snapshotJourneyRecord(row(), "2026-09-20");
   const resolved = resolveJourneyForRecord([
