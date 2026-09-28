@@ -85,6 +85,11 @@ export function JourneyPilotDialog({ preview, provider, saving, error, onApply, 
           {pair && <p className="border border-slate-200 bg-slate-50 p-2 text-xs">
             Placa: {pair.restart?.plate ? <><b>{pair.restart.plate}</b> · macro de reinício de viagem {formatTimestamp(pair.restart.occurredAt)}</> : "sem placa nas duas primeiras macros de reinício; os horários podem ser aplicados."}
           </p>}
+          {preview.preservedPlate && (
+            <p className="border border-sky-200 bg-sky-50 p-2 text-xs text-sky-900">
+              Placa da planilha <b>{preview.preservedPlate.current}</b> será mantida. A macro mostra <b>{preview.preservedPlate.sighra}</b>; essa diferença não impede aplicar os horários.
+            </p>
+          )}
 
           {preview.conflicts.length > 0 && (
             <div className="border border-rose-300 bg-rose-50 p-3">

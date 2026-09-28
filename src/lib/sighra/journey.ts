@@ -53,6 +53,7 @@ export interface JourneyPreview {
   record: JourneyRecordSnapshot;
   resolution: JourneyResolution;
   conflicts: JourneyFieldConflict[];
+  preservedPlate?: { current: string; sighra: string };
   changes: Partial<Pick<DispatchRowModel, "entry_time" | "exit_time" | "fleet_code">>;
   canApply: boolean;
 }
@@ -285,10 +286,13 @@ export function buildJourneyPreview(record: JourneyRecordSnapshot, resolution: J
   const conflicts: JourneyFieldConflict[] = [];
   if (record.entryTime && record.entryTime !== entry) conflicts.push({ field: "entry_time", current: record.entryTime, sighra: entry });
   if (exit && record.exitTime && record.exitTime !== exit) conflicts.push({ field: "exit_time", current: record.exitTime, sighra: exit });
-  if (plate && record.fleetCode && record.fleetCode.toUpperCase() !== plate) conflicts.push({ field: "fleet_code", current: record.fleetCode, sighra: plate });
+  const preservedPlate = plate && record.fleetCode && record.fleetCode.trim().toUpperCase() !== plate
+    ? { current: record.fleetCode, sighra: plate }
+    : undefined;
   const changes: JourneyPreview["changes"] = {};
   if (!record.entryTime) changes.entry_time = entry;
   if (exit && !record.exitTime) changes.exit_time = exit;
   if (plate && !record.fleetCode) changes.fleet_code = plate;
-  return { record, resolution, conflicts, changes, canApply: conflicts.length === 0 && Object.keys(changes).length > 0 };
+  return { record, resolution, conflicts, preservedPlate, changes,
+    canApply: conflicts.length === 0 && Object.keys(changes).length > 0 };
 }

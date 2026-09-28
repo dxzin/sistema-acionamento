@@ -295,16 +295,35 @@ test("não usa a terceira macro de reinício nem uma macro posterior ao fim", ()
   assert.deepEqual(preview.changes, { entry_time: "04:00:00", exit_time: "12:00:00" });
 });
 
-test("placa manual divergente não é sobrescrita pela consulta", () => {
+test("placa preenchida é preservada e não bloqueia o fim de jornada", () => {
   const dispatch = row();
   dispatch.fleet_code = "MAN1A11";
+  dispatch.entry_time = "12:06:00";
+  const record = snapshotJourneyRecord(dispatch, "2026-09-27");
+  const preview = buildJourneyPreview(record, resolveJourneyForRecord([
+    event("start", "start", "2026-09-27T12:06:00"),
+    { ...event("restart", "start", "2026-09-27T12:57:00"), type: "intermediate", name: "REINICIO DE VIAGEM", plate: "SIG1A22" },
+    event("end", "end", "2026-09-28T03:36:00"),
+  ], record));
+  assert.equal(preview.canApply, true);
+  assert.deepEqual(preview.changes, { exit_time: "03:36:00" });
+  assert.deepEqual(preview.conflicts, []);
+  assert.deepEqual(preview.preservedPlate, { current: "MAN1A11", sighra: "SIG1A22" });
+});
+
+test("saída divergente continua bloqueada mesmo com placa preservada", () => {
+  const dispatch = row();
+  dispatch.fleet_code = "MAN1A11";
+  dispatch.exit_time = "04:00:00";
   const record = snapshotJourneyRecord(dispatch, "2026-09-19");
   const preview = buildJourneyPreview(record, resolveJourneyForRecord([
     event("start", "start", "2026-09-19T04:00:00"),
     { ...event("restart", "start", "2026-09-19T04:10:00"), type: "intermediate", name: "REINICIO DE VIAGEM", plate: "SIG1A22" },
+    event("end", "end", "2026-09-19T12:00:00"),
   ], record));
   assert.equal(preview.canApply, false);
-  assert.deepEqual(preview.conflicts, [{ field: "fleet_code", current: "MAN1A11", sighra: "SIG1A22" }]);
+  assert.deepEqual(preview.conflicts, [{ field: "exit_time", current: "04:00:00", sighra: "12:00:00" }]);
+  assert.deepEqual(preview.preservedPlate, { current: "MAN1A11", sighra: "SIG1A22" });
 });
 
 test("resposta atrasada resolve o João pelo recordId após reordenação", () => {

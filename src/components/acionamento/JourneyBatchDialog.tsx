@@ -33,8 +33,13 @@ function detail(item: JourneyBatchItem) {
     ).join("; ");
   }
   if (item.preview.resolution.status !== "safe") return item.preview.resolution.message;
-  if (item.outcome === "unchanged") return "Os dados encontrados já estão registrados.";
-  return `Entrada ${clock(item.preview.changes.entry_time)} · Saída ${clock(item.preview.changes.exit_time)} · Placa ${item.preview.changes.fleet_code || "—"}`;
+  if (item.outcome === "unchanged") return item.preview.preservedPlate
+    ? `Horários já registrados · placa atual ${item.preview.preservedPlate.current} mantida`
+    : "Os dados encontrados já estão registrados.";
+  const plate = item.preview.preservedPlate
+    ? `mantida ${item.preview.preservedPlate.current}`
+    : item.preview.changes.fleet_code || "—";
+  return `Entrada ${clock(item.preview.changes.entry_time)} · Saída ${clock(item.preview.changes.exit_time)} · Placa ${plate}`;
 }
 
 export function JourneyBatchDialog({ items, applying, error, onApplySafe, onCancel, onClose, onRetryFailures }: JourneyBatchDialogProps) {

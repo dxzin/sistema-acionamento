@@ -38,6 +38,15 @@ test("fim isolado após entrada preenchida exige confirmação individual", () =
   assert.equal(journeyBatchOutcome(job("1", "completed"), endOnly), "review");
 });
 
+test("placa preservada não bloqueia a saída no lote", () => {
+  const platePreserved: JourneyPreview = {
+    ...preview(true),
+    preservedPlate: { current: "MAN1A11", sighra: "SIG1A22" },
+    changes: { exit_time: "03:36:00" },
+  };
+  assert.equal(journeyBatchOutcome(job("1", "completed"), platePreserved), "safe");
+});
+
 test("resumo do lote informa progresso e cada resultado", () => {
   const outcomes: JourneyBatchItem["outcome"][] = ["safe", "safe", "pending", "review", "failed", "unchanged"];
   const items = outcomes.map((outcome, index) => ({ record: record(String(index + 1)), job: null, preview: null, outcome }));
