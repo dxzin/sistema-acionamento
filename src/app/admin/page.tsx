@@ -8,6 +8,7 @@ import { dispatchService } from "@/lib/services/dispatch-service";
 import { Base, Location } from "@/types/database";
 import { useAuth } from "@/lib/auth-context";
 import { SupabaseUsage } from "@/components/layout/SupabaseUsage";
+import { isValidLocationName } from "@/lib/locations/location-name";
 
 export default function AdminPage() {
   const { user, isLoading: authLoading } = useAuth();
@@ -15,6 +16,7 @@ export default function AdminPage() {
   const [locations, setLocations] = useState<Location[]>([]);
   const [loading, setLoading] = useState(true);
   const authorized = user?.role === "admin" || user?.role === "supervisor";
+  const activeLocations = locations.filter((location) => location.is_active && isValidLocationName(location.name));
 
   useEffect(() => {
     if (authLoading || !authorized) {
@@ -108,10 +110,10 @@ export default function AdminPage() {
           <div className="bg-white border border-[#a6a6a6] rounded p-4 shadow-xs">
             <h3 className="text-xs font-bold text-slate-800 uppercase tracking-wider mb-3 flex items-center space-x-2">
               <Database className="w-4 h-4 text-[#107c41]" />
-              <span>Locais e Destinos Operacionais ({locations.length})</span>
+              <span>Locais e Destinos Operacionais ({activeLocations.length})</span>
             </h3>
             <div className="flex flex-wrap gap-1.5">
-              {locations.map((loc) => (
+              {activeLocations.map((loc) => (
                 <span
                   key={loc.id}
                   className="px-2.5 py-1 bg-slate-50 border border-slate-300 rounded text-[11px] text-slate-800 font-mono font-bold"

@@ -13,6 +13,7 @@ import { useAuth } from "@/lib/auth-context";
 import { DispatchRowModel, DispatchFilterOptions, DispatchSummaryKPIs } from "@/types/domain";
 import { DailySheet, Location, OperatorPresence } from "@/types/database";
 import { currentDateInBrasilia } from "@/lib/dates/operational-date";
+import { isValidLocationName } from "@/lib/locations/location-name";
 import { matchesDispatchStatus } from "@/lib/calculations/continuity";
 import { OperationalAlerts } from "@/components/acionamento/OperationalAlerts";
 import { JourneyPilotDialog } from "@/components/acionamento/JourneyPilotDialog";
@@ -377,7 +378,7 @@ function AcionamentoContent() {
         }
         pendingEditsRef.current = nextPending;
         setDispatches((current) => mergeServerDispatches(dispatchesData, current, nextPending, editingDispatchIdRef.current));
-        setLocations(locs);
+        setLocations(locs.filter((location) => location.is_active && isValidLocationName(location.name)));
         setDailySheet(sheet);
         setDailySheets(sheets);
         setScheduleIds(nextScheduleIds);

@@ -6,6 +6,7 @@ import { calculateNextForecast } from "../calculations/interjornada";
 import { resolveDayContinuity, resolvePreviousAbono, resolveAutomaticForecast, usesWorkingContinuity } from "../calculations/continuity";
 import { resolveFirstDayBaseOrigin } from "../calculations/first-day-origin";
 import { canCreateDailySheet } from "../dates/operational-date";
+import { INVALID_LOCATION_MESSAGE, isValidLocationName, normalizeLocationName } from "../locations/location-name";
 import {
   INITIAL_BASES,
   INITIAL_DISPATCHES,
@@ -574,8 +575,9 @@ class DispatchService {
     }
 
     const resolveLocationId = async (rawName: string): Promise<string | null> => {
-      const name = rawName.trim().replace(/\s+/g, " ").toUpperCase().slice(0, 100);
+      const name = normalizeLocationName(rawName);
       if (!name) return null;
+      if (!isValidLocationName(name)) throw new Error(INVALID_LOCATION_MESSAGE);
 
       const localMatch = this.localLocations.find((location) => location.name.toUpperCase() === name);
       if (!this.isSupabaseConfigured()) {

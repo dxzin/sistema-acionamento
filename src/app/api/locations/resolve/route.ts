@@ -1,5 +1,10 @@
 import { NextRequest } from "next/server";
 import { noStoreJson as json, readAuthenticatedJson } from "@/lib/api/authenticated-json";
+import {
+  INVALID_LOCATION_MESSAGE,
+  isValidLocationName,
+  normalizeLocationName,
+} from "@/lib/locations/location-name";
 
 export async function POST(request: NextRequest) {
   const parsed = await readAuthenticatedJson(request);
@@ -8,19 +13,32 @@ export async function POST(request: NextRequest) {
   if (body.name !== undefined && typeof body.name !== "string") {
     return json({ error: "Nome de destino inválido." }, 400);
   }
-  const name = (body.name || "").trim().replace(/\s+/g, " ").toUpperCase().slice(0, 100);
+  const name = normalizeLocationName(body.name || "");
   if (!name) return json({ id: null });
+  if (!isValidLocationName(name)) return json({ error: INVALID_LOCATION_MESSAGE }, 400);
 
   const { data: existing, error: lookupError } = await adminClient
     .from("locations")
-    .select("id")
+    .select("id,is_active")
     .ilike("name", name)
     .maybeSingle();
   if (lookupError) {
     console.error("Falha ao consultar destino:", lookupError.code);
     return json({ error: "Não foi possível consultar o destino." }, 500);
   }
-  if (existing) return json({ id: existing.id });
+  if (existing) {
+    if (!existing.is_active) {
+      const { error: reactivateError } = await adminClient
+        .from("locations")
+        .update({ is_active: true })
+        .eq("id", existing.id);
+      if (reactivateError) {
+        console.error("Falha ao reativar destino:", reactivateError.code);
+        return json({ error: "Não foi possível reativar o destino." }, 500);
+      }
+    }
+    return json({ id: existing.id });
+  }
 
   const { data: created, error: createError } = await adminClient
     .from("locations")
