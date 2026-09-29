@@ -63,5 +63,14 @@ simultâneas podem aparecer entre páginas. Atualização a cada 1–5 minutos �
 de configuração do dashboard. A conexão prevista é pelo servidor/conector; acesso
 direto de outro domínio no navegador não tem CORS habilitado.
 
+As leituras de escala são limitadas no banco aos dias solicitados de cada mês,
+inclusive em períodos que atravessam meses ou anos. Somente as colunas utilizadas
+para montar a resposta são transferidas. Isso reduz tráfego sem mudar os campos
+da resposta ou a paginação por condutores.
+
+Na resposta, a região da escala de Minas permanece `MG`. Para preencher os campos
+operacionais desses condutores, a API associa essa região à folha diária `UBJP`,
+que reúne as bases UB, LZ e JP no módulo de acionamento.
+
 Erros em JSON: 400 (filtros inválidos), 401 (credencial ausente/incorreta),
 503 (configuração ausente), 500 (falha na consulta). Outros métodos retornam 405.

@@ -6,6 +6,20 @@ import type { Base, Driver, Dispatch, MonthlyScheduleEntry, MonthlySchedule } fr
 
 export const runtime = "nodejs";
 
+type DashboardBase = Pick<Base, "id" | "code" | "interjornada_minutes">;
+type DashboardDriver = Pick<Driver, "id" | "name" | "login_matricula" | "base_id" | "default_shift" | "default_start_time">;
+type DashboardSchedule = Pick<MonthlySchedule, "id" | "month" | "year" | "region">;
+type DashboardEntry = Pick<MonthlyScheduleEntry, "schedule_id" | "driver_id" | "day_of_month" | "scale_code" | "shift_letter" | "shift_time" | "updated_at">;
+type DashboardDispatch = Pick<Dispatch,
+  "daily_sheet_id" | "driver_id" | "forecast_start_time" | "entry_time" | "exit_time" |
+  "dispatch_status" | "abono_reason" | "origin_location_id" | "destination_location_id" |
+  "final_destination_location_id" | "next_day_forecast_time" | "updated_at"
+>;
+
+function dispatchRegionForSchedule(region: string) {
+  return region === "MG" ? "UBJP" : region;
+}
+
 function json(body: object, status = 200) {
   return NextResponse.json(body, { status, headers: { "Cache-Control": "no-store", "Vary": "Authorization" } });
 }
@@ -34,9 +48,9 @@ export async function GET(request: NextRequest) {
 
   try {
     const db = createClient(url, key, { auth: { persistSession: false, autoRefreshToken: false } });
-    const basesResult = await db.from("bases").select("id,code,name,interjornada_minutes");
+    const basesResult = await db.from("bases").select("id,code,interjornada_minutes");
     if (basesResult.error) throw basesResult.error;
-    const bases = basesResult.data as Base[];
+    const bases = basesResult.data as DashboardBase[];
     let driversQuery = db.from("drivers").select("id,name,login_matricula,base_id,default_shift,default_start_time", { count: "exact" });
     if (filters.matricula) driversQuery = driversQuery.eq("login_matricula", filters.matricula);
     if (filters.base) {
@@ -47,12 +61,18 @@ export async function GET(request: NextRequest) {
     const offset = (filters.pagina - 1) * filters.limite;
     const driversResult = await driversQuery.order("id").range(offset, offset + filters.limite - 1);
     if (driversResult.error) throw driversResult.error;
-    const drivers = driversResult.data as Driver[];
+    const drivers = driversResult.data as DashboardDriver[];
     const data: { data: string; condutor: { id: string; nome: string; matricula: string }; [key: string]: unknown }[] = [];
     if (drivers.length) {
       const ids = drivers.map((driver) => driver.id);
       const sheets = await allRows<{ id: string; date: string; region: string }>((start) => db.from("daily_sheets").select("id,date,region").gte("date", filters.inicio).lte("date", filters.fim).order("id").range(start, start + 999));
-      const dispatches = sheets.length ? await allRows<Dispatch>((start) => db.from("dispatches").select("*").in("daily_sheet_id", sheets.map((sheet) => sheet.id)).in("driver_id", ids).order("id").range(start, start + 999)) : [];
+      const dispatches = sheets.length ? await allRows<DashboardDispatch>((start) => db
+        .from("dispatches")
+        .select("daily_sheet_id,driver_id,forecast_start_time,entry_time,exit_time,dispatch_status,abono_reason,origin_location_id,destination_location_id,final_destination_location_id,next_day_forecast_time,updated_at")
+        .in("daily_sheet_id", sheets.map((sheet) => sheet.id))
+        .in("driver_id", ids)
+        .order("id")
+        .range(start, start + 999)) : [];
       const locationIds = [...new Set(dispatches.flatMap((row) => [row.origin_location_id, row.destination_location_id, row.final_destination_location_id]).filter((id): id is string => Boolean(id)))];
       const locationRows: { id: string; name: string }[] = [];
       for (let start = 0; start < locationIds.length; start += 100) {
@@ -61,15 +81,28 @@ export async function GET(request: NextRequest) {
         locationRows.push(...result.data);
       }
       const locations = new Map(locationRows.map((item) => [item.id, item.name]));
-      const schedules: MonthlySchedule[] = [];
-      const entries: MonthlyScheduleEntry[] = [];
+      const schedules: DashboardSchedule[] = [];
+      const entries: DashboardEntry[] = [];
       const months = new Set<string>();
       for (let date = filters.inicio; date <= filters.fim; date = addCalendarDays(date, 1)) months.add(date.slice(0, 7));
       for (const month of months) {
-        const result = await db.from("monthly_schedules").select("id,month,year,region").eq("year", Number(month.slice(0, 4))).eq("month", Number(month.slice(5, 7)));
+        const year = Number(month.slice(0, 4));
+        const monthNumber = Number(month.slice(5, 7));
+        const firstDay = month === filters.inicio.slice(0, 7) ? Number(filters.inicio.slice(8, 10)) : 1;
+        const lastDay = month === filters.fim.slice(0, 7) ? Number(filters.fim.slice(8, 10)) : new Date(Date.UTC(year, monthNumber, 0)).getUTCDate();
+        const result = await db.from("monthly_schedules").select("id,month,year,region").eq("year", year).eq("month", monthNumber);
         if (result.error) throw result.error;
-        schedules.push(...result.data as MonthlySchedule[]);
-        if (result.data.length) entries.push(...await allRows<MonthlyScheduleEntry>((start) => db.from("monthly_schedule_entries").select("*").in("schedule_id", result.data.map((item) => item.id)).in("driver_id", ids).order("id").range(start, start + 999)));
+        schedules.push(...result.data as DashboardSchedule[]);
+        // Limita cada mês antes da transferência do banco, inclusive na virada do ano.
+        if (result.data.length) entries.push(...await allRows<DashboardEntry>((start) => db
+          .from("monthly_schedule_entries")
+          .select("schedule_id,driver_id,day_of_month,scale_code,shift_letter,shift_time,updated_at")
+          .in("schedule_id", result.data.map((item) => item.id))
+          .in("driver_id", ids)
+          .gte("day_of_month", firstDay)
+          .lte("day_of_month", lastDay)
+          .order("id")
+          .range(start, start + 999)));
       }
       for (const entry of entries) {
         const schedule = schedules.find((item) => item.id === entry.schedule_id)!;
@@ -77,7 +110,10 @@ export async function GET(request: NextRequest) {
         if (date < filters.inicio || date > filters.fim) continue;
         const driver = drivers.find((item) => item.id === entry.driver_id)!;
         const base = bases.find((item) => item.id === driver.base_id);
-        const sheet = sheets.find((item) => item.date === date && item.region === schedule.region);
+        // A escala de Minas é identificada como MG, enquanto a folha diária
+        // compartilhada das bases UB/LZ/JP é identificada como UBJP.
+        const sheetRegion = dispatchRegionForSchedule(schedule.region);
+        const sheet = sheets.find((item) => item.date === date && item.region === sheetRegion);
         const dispatch = dispatches.find((item) => item.driver_id === driver.id && item.daily_sheet_id === sheet?.id);
         data.push({
           data: date, regiao: schedule.region, condutor: { id: driver.id, nome: driver.name, matricula: driver.login_matricula },
