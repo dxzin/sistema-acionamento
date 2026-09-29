@@ -70,6 +70,7 @@ function AcionamentoContent() {
   const [locations, setLocations] = useState<Location[]>([]);
   const [dailySheet, setDailySheet] = useState<DailySheet | null>(null);
   const [dailySheets, setDailySheets] = useState<DailySheet[]>([]);
+  const [scheduleIds, setScheduleIds] = useState<string[]>([]);
   const [changingSheetStatus, setChangingSheetStatus] = useState(false);
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -359,6 +360,7 @@ function AcionamentoContent() {
     setLoadError(null);
     try {
       const dispatchesData = await dispatchService.getDispatchesForSheet(filters.date, filters.region);
+      const nextScheduleIds = dispatchService.getKnownScheduleIdsForDate(filters.date, filters.region);
       const [locs, sheets, syncToken] = await Promise.all([
         dispatchService.getLocations(),
         dispatchService.getDailySheets(filters.date, filters.region),
@@ -378,6 +380,7 @@ function AcionamentoContent() {
         setLocations(locs);
         setDailySheet(sheet);
         setDailySheets(sheets);
+        setScheduleIds(nextScheduleIds);
         syncTokenRef.current = syncToken;
       }
     } catch (error) {
@@ -387,6 +390,7 @@ function AcionamentoContent() {
           setDispatches([]);
           setDailySheet(null);
           setDailySheets([]);
+          setScheduleIds([]);
         }
         setLoadError(error instanceof Error ? error.message : "Não foi possível carregar a folha diária.");
       }
@@ -399,6 +403,14 @@ function AcionamentoContent() {
   }, [filters.date, filters.region]);
 
   const selectedSheetsOpen = dailySheets.length > 0 && dailySheets.every((sheet) => sheet.status === "OPEN");
+  const sheetSubscriptionKey = useMemo(
+    () => dailySheets.map((sheet) => sheet.id).sort().join(","),
+    [dailySheets]
+  );
+  const scheduleSubscriptionKey = useMemo(
+    () => scheduleIds.slice().sort().join(","),
+    [scheduleIds]
+  );
 
   useEffect(() => {
     loadData();
@@ -573,7 +585,7 @@ function AcionamentoContent() {
     let active = true;
     let running = false;
     const heartbeat = async () => {
-      if (running) return;
+      if (running || document.visibilityState !== "visible") return;
       running = true;
       try {
         const presence = await dispatchService.touchAndGetOperatorPresence(
@@ -601,10 +613,15 @@ function AcionamentoContent() {
       }
     };
     void heartbeat();
-    const interval = window.setInterval(heartbeat, 10000);
+    const interval = window.setInterval(heartbeat, 30_000);
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === "visible") void heartbeat();
+    };
+    document.addEventListener("visibilitychange", handleVisibilityChange);
     return () => {
       active = false;
       window.clearInterval(interval);
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
     };
   }, [activeDispatchId, filters.date, filters.region, logout, user]);
 
@@ -628,37 +645,47 @@ function AcionamentoContent() {
 
     const supabase = createClient();
     let refreshTimer: ReturnType<typeof setTimeout> | null = null;
-    const channel = supabase
-      .channel(`dispatches_changes:${dailySheet?.id || `${filters.date}:${filters.region}`}`)
-      .on(
+    const sheetIds = sheetSubscriptionKey ? sheetSubscriptionKey.split(",") : [];
+    const subscribedScheduleIds = scheduleSubscriptionKey ? scheduleSubscriptionKey.split(",") : [];
+    const requestRefresh = () => {
+      if (refreshTimer) clearTimeout(refreshTimer);
+      refreshTimer = setTimeout(syncFromRemote, 700);
+    };
+    let channel = supabase.channel(`operational_changes:${filters.date}:${filters.region}`);
+
+    for (const sheetId of sheetIds) {
+      channel = channel.on(
         "postgres_changes",
         {
           event: "*",
           schema: "public",
           table: "dispatches",
-          ...(dailySheet?.id ? { filter: `daily_sheet_id=eq.${dailySheet.id}` } : {}),
+          filter: `daily_sheet_id=eq.${sheetId}`,
         },
-        () => {
-          // Uma colagem pode atualizar dezenas de linhas. Agrupar os eventos
-          // evita recargas concorrentes e preserva a atualização otimista.
-          if (refreshTimer) clearTimeout(refreshTimer);
-          refreshTimer = setTimeout(syncFromRemote, 700);
-        }
-      )
-      .on(
+        requestRefresh
+      );
+      channel = channel.on(
         "postgres_changes",
-        { event: "UPDATE", schema: "public", table: "daily_sheets" },
-        syncFromRemote
-      )
-      .on(
+        { event: "UPDATE", schema: "public", table: "daily_sheets", filter: `id=eq.${sheetId}` },
+        requestRefresh
+      );
+    }
+
+    channel = channel.on(
+      "postgres_changes",
+      { event: "INSERT", schema: "public", table: "daily_sheets", filter: `date=eq.${filters.date}` },
+      requestRefresh
+    );
+
+    for (const scheduleId of subscribedScheduleIds) {
+      channel = channel.on(
         "postgres_changes",
-        { event: "*", schema: "public", table: "monthly_schedule_entries" },
-        () => {
-          if (refreshTimer) clearTimeout(refreshTimer);
-          refreshTimer = setTimeout(syncFromRemote, 700);
-        }
-      )
-      .subscribe((status) => {
+        { event: "*", schema: "public", table: "monthly_schedule_entries", filter: `schedule_id=eq.${scheduleId}` },
+        requestRefresh
+      );
+    }
+
+    channel.subscribe((status) => {
         if (status === "SUBSCRIBED") setSyncStatus("live");
         if (["CHANNEL_ERROR", "TIMED_OUT", "CLOSED"].includes(status)) {
           setSyncStatus(navigator.onLine ? "fallback" : "offline");
@@ -669,7 +696,7 @@ function AcionamentoContent() {
       if (refreshTimer) clearTimeout(refreshTimer);
       supabase.removeChannel(channel);
     };
-  }, [dailySheet?.id, filters.date, filters.region, syncFromRemote]);
+  }, [filters.date, filters.region, scheduleSubscriptionKey, sheetSubscriptionKey, syncFromRemote]);
 
   useEffect(() => {
     const online = () => setSyncStatus((current) => current === "offline" ? "fallback" : current);
@@ -705,8 +732,15 @@ function AcionamentoContent() {
       }
     };
     if (syncStatus === "offline") return;
-    const interval = window.setInterval(checkForChanges, syncStatus === "live" ? 30000 : 5000);
-    return () => window.clearInterval(interval);
+    const interval = window.setInterval(checkForChanges, syncStatus === "live" ? 120_000 : 15_000);
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === "visible") void checkForChanges();
+    };
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+    return () => {
+      window.clearInterval(interval);
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+    };
   }, [filters.date, filters.region, loadData, syncStatus]);
 
   const handleFilterChange = async (newFilters: Partial<DispatchFilterOptions>) => {

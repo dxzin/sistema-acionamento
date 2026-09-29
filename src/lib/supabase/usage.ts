@@ -19,3 +19,39 @@ export function databaseUsage(metrics: string) {
 }
 
 export type DatabaseUsage = ReturnType<typeof databaseUsage>;
+
+function metricValues(metrics: string, metricName: string) {
+  const values: number[] = [];
+  const pattern = new RegExp(`^${metricName}(?:\\{[^}]*\\})?\\s+(\\S+)`);
+  for (const line of metrics.split(/\r?\n/)) {
+    const match = line.match(pattern);
+    if (!match) continue;
+    const value = Number(match[1]);
+    if (Number.isFinite(value) && value >= 0) values.push(value);
+  }
+  return values;
+}
+
+function metricTotal(metrics: string, metricName: string) {
+  return metricValues(metrics, metricName).reduce((sum, value) => sum + value, 0);
+}
+
+export function performanceUsage(metrics: string) {
+  const totalQueries = metricTotal(metrics, "pg_stat_statements_total_queries");
+  const totalQuerySeconds = metricTotal(metrics, "pg_stat_statements_total_time_seconds");
+  const activeConnections = metricTotal(metrics, "pg_stat_database_num_backends");
+  const cacheHits = metricTotal(metrics, "pg_stat_database_blks_hit_total");
+  const diskReads = metricTotal(metrics, "pg_stat_database_blks_read_total");
+  if (!totalQueries && !activeConnections && !cacheHits && !diskReads) {
+    throw new Error("Métricas de desempenho indisponíveis.");
+  }
+  const cacheRequests = cacheHits + diskReads;
+  return {
+    totalQueries,
+    averageQueryMs: totalQueries > 0 ? totalQuerySeconds / totalQueries * 1000 : 0,
+    activeConnections,
+    cacheHitPercent: cacheRequests > 0 ? cacheHits / cacheRequests * 100 : 0,
+  };
+}
+
+export type PerformanceUsage = ReturnType<typeof performanceUsage>;

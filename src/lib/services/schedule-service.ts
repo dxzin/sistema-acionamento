@@ -190,7 +190,7 @@ export async function loadMonthlySchedule(month: number, year: number, region: s
 
   const baseIds = (bases || []).map((base) => base.id);
   const driversResult = baseIds.length
-    ? await supabase.from("drivers").select("*").in("base_id", baseIds).eq("is_active", true).order("name")
+    ? await supabase.from("drivers").select("id,name,login_matricula,base_id,default_shift,default_start_time,is_active,created_at,updated_at").in("base_id", baseIds).eq("is_active", true).order("name")
     : { data: [], error: null };
   const scheduleResult = await supabase.from("monthly_schedules").select("id").eq("month", month).eq("year", year).eq("region", region).maybeSingle();
   if (driversResult.error || scheduleResult.error) {
@@ -203,7 +203,7 @@ export async function loadMonthlySchedule(month: number, year: number, region: s
     for (let start = 0; ; start += pageSize) {
       const result = await supabase
         .from("monthly_schedule_entries")
-        .select("*")
+        .select("id,schedule_id,driver_id,day_of_month,scale_code,shift_letter,shift_time,updated_at")
         .eq("schedule_id", scheduleResult.data.id)
         .order("driver_id")
         .order("day_of_month")

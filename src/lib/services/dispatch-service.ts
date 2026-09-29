@@ -54,7 +54,8 @@ class DispatchService {
   private localLocations: Location[] = [...INITIAL_LOCATIONS];
   private localBases: Base[] = [...INITIAL_BASES];
   private catalogLoadedAt = { bases: 0, locations: 0, vehicles: 0, drivers: 0 };
-  private readonly catalogTtlMs = 30_000;
+  private readonly catalogTtlMs = 5 * 60_000;
+  private readonly knownScheduleIds = new Map<string, string>();
 
   private async authenticatedQuery<T>(
     operation: () => PromiseLike<{ data: T | null; error: { message: string } | null }>
@@ -88,7 +89,7 @@ class DispatchService {
       if (this.catalogIsFresh("bases")) return this.localBases;
       try {
         const supabase = createClient();
-        const { data, error } = await supabase.from("bases").select("*").order("name");
+        const { data, error } = await supabase.from("bases").select("id,code,name,interjornada_minutes,is_active,created_at").order("name");
         if (error) throw new Error(error.message);
         this.localBases = data || [];
         this.catalogLoadedAt.bases = Date.now();
@@ -106,7 +107,7 @@ class DispatchService {
       if (this.catalogIsFresh("locations")) return this.localLocations;
       try {
         const supabase = createClient();
-        const { data, error } = await supabase.from("locations").select("*").order("name");
+        const { data, error } = await supabase.from("locations").select("id,name,region,is_active,created_at").order("name");
         if (error) throw new Error(error.message);
         this.localLocations = data || [];
         this.catalogLoadedAt.locations = Date.now();
@@ -124,7 +125,7 @@ class DispatchService {
       if (this.catalogIsFresh("vehicles")) return this.localVehicles;
       try {
         const supabase = createClient();
-        const { data, error } = await supabase.from("vehicles").select("*").order("plate_code");
+        const { data, error } = await supabase.from("vehicles").select("id,plate_code,vehicle_type,is_active,created_at").order("plate_code");
         if (error) throw new Error(error.message);
         this.localVehicles = data || [];
         this.catalogLoadedAt.vehicles = Date.now();
@@ -142,7 +143,7 @@ class DispatchService {
       if (this.catalogIsFresh("drivers")) return this.localDrivers;
       try {
         const supabase = createClient();
-        const { data, error } = await supabase.from("drivers").select("*").order("name");
+        const { data, error } = await supabase.from("drivers").select("id,name,login_matricula,base_id,default_shift,default_start_time,is_active,created_at,updated_at").order("name");
         if (error) throw new Error(error.message);
         this.localDrivers = data || [];
         this.catalogLoadedAt.drivers = Date.now();
@@ -159,6 +160,18 @@ class DispatchService {
     const d = new Date(dateStr + "T12:00:00Z");
     d.setUTCDate(d.getUTCDate() - 1);
     return d.toISOString().split("T")[0];
+  }
+
+  private scheduleKey(date: string, region: string) {
+    const [year, month] = date.split("-");
+    return `${year}-${month}:${region === "UBJP" ? "MG" : region}`;
+  }
+
+  getKnownScheduleIdsForDate(date: string, region: string): string[] {
+    const ids = regionsForDispatchSelection(region)
+      .map((selectedRegion) => this.knownScheduleIds.get(this.scheduleKey(date, selectedRegion)))
+      .filter((id): id is string => Boolean(id));
+    return [...new Set(ids)];
   }
 
   async getDailySheet(date: string, region: string = "SP"): Promise<DailySheet | null> {
@@ -323,6 +336,10 @@ class DispatchService {
           .eq("region", scheduleRegion)
           .maybeSingle();
 
+        const scheduleKey = this.scheduleKey(date, normalizedRegion);
+        if (currentSchedule?.id) this.knownScheduleIds.set(scheduleKey, currentSchedule.id);
+        else this.knownScheduleIds.delete(scheduleKey);
+
         if (currentSchedule) {
           const { data: dayEntries } = await supabase
             .from("monthly_schedule_entries")
@@ -353,15 +370,15 @@ class DispatchService {
         if (!options.readOnly && (shouldCreateSheet || shouldReconcileOpenSheet)) {
           const targetBases = REGION_BASES[normalizedRegion] || ["LP", "CASTILHO"];
           const [{ data: bases }, { data: baseLocations }] = await Promise.all([
-            supabase.from("bases").select("*").in("code", targetBases),
-            supabase.from("locations").select("*").eq("is_active", true),
+            supabase.from("bases").select("id,code,name,interjornada_minutes,is_active,created_at").in("code", targetBases),
+            supabase.from("locations").select("id,name,region,is_active,created_at").eq("is_active", true),
           ]);
           const baseIds = (bases || []).map((b) => b.id);
 
           if (baseIds.length > 0) {
             let activeDriversQuery = supabase
               .from("drivers")
-              .select("*")
+              .select("id,name,login_matricula,base_id,default_shift,default_start_time,is_active,created_at,updated_at")
               .in("base_id", baseIds)
               .eq("is_active", true);
             if (!shouldCreateSheet) {
