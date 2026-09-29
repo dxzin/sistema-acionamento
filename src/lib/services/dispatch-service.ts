@@ -346,8 +346,9 @@ class DispatchService {
             return !existingDriverIds.has(driverId) && !isDispatchExcludedScaleCode(code);
           })
           .map(([driverId]) => driverId);
-        const shouldCreateSheet = !sheet && canCreateDailySheet(date);
-        const shouldReconcileOpenSheet = sheet?.status === "OPEN" && missingScheduledDriverIds.length > 0;
+        const canMutateSheet = canCreateDailySheet(date);
+        const shouldCreateSheet = !sheet && canMutateSheet;
+        const shouldReconcileOpenSheet = canMutateSheet && sheet?.status === "OPEN" && missingScheduledDriverIds.length > 0;
 
         if (!options.readOnly && (shouldCreateSheet || shouldReconcileOpenSheet)) {
           const targetBases = REGION_BASES[normalizedRegion] || ["LP", "CASTILHO"];
@@ -370,80 +371,65 @@ class DispatchService {
             if (driversError) throw new Error(driversError.message);
 
             if (activeDrivers && activeDrivers.length > 0) {
-              // Uma folha existente nunca é regravada durante uma simples leitura.
-              // O upsert só é usado na criação inicial para tratar acessos simultâneos.
-              let targetSheet = sheet;
-              if (!targetSheet) {
-                const { data: createdSheet, error: sheetErr } = await supabase
-                  .from("daily_sheets")
-                  .upsert({ date, region: normalizedRegion, status: "OPEN" }, { onConflict: "date,region" })
-                  .select("id,status")
-                  .single();
-                if (sheetErr) throw new Error(sheetErr.message);
-                targetSheet = createdSheet;
-              }
+              // Buscar despachos de D-1 para continuidade
+              const prevDate = this.getPreviousDate(date);
+              const { data: prevSheet } = await supabase
+                .from("daily_sheets")
+                .select("id")
+                .eq("date", prevDate)
+                .eq("region", normalizedRegion)
+                .maybeSingle();
 
-              if (targetSheet) {
-                // Buscar despachos de D-1 para continuidade
-                const prevDate = this.getPreviousDate(date);
-                const { data: prevSheet } = await supabase
-                  .from("daily_sheets")
-                  .select("id")
-                  .eq("date", prevDate)
-                  .eq("region", normalizedRegion)
-                  .maybeSingle();
+              let prevDispatchesByDriver = new Map<string, Dispatch>();
+              if (prevSheet) {
+                const { data: prevDispatches } = await supabase
+                  .from("dispatches")
+                  .select("*")
+                  .eq("daily_sheet_id", prevSheet.id);
 
-                let prevDispatchesByDriver = new Map<string, Dispatch>();
-                if (prevSheet) {
-                  const { data: prevDispatches } = await supabase
-                    .from("dispatches")
-                    .select("*")
-                    .eq("daily_sheet_id", prevSheet.id);
-
-                  if (prevDispatches) {
-                    for (const p of prevDispatches) {
-                      prevDispatchesByDriver.set(p.driver_id, p);
-                    }
+                if (prevDispatches) {
+                  for (const p of prevDispatches) {
+                    prevDispatchesByDriver.set(p.driver_id, p);
                   }
                 }
+              }
 
-                // Montar despachos somente para condutores ainda ausentes.
-                const newDispatchesPayload = activeDrivers.flatMap((d) => {
-                  if (existingDriverIds.has(d.id)) return [];
-                  const schedEntry = scheduleEntriesByDriver.get(d.id);
-                  const prevDisp = prevDispatchesByDriver.get(d.id);
-                  const continuity = resolveDayContinuity(d.id, prevDisp);
-                  const scaleCode = (schedEntry?.scale_code || "").trim().toUpperCase();
-                  const isClosedTrip = (schedEntry?.shift_letter || "").trim().toUpperCase() === "VF";
-                  const previousAbono = resolvePreviousAbono(prevDisp, schedEntry?.shift_time || d.default_start_time, isClosedTrip);
-                  if (isDispatchExcludedScaleCode(scaleCode)) return [];
-                  const baseOrigin = !prevDisp
-                    ? resolveFirstDayBaseOrigin(scaleCode, continuity.originLocationId, d, bases || [], baseLocations || [])
-                    : null;
-                  return [{
-                    daily_sheet_id: targetSheet.id,
-                    driver_id: d.id,
-                    scale_day_status: scaleCode || null,
-                    forecast_start_time: resolveAutomaticForecast(prevDisp, schedEntry?.shift_time || d.default_start_time, isClosedTrip),
-                    forecast_source: usesWorkingContinuity(prevDisp?.dispatch_status) ? "CONTINUITY" : "SCHEDULE",
-                    // O status é uma decisão do operador e começa vazio.
-                    dispatch_status: "",
-                    abono_reason: previousAbono.abonoReason,
-                    origin_location_id: continuity.originLocationId || baseOrigin,
-                    origin_source: continuity.originLocationId ? "CONTINUITY" : baseOrigin ? "BASE" : "SCHEDULE",
-                  }];
+              // A criação da folha e de suas linhas ocorre em uma única transação no banco.
+              const newDispatchesPayload = activeDrivers.flatMap((d) => {
+                if (existingDriverIds.has(d.id)) return [];
+                const schedEntry = scheduleEntriesByDriver.get(d.id);
+                const prevDisp = prevDispatchesByDriver.get(d.id);
+                const continuity = resolveDayContinuity(d.id, prevDisp);
+                const scaleCode = (schedEntry?.scale_code || "").trim().toUpperCase();
+                const isClosedTrip = (schedEntry?.shift_letter || "").trim().toUpperCase() === "VF";
+                const previousAbono = resolvePreviousAbono(prevDisp, schedEntry?.shift_time || d.default_start_time, isClosedTrip);
+                if (isDispatchExcludedScaleCode(scaleCode)) return [];
+                const baseOrigin = !prevDisp
+                  ? resolveFirstDayBaseOrigin(scaleCode, continuity.originLocationId, d, bases || [], baseLocations || [])
+                  : null;
+                return [{
+                  driver_id: d.id,
+                  scale_day_status: scaleCode || null,
+                  forecast_start_time: resolveAutomaticForecast(prevDisp, schedEntry?.shift_time || d.default_start_time, isClosedTrip),
+                  forecast_source: usesWorkingContinuity(prevDisp?.dispatch_status) ? "CONTINUITY" : "SCHEDULE",
+                  // O status é uma decisão do operador e começa vazio.
+                  dispatch_status: "",
+                  abono_reason: previousAbono.abonoReason,
+                  origin_location_id: continuity.originLocationId || baseOrigin,
+                  origin_source: continuity.originLocationId ? "CONTINUITY" : baseOrigin ? "BASE" : "SCHEDULE",
+                }];
+              });
+
+              if (newDispatchesPayload.length > 0) {
+                const { data: inserted, error: insertErr } = await supabase.rpc("ensure_daily_sheet_with_dispatches", {
+                  p_date: date,
+                  p_region: normalizedRegion,
+                  p_dispatches: newDispatchesPayload,
                 });
 
-                if (newDispatchesPayload.length > 0) {
-                  const { data: inserted, error: insertErr } = await supabase
-                    .from("dispatches")
-                    .upsert(newDispatchesPayload, { onConflict: "daily_sheet_id,driver_id" })
-                    .select();
-
-                  if (insertErr) throw new Error(insertErr.message);
-                  if (inserted && inserted.length > 0) {
-                    rawDispatches = [...rawDispatches, ...inserted];
-                  }
+                if (insertErr) throw this.translateMutationError(insertErr.message);
+                if (inserted && inserted.length > 0) {
+                  rawDispatches = [...rawDispatches, ...(inserted as Dispatch[])];
                 }
               }
             }
@@ -760,11 +746,14 @@ class DispatchService {
     if (this.isSupabaseConfigured()) {
       try {
         const supabase = createClient();
-        const { data, error } = await supabase.from("dispatches").insert(dispatch).select().single();
+        const { data, error } = await supabase.rpc("create_dispatch_with_audit", {
+          p_dispatch: dispatch,
+        }).single();
         if (error) throw this.translateMutationError(error.message);
         if (!data) throw new Error("O banco não confirmou a criação do acionamento.");
-        this.localDispatches.push(data);
-        return data;
+        const saved = data as Dispatch;
+        this.localDispatches.push(saved);
+        return saved;
       } catch (e) {
         console.error("Falha ao criar despacho no Supabase:", e);
         throw e;
