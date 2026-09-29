@@ -41,12 +41,12 @@ Não colocar a senha do Sighra no servidor online. Confirmar com o TI que `monit
 
 - Online: sinal recente e teste do banco bem-sucedido.
 - Sem acesso ao banco: PC enviou sinal, mas não conseguiu consultar o Sighra.
-- Offline: nenhum sinal nos últimos dois minutos; tela atualiza a cada 30 segundos.
+- Offline: nenhum sinal nos últimos três minutos e meio; a ponte envia sinal a cada 90 segundos e a tela atualiza a cada dois minutos enquanto estiver visível.
 - Último sinal: horário de recebimento pelo servidor, disponível ao passar o mouse no status. Não equivale a sincronização de dados.
 
 ## Consultas e preenchimento
 
-Atualizar `Iniciar-Ponte.ps1` e `MySql-Nativo.ps1` no PC, mantendo a configuração local e a chave existentes. A ponte busca pedidos a cada cinco segundos. O sistema valida logins numéricos, identifica cada pedido por usuário, limita a fila e expira pedidos após três minutos. A reserva atômica permite até duas tentativas e identifica cada resposta por uma chave de tentativa.
+Atualizar `Iniciar-Ponte.ps1` e `MySql-Nativo.ps1` no PC, mantendo a configuração local e a chave existentes. A ponte ativa busca pedidos a cada 15 segundos e acelera enquanto processa um lote; a ponte inativa verifica a fila a cada 30 segundos. O sistema valida logins numéricos, identifica cada pedido por usuário, limita a fila e expira pedidos após três minutos. A reserva atômica permite até duas tentativas e identifica cada resposta por uma chave de tentativa.
 
 As últimas 10 macros vêm de `log_macro`, ordenadas pelo horário GPS. O último fim de jornada é uma consulta separada nos últimos 30 dias, usando `FIM DE JORNADA` e `FIM DE JORNADA GA`. Os horários GPS são preservados como texto local, sem converter o fuso. A lista pode conter registros duplicados do Sighra; um único evento selecionado preenche a saída, descartando segundos sem arredondamento.
 

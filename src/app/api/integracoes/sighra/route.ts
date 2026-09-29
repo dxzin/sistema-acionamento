@@ -47,7 +47,7 @@ export async function POST(request: Request) {
 function localStatusResponse() {
   const data = getLocalBridgeStatus();
   if (!localBridgeToken()) return json({ status: "nao_configurada" });
-  const online = data.lastSeenAt && Date.now() - Date.parse(data.lastSeenAt) < 120_000;
+  const online = data.lastSeenAt && Date.now() - Date.parse(data.lastSeenAt) < 210_000;
   const status = !online ? "offline" : data.databaseOk ? "online" : "sem_banco";
   const notebook = { status, ultimo_sinal: data.lastSeenAt, ultimo_acesso_banco: data.lastDatabaseOkAt, query_enabled: data.queryEnabled };
   return json({ ...notebook, ambiente: data.simulation ? "simulacao-local" : "notebook-teste", active_bridge: "notebook",
@@ -74,7 +74,7 @@ export async function GET(request: Request) {
     const token = id === "notebook" ? process.env.SIGHRA_NOTEBOOK_BRIDGE_TOKEN : process.env.SIGHRA_BRIDGE_TOKEN;
     const configured = Boolean(token && token.length >= 32);
     const row = rows.get(id);
-    const online = Boolean(row && Date.now() - Date.parse(row.last_seen_at) < 120_000);
+    const online = Boolean(row && Date.now() - Date.parse(row.last_seen_at) < 210_000);
     return { status: !configured ? "nao_configurada" : !online ? "offline" : row?.database_ok ? "online" : "sem_banco",
       ultimo_sinal: row?.last_seen_at ?? null, ultimo_acesso_banco: row?.last_database_ok_at ?? null,
       query_enabled: row?.query_enabled ?? false };

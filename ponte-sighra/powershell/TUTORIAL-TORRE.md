@@ -75,7 +75,7 @@ Fechar esta janela do PowerShell nao para a tarefa. Bloquear a tela com Win+L ma
 - Em Configuracoes do Windows > Sistema > Energia, definir suspensao como Nunca quando conectado a tomada. A tela pode apagar normalmente.
 - Manter a conta conectada; bloquear a tela em vez de sair da conta.
 - Depois de atualizacoes, reinicios ou falta de energia, entrar na conta e confirmar a VPN e `Sighra: online` no sistema.
-- A ponte verifica o banco e envia sinal a cada 30 segundos; procura consultas a cada cinco segundos. Ela tenta novamente quando a rede volta.
+- A ponte verifica o banco e envia sinal a cada 90 segundos. Quando está ativa, procura consultas a cada 15 segundos e acelera enquanto processa um lote; quando está inativa, verifica a fila a cada 30 segundos. Ela tenta novamente quando a rede volta.
 
 ## 6. Conferir, parar e reiniciar
 

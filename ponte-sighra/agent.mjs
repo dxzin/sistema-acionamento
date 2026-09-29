@@ -37,5 +37,5 @@ while (!stopping) {
     if (!response.ok) throw new Error();
     console.log(`${new Date().toLocaleString("pt-BR")} — sinal enviado; banco ${databaseOk ? "acessível" : "indisponível"}.`);
   } catch { console.error("Sinal não entregue. Verifique URL, chave e configuração do sistema."); }
-  try { await sleep(30_000, undefined, { signal: shutdown.signal }); } catch { /* encerramento */ }
+  try { await sleep(90_000, undefined, { signal: shutdown.signal }); } catch { /* encerramento */ }
 }

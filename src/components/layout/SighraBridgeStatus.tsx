@@ -40,13 +40,25 @@ export function SighraBridgeStatus({ canManage = false, compact = true }: { canM
 
   useEffect(() => {
     const controller = new AbortController();
+    let running = false;
     const refresh = async () => {
+      if (running || document.visibilityState !== "visible") return;
+      running = true;
       try { await update(controller.signal); }
       catch { if (!controller.signal.aborted) setStatus("indisponivel"); }
+      finally { running = false; }
     };
     void refresh();
-    const interval = setInterval(() => { void refresh(); }, 30_000);
-    return () => { controller.abort(); clearInterval(interval); };
+    const interval = setInterval(() => { void refresh(); }, 120_000);
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === "visible") void refresh();
+    };
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+    return () => {
+      controller.abort();
+      clearInterval(interval);
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+    };
   }, []);
 
   async function selectBridge(nextBridge: BridgeId) {

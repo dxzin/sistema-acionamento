@@ -66,6 +66,7 @@ function Invoke-SighraHttp([string]$Method, [string]$Path, $Body) {
     }
 }
 $nextHeartbeat = [DateTime]::MinValue
+$nextQueuePoll = [DateTime]::MinValue
 $pendingAnswer = $null
 try {
     do {
@@ -90,13 +91,16 @@ try {
             if ($response) { $response.Dispose() }
             if ($content) { $content.Dispose() }
         }
-        $nextHeartbeat = (Get-Date).AddSeconds(30)
+        $nextHeartbeat = (Get-Date).AddSeconds(90)
       }
-      if ($databaseOk) {
+      if ($databaseOk -and (Get-Date) -ge $nextQueuePoll) {
+        $queueDelaySeconds = 15
         try {
             if ($null -eq $pendingAnswer) {
                 $queue = Invoke-SighraHttp 'POST' '/api/integracoes/sighra/tarefas' $null
+                if ($queue.ponte_ativa -eq $false) { $queueDelaySeconds = 30 }
                 if ($queue.job) {
+                    $queueDelaySeconds = 1
                     Write-PonteLog ('Consultando macros do login ' + $queue.job.login)
                     $pendingAnswer = @{ id = $queue.job.id; lease_token = $queue.job.lease_token }
                     try {
@@ -120,13 +124,18 @@ try {
                 if ($answer.expired) { Write-PonteLog 'Pedido expirou; faca uma nova consulta no sistema.' }
                 else { Write-PonteLog 'Resultado das macros recebido pelo sistema.' }
                 $pendingAnswer = $null
+                $queueDelaySeconds = 1
             }
-        } catch { Write-PonteLog 'Fila de consultas indisponivel; nova tentativa em alguns segundos.' }
+        } catch {
+            $queueDelaySeconds = 30
+            Write-PonteLog 'Fila de consultas indisponivel; nova tentativa em alguns segundos.'
+        }
+        finally { $nextQueuePoll = (Get-Date).AddSeconds($queueDelaySeconds) }
       }
         if ($UmaVez) {
             if (-not $delivered -or -not $databaseOk) { throw 'Teste incompleto: consulte ponte.log.' }
             break
         }
-        Start-Sleep -Seconds 5
+        Start-Sleep -Seconds 1
     } while ($true)
 } finally { $client.Dispose(); $handler.Dispose() }

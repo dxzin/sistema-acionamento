@@ -17,7 +17,7 @@ cd C:\PonteSighra
 .\Iniciar-Ponte.ps1
 ```
 
-No sistema, abra Consulta Sighra, cole o login numerico e consulte. A ponte busca pedidos a cada cinco segundos e envia sinais a cada 30 segundos. Pedidos expiram apos tres minutos, com no maximo duas tentativas. Se o envio de resultado falhar, a ponte tenta novamente antes de receber outro pedido. A tela informa que e necessario atualizar a ponte se ela ainda estiver na versao anterior.
+No sistema, abra Consulta Sighra, cole o login numerico e consulte. A ponte ativa busca pedidos a cada 15 segundos e acelera enquanto processa um lote; a ponte inativa verifica a fila a cada 30 segundos. O sinal de funcionamento e enviado a cada 90 segundos. Pedidos expiram apos tres minutos, com no maximo duas tentativas. Se o envio de resultado falhar, a ponte tenta novamente antes de receber outro pedido. A tela informa que e necessario atualizar a ponte se ela ainda estiver na versao anterior.
 
 O botao Conferir preenchimento mostra a entrada e a saida atuais da folha. Preencher saida usa o horario GPS com segundos descartados, recalcula jornada e proxima previsao, registra a alteracao no historico do usuario e bloqueia conflitos ou folhas fechadas. Nenhuma linha e criada automaticamente. Escolha o dia da macro ou o anterior para jornadas que cruzaram a meia-noite. O ultimo fim historico nao confirma encerramento da jornada atual.
 
