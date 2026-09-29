@@ -77,7 +77,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         });
 
         if (error) {
-          console.error("Erro no signInWithPassword:", error.message);
           setIsLoading(false);
           return false;
         }
