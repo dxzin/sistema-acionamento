@@ -2,6 +2,7 @@ import { INITIAL_BASES } from "@/lib/mock-data";
 import { createClient } from "@/lib/supabase/client";
 import { Driver, MonthlyScheduleEntry } from "@/types/database";
 import ExcelJS from "exceljs";
+import JSZip from "jszip";
 import { getDemoDrivers } from "./driver-service";
 
 export const SCALE_CODES = ["1", "2", "3", "4", "5", "6", "F", "FE", "AT", "AF", "SATD", "DES", "DESL"] as const;
@@ -436,8 +437,38 @@ export async function parseScheduleFile(
   drivers: Driver[],
   daysInMonth: number
 ): Promise<ImportResult> {
-  const workbook = new ExcelJS.Workbook();
-  await workbook.xlsx.load(buffer as never);
+  let workbook = new ExcelJS.Workbook();
+  try {
+    await workbook.xlsx.load(buffer as never);
+  } catch (reason) {
+    let archive: JSZip;
+    try {
+      archive = await JSZip.loadAsync(buffer);
+    } catch {
+      throw reason;
+    }
+    const xmlFiles = Object.keys(archive.files).filter((name) => name.endsWith(".xml"));
+    let normalizedFiles = 0;
+    for (const name of xmlFiles) {
+      const entry = archive.file(name);
+      if (!entry) continue;
+      const xml = await entry.async("string");
+      if (!xml.includes("xmlns:x=\"http://schemas.openxmlformats.org/spreadsheetml/2006/main\"")) continue;
+      const normalized = xml.replace(/<(\/?)x:/g, "<$1");
+      if (normalized !== xml) {
+        archive.file(name, normalized);
+        normalizedFiles++;
+      }
+    }
+    if (!normalizedFiles) throw reason;
+    try {
+      const compatibleBuffer = await archive.generateAsync({ type: "uint8array" });
+      workbook = new ExcelJS.Workbook();
+      await workbook.xlsx.load(compatibleBuffer as never);
+    } catch {
+      throw new Error("O arquivo Excel não pôde ser interpretado. Abra-o no Excel, use Salvar como .xlsx e tente novamente.");
+    }
+  }
   if (!workbook.worksheets.length) throw new Error("O arquivo não possui uma planilha legível.");
   if (workbook.worksheets.length > 20) throw new Error("O arquivo excede o limite seguro de 20 abas.");
 

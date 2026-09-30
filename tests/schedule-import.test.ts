@@ -1,6 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import ExcelJS from "exceljs";
+import JSZip from "jszip";
 import {
   normalizeScaleCode,
   normalizeScheduleTime,
@@ -39,6 +40,23 @@ async function workbookBuffer(rows: unknown[][]): Promise<ArrayBuffer> {
   return bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength);
 }
 
+async function prefixedWorkbookBuffer(rows: unknown[][]): Promise<ArrayBuffer> {
+  const buffer = await workbookBuffer(rows);
+  const archive = await JSZip.loadAsync(buffer);
+  for (const name of Object.keys(archive.files).filter((entry) => entry.endsWith(".xml"))) {
+    const entry = archive.file(name);
+    if (!entry) continue;
+    const xml = await entry.async("string");
+    if (!xml.includes('xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"')) continue;
+    const prefixed = xml
+      .replace('xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"', 'xmlns:x="http://schemas.openxmlformats.org/spreadsheetml/2006/main"')
+      .replace(/<(\/?)((?!x:)[A-Za-z_][\w.-]*)(?=[\s/>])/g, "<$1x:$2");
+    archive.file(name, prefixed);
+  }
+  const output = await archive.generateAsync({ type: "uint8array" });
+  return output.buffer.slice(output.byteOffset, output.byteOffset + output.byteLength) as ArrayBuffer;
+}
+
 test("importa códigos da escala e encontra condutor por matrícula", async () => {
   const buffer = await workbookBuffer([
     ["Condutor", "Login", "1", "2", "3", "4"],
@@ -50,6 +68,18 @@ test("importa códigos da escala e encontra condutor por matrícula", async () =
   assert.equal(result.matchedDriversCount, 1);
   assert.equal(result.totalEntries, 4);
   assert.deepEqual(result.changes.map((change) => change.scale_code), ["1", "F", "FE", "SATD"]);
+});
+
+test("importa arquivo Excel válido que usa prefixo XML x", async () => {
+  const buffer = await prefixedWorkbookBuffer([
+    ["Condutor", "Login", "1", "2", "3"],
+    ["MARIA DA SILVA", "12345", "A", "F", "A"],
+  ]);
+
+  const result = await parseScheduleFile(buffer, [driver], 31);
+
+  assert.equal(result.matchedDriversCount, 1);
+  assert.deepEqual(result.changes.map((change) => change.scale_code), ["A", "F", "A"]);
 });
 
 test("importa o modelo 4x2 com dias, horário e turma e escolhe a aba compatível", async () => {
