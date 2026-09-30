@@ -27,9 +27,13 @@ export interface ScheduleCatalog {
 
 export interface ImportResult {
   changes: ScheduleCellChange[];
+  scheduleTimes: ScheduleTimeChange[];
+  shifts: Array<{ driver_id: string; shift_letter: string }>;
   matchedDriversCount: number;
   unmatchedNames: string[];
   totalEntries: number;
+  worksheetName: string;
+  detectedMonth: number | null;
 }
 
 const REGION_BASE_CODES: Record<string, string[]> = {
@@ -259,6 +263,167 @@ function plainExcelValue(value: unknown): string | number | Date | null {
   return String(value);
 }
 
+const IMPORT_MONTH_NAMES = [
+  "JANEIRO", "FEVEREIRO", "MARCO", "ABRIL", "MAIO", "JUNHO",
+  "JULHO", "AGOSTO", "SETEMBRO", "OUTUBRO", "NOVEMBRO", "DEZEMBRO",
+];
+
+function normalizedLabel(value: unknown): string {
+  return String(value ?? "")
+    .normalize("NFKD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toUpperCase()
+    .trim();
+}
+
+function importedScheduleTime(value: string | number | Date | null | undefined): string | null {
+  if (value instanceof Date) {
+    return `${String(value.getUTCHours()).padStart(2, "0")}:${String(value.getUTCMinutes()).padStart(2, "0")}`;
+  }
+  if (typeof value === "number" && value >= 0 && value < 1) {
+    const totalMinutes = Math.round(value * 24 * 60) % (24 * 60);
+    return `${String(Math.floor(totalMinutes / 60)).padStart(2, "0")}:${String(totalMinutes % 60).padStart(2, "0")}`;
+  }
+  return normalizeScheduleTime(String(value ?? ""));
+}
+
+function findDayHeader(rows: Array<Array<string | number | Date | null>>, daysInMonth: number) {
+  let best: { row: number; column: number; sequence: number } | null = null;
+  for (let rowIndex = 0; rowIndex < Math.min(20, rows.length); rowIndex++) {
+    const row = rows[rowIndex] || [];
+    for (let column = 0; column < row.length; column++) {
+      if (!/^(?:1|01)$/.test(String(row[column] ?? "").trim())) continue;
+      let sequence = 1;
+      while (
+        sequence < daysInMonth &&
+        String(row[column + sequence] ?? "").trim().replace(/^0/, "") === String(sequence + 1)
+      ) {
+        sequence++;
+      }
+      if (!best || sequence > best.sequence) best = { row: rowIndex, column, sequence };
+    }
+  }
+  return best && best.sequence >= Math.min(3, daysInMonth) ? best : null;
+}
+
+function parseScheduleWorksheet(
+  worksheet: ExcelJS.Worksheet,
+  drivers: Driver[],
+  daysInMonth: number
+): ImportResult {
+  if (worksheet.rowCount > 2000 || worksheet.columnCount > 100) {
+    throw new Error(`A aba “${worksheet.name}” excede o limite seguro de 2.000 linhas ou 100 colunas.`);
+  }
+
+  const rows: Array<Array<string | number | Date | null>> = [];
+  worksheet.eachRow({ includeEmpty: true }, (row, rowNumber) => {
+    const values = Array.isArray(row.values) ? row.values.slice(1, 101) : [];
+    rows[rowNumber - 1] = values.map(plainExcelValue);
+  });
+
+  const header = findDayHeader(rows, daysInMonth);
+  if (!header) {
+    return {
+      changes: [], scheduleTimes: [], shifts: [], matchedDriversCount: 0,
+      unmatchedNames: [], totalEntries: 0, worksheetName: worksheet.name, detectedMonth: null,
+    };
+  }
+
+  let detectedMonth: number | null = null;
+  for (const row of rows.slice(0, 12)) {
+    for (const value of row || []) {
+      const label = normalizedLabel(value);
+      const monthIndex = IMPORT_MONTH_NAMES.findIndex((monthName) => label === monthName || label.includes(monthName));
+      if (monthIndex >= 0) detectedMonth = monthIndex + 1;
+    }
+  }
+
+  let nameCol = 0;
+  let loginCol = -1;
+  let timeCol = -1;
+  let shiftCol = -1;
+  let lastHeaderRow = header.row;
+  for (let rowIndex = Math.max(0, header.row - 2); rowIndex <= Math.min(rows.length - 1, header.row + 3); rowIndex++) {
+    const row = rows[rowIndex] || [];
+    row.forEach((value, column) => {
+      const label = normalizedLabel(value);
+      if (["NOME", "NOME DO CONDUTOR", "CONDUTOR", "CONDUTORES", "COLABORADOR", "COLABORADORES"].includes(label)) {
+        nameCol = column;
+        lastHeaderRow = Math.max(lastHeaderRow, rowIndex);
+      }
+      if (["LOGIN", "MATRICULA", "MATRÍCULA"].includes(label)) {
+        loginCol = column;
+        lastHeaderRow = Math.max(lastHeaderRow, rowIndex);
+      }
+      if (label.includes("HORARIO")) {
+        timeCol = column;
+        lastHeaderRow = Math.max(lastHeaderRow, rowIndex);
+      }
+      if (label === "TURMA" || label === "TURNO") {
+        shiftCol = column;
+        lastHeaderRow = Math.max(lastHeaderRow, rowIndex);
+      }
+    });
+  }
+
+  const driverByKey = new Map<string, Driver>();
+  const driverByLogin = new Map<string, Driver>();
+  for (const driver of drivers) {
+    driverByKey.set(matchKey(driver.name), driver);
+    if (driver.login_matricula) driverByLogin.set(driver.login_matricula.trim(), driver);
+  }
+
+  const changes: ScheduleCellChange[] = [];
+  const matchedDrivers = new Set<string>();
+  const unmatchedNames: string[] = [];
+  const scheduleTimes = new Map<string, ScheduleTimeChange>();
+  const shifts = new Map<string, { driver_id: string; shift_letter: string }>();
+
+  for (let rowIndex = lastHeaderRow + 1; rowIndex < rows.length; rowIndex++) {
+    const row = rows[rowIndex];
+    if (!Array.isArray(row) || !row[nameCol]) continue;
+    const rawName = String(row[nameCol]).trim();
+    const cleanName = rawName.replace(/\s+-\s+VOLTA\s+\d{1,2}\/\d{1,2}\s*$/i, "").trim();
+    const rawLogin = loginCol >= 0 && row[loginCol] ? String(row[loginCol]).trim() : "";
+    const driver = driverByKey.get(matchKey(cleanName)) || (rawLogin ? driverByLogin.get(rawLogin) : undefined);
+    if (!driver) {
+      if (cleanName && !unmatchedNames.includes(cleanName)) unmatchedNames.push(cleanName);
+      continue;
+    }
+
+    matchedDrivers.add(driver.id);
+    const importedTime = timeCol >= 0 ? importedScheduleTime(row[timeCol]) : null;
+    if (importedTime) scheduleTimes.set(driver.id, { driver_id: driver.id, shift_time: importedTime });
+    const importedShift = shiftCol >= 0 ? normalizedLabel(row[shiftCol]) : "";
+    if (/^[A-G]$/.test(importedShift)) shifts.set(driver.id, { driver_id: driver.id, shift_letter: importedShift });
+
+    for (let day = 1; day <= Math.min(daysInMonth, header.sequence); day++) {
+      const rawCode = row[header.column + day - 1];
+      if (rawCode === undefined || rawCode === null || String(rawCode).trim() === "") continue;
+      let code = String(rawCode).trim().toUpperCase();
+      if (code.endsWith(".0")) code = code.slice(0, -2);
+      changes.push({
+        driver_id: driver.id,
+        day_of_month: day,
+        scale_code: normalizeScaleCode(code),
+        shift_letter: /^[A-G]$/.test(importedShift) ? importedShift : undefined,
+        shift_time: importedTime && importedTime !== "VF" ? `${importedTime}:00` : importedTime === "VF" ? null : undefined,
+      });
+    }
+  }
+
+  return {
+    changes,
+    scheduleTimes: [...scheduleTimes.values()],
+    shifts: [...shifts.values()],
+    matchedDriversCount: matchedDrivers.size,
+    unmatchedNames,
+    totalEntries: changes.length,
+    worksheetName: worksheet.name,
+    detectedMonth,
+  };
+}
+
 export async function parseScheduleFile(
   buffer: ArrayBuffer,
   drivers: Driver[],
@@ -266,97 +431,13 @@ export async function parseScheduleFile(
 ): Promise<ImportResult> {
   const workbook = new ExcelJS.Workbook();
   await workbook.xlsx.load(buffer as never);
-  const worksheet = workbook.worksheets[0];
-  if (!worksheet) throw new Error("O arquivo não possui uma planilha legível.");
-  if (worksheet.rowCount > 2000 || worksheet.columnCount > 100) {
-    throw new Error("A planilha excede o limite seguro de 2.000 linhas ou 100 colunas.");
-  }
+  if (!workbook.worksheets.length) throw new Error("O arquivo não possui uma planilha legível.");
+  if (workbook.worksheets.length > 20) throw new Error("O arquivo excede o limite seguro de 20 abas.");
 
-  const rows: Array<Array<string | number | Date | null>> = [];
-  worksheet.eachRow({ includeEmpty: true }, (row, rowNumber) => {
-    if (rowNumber > 2000) return;
-    const values = Array.isArray(row.values) ? row.values.slice(1, 101) : [];
-    rows[rowNumber - 1] = values.map(plainExcelValue);
-  });
-
-  const driverByKey = new Map<string, Driver>();
-  const driverByLogin = new Map<string, Driver>();
-  for (const d of drivers) {
-    driverByKey.set(matchKey(d.name), d);
-    if (d.login_matricula) driverByLogin.set(d.login_matricula.trim(), d);
-  }
-
-  let headerRowIndex = 0;
-  let nameCol = 0;
-  let loginCol = -1;
-  let firstDayCol = 2;
-
-  for (let r = 0; r < Math.min(6, rows.length); r++) {
-    const row = rows[r];
-    if (!Array.isArray(row)) continue;
-    let foundDays = 0;
-    for (let c = 0; c < row.length; c++) {
-      const val = String(row[c] || "").trim().toLowerCase();
-      if (val === "1" || val === "01") {
-        foundDays++;
-        firstDayCol = c;
-      }
-      if (val.includes("nome") || val.includes("condutor") || val.includes("colaborador")) {
-        nameCol = c;
-      }
-      if (val.includes("login") || val.includes("matr")) {
-        loginCol = c;
-      }
-    }
-    if (foundDays > 0) {
-      headerRowIndex = r;
-      break;
-    }
-  }
-
-  const changes: ScheduleCellChange[] = [];
-  const matchedDrivers = new Set<string>();
-  const unmatchedNames: string[] = [];
-
-  for (let r = headerRowIndex + 1; r < rows.length; r++) {
-    const row = rows[r];
-    if (!Array.isArray(row) || !row[nameCol]) continue;
-    const rawName = String(row[nameCol]).trim();
-    const cleanName = rawName.replace(/\s+-\s+VOLTA\s+\d{1,2}\/\d{1,2}\s*$/i, "").trim();
-    const rawLogin = loginCol >= 0 && row[loginCol] ? String(row[loginCol]).trim() : "";
-
-    const driver = driverByKey.get(matchKey(cleanName)) || (rawLogin ? driverByLogin.get(rawLogin) : undefined);
-    if (!driver) {
-      unmatchedNames.push(cleanName);
-      continue;
-    }
-
-    matchedDrivers.add(driver.id);
-
-    for (let day = 1; day <= daysInMonth; day++) {
-      const colIdx = firstDayCol + (day - 1);
-      if (colIdx < row.length) {
-        const rawCode = row[colIdx];
-        if (rawCode !== undefined && rawCode !== null && String(rawCode).trim() !== "") {
-          let codeStr = String(rawCode).trim().toUpperCase();
-          if (codeStr.endsWith(".0")) codeStr = codeStr.slice(0, -2);
-          codeStr = normalizeScaleCode(codeStr);
-          changes.push({
-            driver_id: driver.id,
-            day_of_month: day,
-            scale_code: codeStr,
-          });
-        }
-      }
-    }
-  }
-
-  return {
-    changes,
-    matchedDriversCount: matchedDrivers.size,
-    unmatchedNames,
-    totalEntries: changes.length,
-  };
+  const results = workbook.worksheets.map((worksheet) => parseScheduleWorksheet(worksheet, drivers, daysInMonth));
+  return results.sort((left, right) =>
+    right.matchedDriversCount - left.matchedDriversCount || right.totalEntries - left.totalEntries
+  )[0];
 }
 
 export async function exportScheduleToExcel(

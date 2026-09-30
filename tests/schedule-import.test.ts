@@ -43,6 +43,40 @@ test("importa códigos da escala e encontra condutor por matrícula", async () =
   assert.deepEqual(result.changes.map((change) => change.scale_code), ["1", "F", "FE", "SATD"]);
 });
 
+test("importa o modelo 4x2 com dias, horário e turma e escolhe a aba compatível", async () => {
+  const workbook = new ExcelJS.Workbook();
+  workbook.addWorksheet("Capa").addRows([["ESCALA OPERACIONAL"], ["OUTUBRO"]]);
+  workbook.addWorksheet("LP Outubro").addRows([
+    [null, null, null, null, "OUTUBRO"],
+    [null, null, "ESCALA", null, null, 1, 2, 3],
+    ["CONDUTORES", "LIBERAÇÃO", 4, "x", 2, "QUI", "SEX", "SÁB", "HORÁRIO", "TURMA"],
+    ["MARIA DA SILVA", "Liberado", 4, "x", 2, "A", "F", "FE", "20:00", "B"],
+  ]);
+  const output = await workbook.xlsx.writeBuffer();
+  const bytes = new Uint8Array(output);
+  const buffer = bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength);
+
+  const result = await parseScheduleFile(buffer, [driver], 31);
+
+  assert.equal(result.worksheetName, "LP Outubro");
+  assert.equal(result.detectedMonth, 10);
+  assert.deepEqual(result.changes.map((change) => change.scale_code), ["A", "F", "FE"]);
+  assert.deepEqual(result.scheduleTimes, [{ driver_id: "driver-1", shift_time: "20:00" }]);
+  assert.deepEqual(result.shifts, [{ driver_id: "driver-1", shift_letter: "B" }]);
+});
+
+test("informa os nomes da planilha que não existem na operação selecionada", async () => {
+  const buffer = await workbookBuffer([
+    ["Condutor", "1", "2", "3"],
+    ["CONDUTOR NÃO CADASTRADO", "A", "F", "A"],
+  ]);
+
+  const result = await parseScheduleFile(buffer, [driver], 31);
+
+  assert.equal(result.matchedDriversCount, 0);
+  assert.deepEqual(result.unmatchedNames, ["CONDUTOR NÃO CADASTRADO"]);
+});
+
 test("recusa planilha acima do limite seguro de linhas", async () => {
   const workbook = new ExcelJS.Workbook();
   const worksheet = workbook.addWorksheet("Escala");

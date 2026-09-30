@@ -36,6 +36,11 @@ const MONTHS = [
   "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro",
 ];
 const WEEKDAYS = ["dom", "seg", "ter", "qua", "qui", "sex", "sáb"];
+const REGION_LABELS: Record<string, string> = {
+  SP: "LP / Castilho",
+  MG: "Minas (UB / LZ / JP)",
+  MS: "Mato Grosso do Sul",
+};
 type ScheduleSelection = {
   anchor: { row: number; day: number };
   focus: { row: number; day: number };
@@ -86,6 +91,7 @@ export default function EscalaPage() {
   const [values, setValues] = useState<Record<string, string>>({});
   const [scheduleTimes, setScheduleTimes] = useState<Record<string, string>>({});
   const [timeChanges, setTimeChanges] = useState<Record<string, string>>({});
+  const [shiftChanges, setShiftChanges] = useState<Record<string, string>>({});
   const [source, setSource] = useState<ScheduleCatalog["source"]>("demo");
   const [changes, setChanges] = useState<Record<string, ScheduleCellChange>>({});
   const [loading, setLoading] = useState(true);
@@ -135,6 +141,7 @@ export default function EscalaPage() {
     setSuccess(null);
     setChanges({});
     setTimeChanges({});
+    setShiftChanges({});
     setSelection(null);
     setTimeSelection(null);
 
@@ -464,12 +471,16 @@ export default function EscalaPage() {
     });
 
     const pending = [...pendingByCell.values()];
-    if (!pending.length && !normalizedTimes.size) return;
+    if (!pending.length && !normalizedTimes.size && !Object.keys(shiftChanges).length) return;
 
     setSaving(true);
     setError(null);
     setSuccess(null);
     try {
+      for (const [driverId, shift] of Object.entries(shiftChanges)) {
+        const updated = await updateDriverShift(driverId, shift, source);
+        setDrivers((current) => current.map((driver) => driver.id === driverId ? updated : driver));
+      }
       for (const [driverId, time] of normalizedTimes) {
         if (time === "VF") continue;
         const updated = await updateDriverScheduleTime(driverId, time, source);
@@ -478,6 +489,7 @@ export default function EscalaPage() {
       if (pending.length) await saveMonthlySchedule(month, year, region, pending, source);
       setChanges({});
       setTimeChanges({});
+      setShiftChanges({});
       setScheduleTimes((current) => ({ ...current, ...Object.fromEntries(normalizedTimes) }));
       setSuccess("Alterações da escala e dos horários salvas com sucesso.");
     } catch (reason) {
@@ -496,6 +508,9 @@ export default function EscalaPage() {
     setSuccess(null);
 
     try {
+      if (!drivers.length) {
+        throw new Error(`Não há condutores ativos cadastrados em ${REGION_LABELS[region]}. Cadastre os condutores e seus logins antes de importar a escala.`);
+      }
       if (!file.name.toLowerCase().endsWith(".xlsx")) {
         throw new Error("Use um arquivo .xlsx. Formatos .xls e .csv não são aceitos nesta versão segura.");
       }
@@ -505,8 +520,17 @@ export default function EscalaPage() {
       const buffer = await file.arrayBuffer();
       const result = await parseScheduleFile(buffer, drivers, daysInMonth);
 
+      if (result.detectedMonth && result.detectedMonth !== month) {
+        throw new Error(
+          `A aba “${result.worksheetName}” indica ${MONTHS[result.detectedMonth - 1]}, mas a tela está em ${MONTHS[month - 1]}.`
+        );
+      }
+
       if (result.changes.length === 0) {
-        setError("Nenhuma escala compatível foi encontrada na planilha importada.");
+        const unmatched = result.unmatchedNames.length
+          ? ` Nenhum dos ${result.unmatchedNames.length} nome(s) da aba “${result.worksheetName}” pertence à operação selecionada.`
+          : "";
+        setError(`Nenhuma escala compatível foi encontrada para ${REGION_LABELS[region]}.${unmatched}`);
         return;
       }
 
@@ -521,8 +545,23 @@ export default function EscalaPage() {
 
       setValues(newValues);
       setChanges(newChanges);
+      if (result.scheduleTimes.length) {
+        const importedTimes = Object.fromEntries(result.scheduleTimes.map((item) => [item.driver_id, item.shift_time]));
+        setScheduleTimes((current) => ({ ...current, ...importedTimes }));
+        setTimeChanges((current) => ({ ...current, ...importedTimes }));
+      }
+      if (result.shifts.length) {
+        const importedShifts = Object.fromEntries(result.shifts.map((item) => [item.driver_id, item.shift_letter]));
+        setShiftChanges((current) => ({ ...current, ...importedShifts }));
+        setDrivers((current) => current.map((driver) => importedShifts[driver.id]
+          ? { ...driver, default_shift: importedShifts[driver.id] }
+          : driver));
+      }
+      const unmatchedSummary = result.unmatchedNames.length
+        ? ` ${result.unmatchedNames.length} nome(s) não encontrado(s): ${result.unmatchedNames.slice(0, 4).join(", ")}${result.unmatchedNames.length > 4 ? "…" : ""}.`
+        : "";
       setSuccess(
-        `Importação concluída: ${result.totalEntries} códigos mapeados para ${result.matchedDriversCount} condutores. Clique em 'Salvar' para persistir.`
+        `Aba “${result.worksheetName}” importada para ${REGION_LABELS[region]}: ${result.totalEntries} códigos, ${result.scheduleTimes.length} horários e ${result.shifts.length} turmas de ${result.matchedDriversCount} condutores.${unmatchedSummary} Confira e clique em “Salvar”.`
       );
     } catch (err) {
       setError(`Erro ao importar arquivo: ${(err as Error).message}`);
@@ -541,7 +580,7 @@ export default function EscalaPage() {
     }
   }
 
-  const pendingCount = Object.keys(changes).length + Object.keys(timeChanges).length;
+  const pendingCount = Object.keys(changes).length + Object.keys(timeChanges).length + Object.keys(shiftChanges).length;
 
   return (
     <div className="excel-shell flex-1 flex flex-col min-h-screen">
@@ -569,6 +608,8 @@ export default function EscalaPage() {
                   aria-label="Mês"
                   value={month}
                   onChange={(e) => setMonth(Number(e.target.value))}
+                  disabled={pendingCount > 0 || saving}
+                  title={pendingCount > 0 ? "Salve ou recarregue a página antes de trocar o mês." : undefined}
                   className="h-7 rounded border border-slate-400 bg-white px-2 text-xs font-medium text-slate-800 focus:border-[#107c41] focus:outline-none"
                 >
                   {MONTHS.map((name, index) => (
@@ -586,6 +627,8 @@ export default function EscalaPage() {
                   aria-label="Ano"
                   value={year}
                   onChange={(e) => setYear(Number(e.target.value))}
+                  disabled={pendingCount > 0 || saving}
+                  title={pendingCount > 0 ? "Salve ou recarregue a página antes de trocar o ano." : undefined}
                   className="h-7 rounded border border-slate-400 bg-white px-2 text-xs font-medium text-slate-800 focus:border-[#107c41] focus:outline-none"
                 >
                   {Array.from({ length: 7 }, (_, index) => today.getFullYear() - 2 + index).map(
@@ -605,6 +648,8 @@ export default function EscalaPage() {
                   aria-label="Região"
                   value={region}
                   onChange={(e) => setRegion(e.target.value)}
+                  disabled={pendingCount > 0 || saving}
+                  title={pendingCount > 0 ? "Salve a importação atual antes de trocar a região." : undefined}
                   className="h-7 rounded border border-slate-400 bg-white px-2 text-xs font-bold text-slate-800 focus:border-[#107c41] focus:outline-none"
                 >
                   <option value="SP">SP · LP / Castilho</option>
@@ -649,14 +694,14 @@ export default function EscalaPage() {
                 onClick={() => fileInputRef.current?.click()}
                 disabled={importing || loading}
                 className="flex h-7 items-center gap-1.5 rounded border border-slate-400 bg-white px-2.5 text-xs font-semibold text-slate-800 hover:bg-slate-100 disabled:opacity-50 transition-colors shadow-2xs"
-                title="Importar planilha Excel .xlsx (máximo 5 MB)"
+                title={`Importar planilha Excel de ${REGION_LABELS[region]} para ${MONTHS[month - 1]} de ${year} (máximo 5 MB)`}
               >
                 {importing ? (
                   <Loader2 className="h-3.5 w-3.5 animate-spin text-[#107c41]" />
                 ) : (
                   <Upload className="h-3.5 w-3.5 text-[#107c41]" />
                 )}
-                <span>Importar</span>
+                <span>Importar {REGION_LABELS[region]}</span>
               </button>
 
               <button
@@ -695,6 +740,10 @@ export default function EscalaPage() {
               </span>
             </div>
           </section>
+
+          <div className="rounded border border-[#9dc3e6] bg-[#ddebf7] px-3 py-1.5 text-[11px] font-medium text-[#1f4e78]">
+            Para outubro: selecione a operação, importe o arquivo, confira os nomes não encontrados e salve. Depois repita para LP / Castilho, Minas e MS.
+          </div>
 
           {/* Avisos / Notificações */}
           {(error || success) && (
