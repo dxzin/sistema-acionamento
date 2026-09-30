@@ -291,13 +291,18 @@ function findDayHeader(rows: Array<Array<string | number | Date | null>>, daysIn
   for (let rowIndex = 0; rowIndex < Math.min(20, rows.length); rowIndex++) {
     const row = rows[rowIndex] || [];
     for (let column = 0; column < row.length; column++) {
-      if (!/^(?:1|01)$/.test(String(row[column] ?? "").trim())) continue;
-      let sequence = 1;
-      while (
-        sequence < daysInMonth &&
-        String(row[column + sequence] ?? "").trim().replace(/^0/, "") === String(sequence + 1)
-      ) {
-        sequence++;
+      const value = row[column];
+      let sequence = 0;
+      if (/^(?:1|01)$/.test(String(value ?? "").trim())) {
+        sequence = 1;
+        while (
+          sequence < daysInMonth &&
+          String(row[column + sequence] ?? "").trim().replace(/^0/, "") === String(sequence + 1)
+        ) {
+          sequence++;
+        }
+      } else if (value instanceof Date) {
+        while (sequence < daysInMonth && row[column + sequence] instanceof Date) sequence++;
       }
       if (!best || sequence > best.sequence) best = { row: rowIndex, column, sequence };
     }
@@ -331,6 +336,9 @@ function parseScheduleWorksheet(
   let detectedMonth: number | null = null;
   for (const row of rows.slice(0, 12)) {
     for (const value of row || []) {
+      if (value instanceof Date && value.getUTCFullYear() >= 2000) {
+        detectedMonth = value.getUTCMonth() + 1;
+      }
       const label = normalizedLabel(value);
       const monthIndex = IMPORT_MONTH_NAMES.findIndex((monthName) => label === monthName || label.includes(monthName));
       if (monthIndex >= 0) detectedMonth = monthIndex + 1;
@@ -342,7 +350,7 @@ function parseScheduleWorksheet(
   let timeCol = -1;
   let shiftCol = -1;
   let lastHeaderRow = header.row;
-  for (let rowIndex = Math.max(0, header.row - 2); rowIndex <= Math.min(rows.length - 1, header.row + 3); rowIndex++) {
+  for (let rowIndex = Math.max(0, header.row - 2); rowIndex <= Math.min(rows.length - 1, header.row + 2); rowIndex++) {
     const row = rows[rowIndex] || [];
     row.forEach((value, column) => {
       const label = normalizedLabel(value);
@@ -354,11 +362,11 @@ function parseScheduleWorksheet(
         loginCol = column;
         lastHeaderRow = Math.max(lastHeaderRow, rowIndex);
       }
-      if (label.includes("HORARIO")) {
+      if (label === "HORA" || label.includes("HORARIO")) {
         timeCol = column;
         lastHeaderRow = Math.max(lastHeaderRow, rowIndex);
       }
-      if (label === "TURMA" || label === "TURNO") {
+      if (label === "TURMA" || label === "TURNO" || label === "LETRA") {
         shiftCol = column;
         lastHeaderRow = Math.max(lastHeaderRow, rowIndex);
       }

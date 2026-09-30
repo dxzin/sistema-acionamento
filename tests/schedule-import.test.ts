@@ -91,6 +91,25 @@ test("importa a escala 6x3 de MS dentro do mesmo grupo de LP", async () => {
   assert.deepEqual(result.shifts, [{ driver_id: "driver-ms", shift_letter: "C" }]);
 });
 
+test("importa o arquivo LP quando os dias são datas e os campos são Hora e Letra", async () => {
+  const buffer = await workbookBuffer([
+    [null, null, null, null, null, null, new Date("2026-10-01T00:00:00.000Z")],
+    [null, null, null, null, null],
+    [null, null, "Escala", "Escala", "Escala", new Date("1900-01-31T00:00:00.000Z"), new Date("1900-02-01T00:00:00.000Z"), new Date("1900-02-02T00:00:00.000Z")],
+    [null, null, 4, "x", 2, "QUI", "SEX", "SÁB"],
+    ["Nome", "Login", "N", "x", "F", null, null, null, "Hora", "Letra"],
+    ["MARIA DA SILVA", 12345, 4, "x", 2, "A", "F", "A", new Date("1899-12-30T04:00:00.000Z"), "A"],
+  ]);
+
+  const result = await parseScheduleFile(buffer, [driver], 31);
+
+  assert.equal(result.detectedMonth, 10);
+  assert.equal(result.matchedDriversCount, 1);
+  assert.deepEqual(result.changes.map((change) => change.scale_code), ["A", "F", "A"]);
+  assert.deepEqual(result.scheduleTimes, [{ driver_id: "driver-1", shift_time: "04:00" }]);
+  assert.deepEqual(result.shifts, [{ driver_id: "driver-1", shift_letter: "A" }]);
+});
+
 test("informa os nomes da planilha que não existem na operação selecionada", async () => {
   const buffer = await workbookBuffer([
     ["Condutor", "1", "2", "3"],
