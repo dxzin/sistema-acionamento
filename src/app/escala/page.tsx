@@ -37,9 +37,8 @@ const MONTHS = [
 ];
 const WEEKDAYS = ["dom", "seg", "ter", "qua", "qui", "sex", "sáb"];
 const REGION_LABELS: Record<string, string> = {
-  SP: "LP / Castilho",
+  SP: "LP / MS / Castilho",
   MG: "Minas (UB / LZ / JP)",
-  MS: "Mato Grosso do Sul",
 };
 type ScheduleSelection = {
   anchor: { row: number; day: number };
@@ -652,9 +651,8 @@ export default function EscalaPage() {
                   title={pendingCount > 0 ? "Salve a importação atual antes de trocar a região." : undefined}
                   className="h-7 rounded border border-slate-400 bg-white px-2 text-xs font-bold text-slate-800 focus:border-[#107c41] focus:outline-none"
                 >
-                  <option value="SP">SP · LP / Castilho</option>
+                  <option value="SP">SP · LP / MS / Castilho</option>
                   <option value="MG">MG · UB / LZ / JP</option>
-                  <option value="MS">MS</option>
                 </select>
               </div>
 
@@ -742,7 +740,7 @@ export default function EscalaPage() {
           </section>
 
           <div className="rounded border border-[#9dc3e6] bg-[#ddebf7] px-3 py-1.5 text-[11px] font-medium text-[#1f4e78]">
-            Para outubro: selecione a operação, importe o arquivo, confira os nomes não encontrados e salve. Depois repita para LP / Castilho, Minas e MS.
+            Para outubro: em LP / MS / Castilho, importe o arquivo 4x2 de LP e depois o arquivo 6x3 de MS. As duas importações são combinadas pelos nomes ou logins dos condutores; confira e salve uma vez. Depois importe Minas separadamente.
           </div>
 
           {/* Avisos / Notificações */}

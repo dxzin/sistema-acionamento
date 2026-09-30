@@ -40,7 +40,6 @@ const REGION_BASE_CODES: Record<string, string[]> = {
   SP: ["LP", "CASTILHO"],
   MG: ["UB", "LZ", "JP"],
   UBJP: ["UB", "LZ", "JP"],
-  MS: ["MS"],
 };
 
 export function normalizeScaleCode(value: string) {

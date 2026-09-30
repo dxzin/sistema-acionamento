@@ -22,6 +22,15 @@ const driver: Driver = {
   updated_at: "2026-09-01T00:00:00.000Z",
 };
 
+const msDriver: Driver = {
+  ...driver,
+  id: "driver-ms",
+  name: "JOAO DE MS",
+  login_matricula: "67890",
+  default_shift: "C",
+  default_start_time: "20:00:00",
+};
+
 async function workbookBuffer(rows: unknown[][]): Promise<ArrayBuffer> {
   const workbook = new ExcelJS.Workbook();
   workbook.addWorksheet("Escala").addRows(rows);
@@ -63,6 +72,23 @@ test("importa o modelo 4x2 com dias, horário e turma e escolhe a aba compatíve
   assert.deepEqual(result.changes.map((change) => change.scale_code), ["A", "F", "FE"]);
   assert.deepEqual(result.scheduleTimes, [{ driver_id: "driver-1", shift_time: "20:00" }]);
   assert.deepEqual(result.shifts, [{ driver_id: "driver-1", shift_letter: "B" }]);
+});
+
+test("importa a escala 6x3 de MS dentro do mesmo grupo de LP", async () => {
+  const buffer = await workbookBuffer([
+    [null, null, null, null, "OUTUBRO"],
+    [null, null, "ESCALA", null, null, 1, 2, 3, 4],
+    ["CONDUTORES", "LIBERAÇÃO", 6, "x", 3, "QUI", "SEX", "SÁB", "DOM", "HORÁRIO", "TURMA"],
+    ["JOAO DE MS", "Liberado", 6, "x", 3, "1", "2", "3", "F", "20:00", "C"],
+  ]);
+
+  const result = await parseScheduleFile(buffer, [driver, msDriver], 31);
+
+  assert.equal(result.matchedDriversCount, 1);
+  assert.deepEqual(result.changes.map((change) => change.driver_id), ["driver-ms", "driver-ms", "driver-ms", "driver-ms"]);
+  assert.deepEqual(result.changes.map((change) => change.scale_code), ["1", "2", "3", "F"]);
+  assert.deepEqual(result.scheduleTimes, [{ driver_id: "driver-ms", shift_time: "20:00" }]);
+  assert.deepEqual(result.shifts, [{ driver_id: "driver-ms", shift_letter: "C" }]);
 });
 
 test("informa os nomes da planilha que não existem na operação selecionada", async () => {
