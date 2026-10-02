@@ -3,6 +3,7 @@ import test from "node:test";
 import type { DispatchRowModel } from "../src/types/domain";
 import {
   buildJourneyPreview,
+  canAutoApplyManualEnd,
   isJourneyEligible,
   pairJourneyEvents,
   resolveJourneyForRecord,
@@ -92,6 +93,7 @@ test("entrada preenchida permite aplicar somente o fim posterior quando falta ma
   assert.equal(preview.resolution.status, "manual_end");
   assert.deepEqual(preview.changes, { exit_time: "15:05:00" });
   assert.equal(preview.canApply, true);
+  assert.equal(canAutoApplyManualEnd(preview), true);
 });
 
 test("fim isolado exige entrada preenchida e não altera saída manual divergente", () => {
@@ -104,12 +106,14 @@ test("fim isolado exige entrada preenchida e não altera saída manual divergent
   const preview = buildJourneyPreview(record, resolveJourneyForRecord([finish], record));
   assert.equal(preview.canApply, false);
   assert.deepEqual(preview.conflicts, [{ field: "exit_time", current: "15:10:00", sighra: "15:05:00" }]);
+  assert.equal(canAutoApplyManualEnd(preview), false);
   dispatch.exit_time = "15:05:00";
   const filledRecord = snapshotJourneyRecord(dispatch, "2026-09-27");
   const filledPreview = buildJourneyPreview(filledRecord, resolveJourneyForRecord([finish], filledRecord));
   assert.equal(filledPreview.resolution.status, "manual_end");
   assert.deepEqual(filledPreview.changes, {});
   assert.equal(filledPreview.canApply, false);
+  assert.equal(canAutoApplyManualEnd(filledPreview), false);
 });
 
 test("dois fins posteriores à entrada continuam exigindo conferência", () => {

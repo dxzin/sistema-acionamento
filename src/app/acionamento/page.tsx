@@ -42,6 +42,7 @@ import {
 } from "@/lib/editing/dispatch-edit-state";
 import {
   buildJourneyPreview,
+  canAutoApplyManualEnd,
   isJourneyEligible,
   resolveJourneyForRecord,
   resolveJourneyRecord,
@@ -812,7 +813,7 @@ function AcionamentoContent() {
       startMacroId: pair?.start.id || null,
       endMacroId: pair?.end?.id || manualEnd?.id || null,
       queryId: result?.queryId || null,
-      reason: reason || (preview?.resolution.status === "manual_end" ? "Saída conferida com entrada já preenchida."
+      reason: reason || (preview?.resolution.status === "manual_end" ? "Fim relacionado à entrada já preenchida."
         : preview?.resolution.status !== "safe" ? preview?.resolution.reasons.join(" ") : null),
     }, journeyProvider.kind);
   }, [journeyProvider]);
@@ -982,6 +983,19 @@ function AcionamentoContent() {
       }
       const freshRecord = snapshotJourneyRecord(resolved.row, requested.operationalDate);
       const preview = buildJourneyPreview(freshRecord, resolveJourneyForRecord(result.events, freshRecord));
+      if (canAutoApplyManualEnd(preview)) {
+        try {
+          await handleUpdateRow(freshRecord.recordId, preview.changes);
+          await auditJourney(freshRecord, "applied", result, preview, "Saída preenchida automaticamente a partir da entrada manual.");
+          setSaveState({ status: "saved", message: "Fim de jornada preenchido automaticamente pelo SIGhRa." });
+        } catch (error) {
+          const message = error instanceof Error ? error.message : "Não foi possível preencher automaticamente o fim da jornada.";
+          setJourneyDialog({ requested, result, preview });
+          setJourneyError(message);
+          void auditJourney(freshRecord, "failed", result, preview, message);
+        }
+        return;
+      }
       setJourneyDialog({ requested, result, preview });
       void auditJourney(freshRecord, preview.resolution.status === "safe" || preview.resolution.status === "manual_end" ? "preview" : "blocked", result, preview);
     } catch (error) {
@@ -999,7 +1013,7 @@ function AcionamentoContent() {
     } finally {
       if (requestNumber === journeyRequestRef.current) setJourneyRequestingId(null);
     }
-  }, [auditJourney, filters.date, flushPendingEdits, journeyProvider]);
+  }, [auditJourney, filters.date, flushPendingEdits, handleUpdateRow, journeyProvider]);
 
   const cancelJourney = useCallback(() => {
     if (journeyDialog) void auditJourney(journeyDialog.preview.record, "canceled", journeyDialog.result, journeyDialog.preview);

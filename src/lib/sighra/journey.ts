@@ -296,3 +296,11 @@ export function buildJourneyPreview(record: JourneyRecordSnapshot, resolution: J
   return { record, resolution, conflicts, preservedPlate, changes,
     canApply: conflicts.length === 0 && Object.keys(changes).length > 0 };
 }
+
+export function canAutoApplyManualEnd(preview: JourneyPreview): boolean {
+  return preview.resolution.status === "manual_end" &&
+    preview.canApply &&
+    preview.conflicts.length === 0 &&
+    typeof preview.changes.exit_time === "string" &&
+    Object.keys(preview.changes).length === 1;
+}
