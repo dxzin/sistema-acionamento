@@ -1,0 +1,37 @@
+PONTE SIGHRA - INSTALACAO NO PC DA EMPRESA
+
+Antes de ir ao PC, tenha em maos:
+- a senha do banco Sighra;
+- a chave SIGHRA_BRIDGE_TOKEN ja configurada no servidor.
+
+O pacote nao contem senhas nem configuracao de outro computador.
+
+1. Extraia todos os arquivos para C:\PonteSighra.
+
+2. Abra este PowerShell de 32 bits pelo Win+R:
+   C:\Windows\SysWOW64\WindowsPowerShell\v1.0\powershell.exe
+
+3. Execute, uma linha por vez:
+
+   Set-Location C:\PonteSighra
+   Get-ChildItem -LiteralPath C:\PonteSighra -Filter *.ps1 | Unblock-File
+   Test-NetConnection 192.168.0.4 -Port 3306
+   .\Instalar-Ponte.ps1 -SistemaUrl 'https://sistema-acionamento.vercel.app'
+   .\Iniciar-Ponte.ps1 -UmaVez
+
+4. O teste deve mostrar:
+   Sinal recebido pelo sistema; banco acessivel: True
+
+5. Para deixar funcionando em segundo plano, execute:
+
+   .\Registrar-Torre.ps1
+   Get-ScheduledTask -TaskName 'Ponte Sighra' | Select-Object TaskName,State
+
+O estado esperado e Running. Nao deixe outra ponte funcionando em paralelo.
+Mantenha o PC ligado, sem suspensao, com a conta conectada e a VPN ativa
+quando ela for necessaria. Bloquear a tela pode; sair da conta para a ponte.
+
+Se a DLL for de 64 bits, o proprio script indicara para abrir:
+C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe
+
+Para detalhes e problemas comuns, abra TUTORIAL-TORRE.md.

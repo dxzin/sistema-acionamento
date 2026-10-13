@@ -7,8 +7,9 @@ Este documento registra decisões confirmadas durante os testes. Alterações ne
 1. Os grupos de horário são 04h, 12h e 20h e devem permanecer visualmente identificáveis.
 2. A cor do turno deve preencher toda a célula de horário, como em uma planilha.
 3. A listagem do acionamento deve respeitar o horário e o código do dia na escala mensal.
-4. `F` e `FE` representam ausência do acionamento diário; esses condutores não devem aparecer na folha do dia.
-5. A escala é a fonte dos dados planejados. Ela não define automaticamente o status operacional do acionamento.
+4. `VF` significa viagem fechada e conta como dia trabalhado: o condutor permanece na folha de acionamento.
+5. `F` e `FE` representam ausência do acionamento diário; esses condutores não devem aparecer na folha do dia.
+6. A escala é a fonte dos dados planejados. Ela não define automaticamente o status operacional do acionamento.
 
 ## Status do acionamento
 

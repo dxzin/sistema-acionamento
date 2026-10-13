@@ -7,6 +7,7 @@ import { normalizeClockTime } from "@/lib/calculations/jornada";
 import { isJourneyEligible } from "@/lib/sighra/journey";
 import { captureGridSelection, DispatchGridSelection, gridSelectionBounds, resolveGridSelectionRows } from "@/lib/editing/dispatch-grid-selection";
 import { parseGridClipboard } from "@/lib/editing/dispatch-grid-clipboard";
+import { getDriverNameHighlightClass } from "@/lib/dispatch/driver-name-highlight";
 import { ArrowUpDown, Bell, BellRing, Check, ChevronDown, Columns3, Copy, Clock, Eye, EyeOff, ListChecks, Loader2, Maximize2, Minimize2, Minus, Plus, RefreshCw, Search, Trash2, Volume2, VolumeX, X } from "lucide-react";
 
 interface DispatchGridProps {
@@ -1892,7 +1893,10 @@ export function DispatchGrid({
               const hasAbonoPending =
                 row.abono_authorized_by === "PENDENTE" && row.dispatch_status === "ABONADO";
               const rowEditors = activeEditors[row.id] || [];
-              const isCastilhoDriver = row.base?.code?.trim().toUpperCase() === "CASTILHO";
+              const driverNameHighlightClass = getDriverNameHighlightClass(
+                row.scale_day_status,
+                row.base?.code,
+              );
               const rowFeedback = Object.entries(cellSaveStates)
                 .filter(([key]) => key.startsWith(`${row.id}:`))
                 .map(([, feedback]) => feedback)
@@ -1936,7 +1940,7 @@ export function DispatchGrid({
 
                   {/* 1. CONDUTOR (Fixado - Texto Escuro e Nítido) */}
                   <td className={`sticky left-[44px] z-20 px-2.5 py-1 font-sans font-semibold group overflow-hidden border-r border-slate-300 ${
-                    isCastilhoDriver ? "excel-driver-castilho" : ""
+                    driverNameHighlightClass
                   }`}>
                     <div className="flex items-center justify-between gap-1 overflow-hidden">
                       <span className="excel-driver-name-value truncate text-slate-900 font-bold text-xs" title={row.driver.name}>

@@ -36,6 +36,7 @@ Este documento formaliza as regras essenciais de negócio para o acionamento e c
 3. **Vinculação com o Acionamento Diário:**
    - O campo `DIA ESC.` do dia busca o código correspondente na escala mensal do motorista.
    - Os campos `LOGIN` e `HORARIO` (turno padrão) são preenchidos automaticamente a partir da escala mensal.
+   - `VF` é dia trabalhado e mantém o condutor na folha de acionamento; `F` é folga e retira o condutor da folha daquele dia.
 
 ---
 

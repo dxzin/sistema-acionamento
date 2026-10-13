@@ -702,3 +702,27 @@ input:focus-visible, select:focus-visible, button:focus-visible, a:focus-visible
   color: #e8f7ee !important;
   -webkit-text-fill-color: #e8f7ee;
 }
+
+/* VF e dia trabalhado: destaca somente o nome, no mesmo padrão operacional de Castilho. */
+.excel-grid tbody tr td.excel-driver-vf,
+.excel-grid tbody tr:hover td.excel-driver-vf,
+.excel-grid tbody tr.excel-selected-row td.excel-driver-vf,
+.excel-grid tbody tr.excel-collaborator-row td.excel-driver-vf {
+  background-color: #ddebf7 !important;
+  color: #173f6b !important;
+}
+.excel-grid tbody td.excel-driver-vf .excel-driver-name-value {
+  color: #173f6b !important;
+  -webkit-text-fill-color: #173f6b;
+}
+[data-app-theme="dark"] .excel-grid tbody tr td.excel-driver-vf,
+[data-app-theme="dark"] .excel-grid tbody tr:hover td.excel-driver-vf,
+[data-app-theme="dark"] .excel-grid tbody tr.excel-selected-row td.excel-driver-vf,
+[data-app-theme="dark"] .excel-grid tbody tr.excel-collaborator-row td.excel-driver-vf {
+  background-color: #1f4564 !important;
+  color: #e5f2ff !important;
+}
+[data-app-theme="dark"] .excel-grid tbody td.excel-driver-vf .excel-driver-name-value {
+  color: #e5f2ff !important;
+  -webkit-text-fill-color: #e5f2ff;
+}

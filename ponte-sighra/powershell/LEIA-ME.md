@@ -21,7 +21,7 @@ No sistema, abra Consulta Sighra, cole o login numerico e consulte. A ponte ativ
 
 O botao Conferir preenchimento mostra a entrada e a saida atuais da folha. Preencher saida usa o horario GPS com segundos descartados, recalcula jornada e proxima previsao, registra a alteracao no historico do usuario e bloqueia conflitos ou folhas fechadas. Nenhuma linha e criada automaticamente. Escolha o dia da macro ou o anterior para jornadas que cruzaram a meia-noite. O ultimo fim historico nao confirma encerramento da jornada atual.
 
-Copie os quatro arquivos desta pasta para `C:\PonteSighra`, sem alterar a pasta do Sighra. Abra o mesmo PowerShell que funcionou com o script anterior:
+Copie todos os arquivos deste pacote para `C:\PonteSighra`, sem alterar a pasta do Sighra. Abra o mesmo PowerShell que funcionou com o script anterior:
 
 ```powershell
 cd C:\PonteSighra

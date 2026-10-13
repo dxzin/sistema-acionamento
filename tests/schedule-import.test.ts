@@ -183,6 +183,19 @@ test("cola um bloco de escala a partir da célula selecionada", () => {
   );
 });
 
+test("preserva a sequência VF como trabalho e F como folga na escala mensal", () => {
+  assert.deepEqual(
+    parseScheduleClipboard("VF\tVF\tVF\tVF\tF", ["d1"], 0, 1, 31),
+    [
+      { driver_id: "d1", day_of_month: 1, scale_code: "VF" },
+      { driver_id: "d1", day_of_month: 2, scale_code: "VF" },
+      { driver_id: "d1", day_of_month: 3, scale_code: "VF" },
+      { driver_id: "d1", day_of_month: 4, scale_code: "VF" },
+      { driver_id: "d1", day_of_month: 5, scale_code: "F" },
+    ],
+  );
+});
+
 test("repete um único valor em todas as células selecionadas", () => {
   assert.deepEqual(
     parseScheduleClipboard("SATD", ["d1", "d2", "d3"], 0, 1, 4, 1, 2),

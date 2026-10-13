@@ -46,6 +46,7 @@
 ## Regras entre escala e acionamento
 
 - Condutor marcado com `F` ou `FE` na escala não aparece no acionamento daquele dia.
+- Condutor marcado com `VF` (viagem fechada) continua no acionamento como dia trabalhado.
 - Horário do condutor é exibido na escala mensal e usado no acionamento.
 - Uma folha diária nova inicia com o status em branco.
 - O campo `LOCAL` do dia atual herda somente o `DESTINO FINAL` preenchido no dia anterior.

@@ -14,14 +14,19 @@ test("reconhece expiração de JWT sem confundir erros operacionais", () => {
   assert.equal(isExpiredJwtError({ message: "DAILY_SHEET_CLOSED" }), false);
 });
 
-test("F, FE, AF, DES e DESL não entram no acionamento", () => {
+test("VF entra como trabalho e F, FE, AF, DES e DESL não entram no acionamento", () => {
   for (const code of ["F", "FE", "AF", "DES", "DESL", " af ", " des ", " desl "]) {
     assert.equal(isDispatchExcludedScaleCode(code), true);
   }
 
-  for (const code of ["1", "6", "AT", "SATD", ""]) {
+  for (const code of ["1", "6", "VF", " vf ", "AT", "SATD", ""]) {
     assert.equal(isDispatchExcludedScaleCode(code), false);
   }
+
+  assert.deepEqual(
+    ["VF", "VF", "VF", "VF", "F"].map((code) => !isDispatchExcludedScaleCode(code)),
+    [true, true, true, true, false],
+  );
 });
 
 test("condutor inativo não entra no acionamento", () => {

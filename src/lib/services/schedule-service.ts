@@ -5,7 +5,7 @@ import ExcelJS from "exceljs";
 import JSZip from "jszip";
 import { getDemoDrivers } from "./driver-service";
 
-export const SCALE_CODES = ["1", "2", "3", "4", "5", "6", "F", "FE", "AT", "AF", "SATD", "DES", "DESL"] as const;
+export const SCALE_CODES = ["1", "2", "3", "4", "5", "6", "VF", "F", "FE", "AT", "AF", "SATD", "DES", "DESL"] as const;
 
 export interface ScheduleCellChange {
   driver_id: string;
