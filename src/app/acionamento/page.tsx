@@ -615,7 +615,7 @@ function AcionamentoContent() {
       }
     };
     void heartbeat();
-    const interval = window.setInterval(heartbeat, 30_000);
+    const interval = window.setInterval(heartbeat, 60_000);
     const handleVisibilityChange = () => {
       if (document.visibilityState === "visible") void heartbeat();
     };

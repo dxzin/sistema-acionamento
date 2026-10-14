@@ -1,6 +1,6 @@
 import type { UserRole } from "@/types/database";
 
-const OPERATION_PAGES = ["/acionamento", "/escala", "/condutores", "/sighra"];
+const OPERATION_PAGES = ["/acionamento", "/escala", "/condutores", "/sighra", "/avisos"];
 
 export function canAccessPage(role: UserRole | string | null | undefined, pathname: string): boolean {
   if (role === "admin" || role === "supervisor") return true;

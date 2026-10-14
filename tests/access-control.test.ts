@@ -2,8 +2,8 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { canAccessPage } from "../src/lib/access-control";
 
-test("Operação acessa somente as quatro abas operacionais e o redirecionamento inicial", () => {
-  for (const path of ["/", "/acionamento", "/escala", "/condutores", "/sighra", "/escala/detalhes"]) {
+test("Operação acessa somente as abas operacionais e o redirecionamento inicial", () => {
+  for (const path of ["/", "/acionamento", "/escala", "/condutores", "/sighra", "/avisos", "/escala/detalhes"]) {
     assert.equal(canAccessPage("operator", path), true, path);
   }
   for (const path of ["/historico", "/historico/", "/relatorios", "/admin", "/admin/usuarios", "/nova-aba", "/escala-extra"]) {
@@ -15,7 +15,7 @@ test("Operação acessa somente as quatro abas operacionais e o redirecionamento
 
 test("Supervisores e administradores mantêm acesso a todas as abas", () => {
   for (const role of ["admin", "supervisor"]) {
-    for (const path of ["/acionamento", "/escala", "/condutores", "/sighra", "/historico", "/relatorios", "/admin"]) {
+    for (const path of ["/acionamento", "/escala", "/condutores", "/sighra", "/avisos", "/historico", "/relatorios", "/admin"]) {
       assert.equal(canAccessPage(role, path), true, `${role}: ${path}`);
     }
   }

@@ -8,29 +8,33 @@ import { SupabaseUsage } from "./SupabaseUsage";
 
 type ThemePreference = "light" | "dark" | "auto";
 
+function BrasiliaClock() {
+  const [time, setTime] = useState("");
+
+  useEffect(() => {
+    const update = () => setTime(new Date().toLocaleTimeString("pt-BR", {
+      hour12: false,
+      hour: "2-digit",
+      minute: "2-digit",
+      second: "2-digit",
+    }));
+    update();
+    const interval = window.setInterval(update, 1_000);
+    return () => window.clearInterval(interval);
+  }, []);
+
+  return <div className="excel-clock flex items-center space-x-1.5 px-2.5 py-1 font-mono text-xs">
+    <Clock className="w-3.5 h-3.5" />
+    <span className="font-bold tracking-wider">{time || "--:--:--"}</span>
+    <span className="text-[10px] opacity-75">Brasília</span>
+  </div>;
+}
+
 export function Header() {
   const { user, logout } = useAuth();
-  const [time, setTime] = useState<string>("");
   const [themePreference, setThemePreference] = useState<ThemePreference>("auto");
   const [systemDark, setSystemDark] = useState(false);
   const [themeReady, setThemeReady] = useState(false);
-
-  useEffect(() => {
-    const update = () => {
-      const now = new Date();
-      setTime(
-        now.toLocaleTimeString("pt-BR", {
-          hour12: false,
-          hour: "2-digit",
-          minute: "2-digit",
-          second: "2-digit",
-        })
-      );
-    };
-    update();
-    const interval = setInterval(update, 1000);
-    return () => clearInterval(interval);
-  }, []);
 
   useEffect(() => {
     const savedTheme = localStorage.getItem("app-theme") || localStorage.getItem("dispatch-grid-theme") || "auto";
@@ -86,12 +90,7 @@ export function Header() {
           </select>
         </label>
 
-        {/* Relógio do Sistema em Tempo Real */}
-        <div className="excel-clock flex items-center space-x-1.5 px-2.5 py-1 font-mono text-xs">
-          <Clock className="w-3.5 h-3.5" />
-          <span className="font-bold tracking-wider">{time || "--:--:--"}</span>
-          <span className="text-[10px] opacity-75">Brasília</span>
-        </div>
+        <BrasiliaClock />
 
         {/* Informações do Usuário */}
         {user && (

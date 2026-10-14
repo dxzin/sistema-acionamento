@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useCallback, useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Header } from "@/components/layout/Header";
 import { Sidebar } from "@/components/layout/Sidebar";
 import { createClient } from "@/lib/supabase/client";
@@ -9,6 +9,11 @@ import { Database, Download, History, Loader2, Search, ShieldCheck } from "lucid
 
 const PAGE_SIZE = 50;
 interface AuditEvent { id: string; timestamp: string; user: string; action: string; driver: string; details: string }
+type AuditCatalogs = {
+  profileRows: Array<{ id: string; name: string }>;
+  locationRows: Array<{ id: string; name: string }>;
+  vehicleRows: Array<{ id: string; plate_code: string }>;
+};
 const FIELD_LABELS: Record<string, string> = {
   forecast_start_time: "Previsão", dispatch_status: "Status", abono_reason: "Motivo do abono",
   abono_authorized_by: "Autorizado por", origin_location_id: "Local", origin_source: "Origem do local",
@@ -29,22 +34,41 @@ export default function HistoricoPage() {
   const [operator, setOperator] = useState("");
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
+  const catalogRef = useRef<AuditCatalogs | null>(null);
 
   const loadLogs = useCallback(async (nextPage = 0, append = false) => {
     setLoading(true);
     try {
       const supabase = createClient();
-      let query = supabase.from("audit_logs").select("*").order("timestamp", { ascending: false });
+      let query = supabase.from("audit_logs")
+        .select("id,timestamp,user_id,action,entity_name,entity_id,old_values,new_values")
+        .order("timestamp", { ascending: false });
       if (operator) query = query.eq("user_id", operator);
       if (startDate) query = query.gte("timestamp", `${startDate}T00:00:00-03:00`);
       if (endDate) query = query.lte("timestamp", `${endDate}T23:59:59.999-03:00`);
-      const [{ data, error }, { data: profileRows }, { data: locationRows }, { data: vehicleRows }] = await Promise.all([
+      const catalogPromise: Promise<AuditCatalogs> = append && catalogRef.current
+        ? Promise.resolve(catalogRef.current)
+        : Promise.all([
+          supabase.from("profiles").select("id,name").order("name"),
+          supabase.from("locations").select("id,name"),
+          supabase.from("vehicles").select("id,plate_code"),
+        ]).then(([profilesResult, locationsResult, vehiclesResult]) => {
+          if (profilesResult.error) throw profilesResult.error;
+          if (locationsResult.error) throw locationsResult.error;
+          if (vehiclesResult.error) throw vehiclesResult.error;
+          return {
+            profileRows: profilesResult.data || [],
+            locationRows: locationsResult.data || [],
+            vehicleRows: vehiclesResult.data || [],
+          };
+        });
+      const [{ data, error }, catalogs] = await Promise.all([
         query.range(nextPage * PAGE_SIZE, nextPage * PAGE_SIZE + PAGE_SIZE),
-        supabase.from("profiles").select("id,name").order("name"),
-        supabase.from("locations").select("id,name"),
-        supabase.from("vehicles").select("id,plate_code"),
+        catalogPromise,
       ]);
       if (error) throw error;
+      catalogRef.current = catalogs;
+      const { profileRows, locationRows, vehicleRows } = catalogs;
       const fetchedRows = data || [];
       const rows = fetchedRows.slice(0, PAGE_SIZE);
       const dispatchIds = rows.filter((row) => row.entity_name === "dispatches").map((row) => row.entity_id);

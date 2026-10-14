@@ -8,6 +8,7 @@ import {
   CalendarDays,
   ClipboardList,
   History,
+  Megaphone,
   Settings,
   Users,
   Database,
@@ -45,6 +46,12 @@ export function Sidebar() {
       description: "Macros e fim de jornada",
     },
     {
+      name: "Quadro de Avisos",
+      href: "/avisos",
+      icon: Megaphone,
+      description: "Avisos e atividades",
+    },
+    {
       name: "Histórico",
       href: "/historico",
       icon: History,
@@ -78,6 +85,8 @@ export function Sidebar() {
               <Link
                 key={item.name}
                 href={item.href}
+                aria-label={item.name}
+                title={item.description}
                 className={`excel-sheet-link flex items-center px-3 py-2 text-xs font-medium transition-colors ${
                   isActive
                     ? "is-active font-semibold"

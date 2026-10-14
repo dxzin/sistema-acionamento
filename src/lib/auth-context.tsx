@@ -35,7 +35,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         if (session && session.user) {
           const { data: profile } = await supabase
             .from("profiles")
-            .select("*")
+            .select("id,name,email,role,base_id,created_at,updated_at")
             .eq("id", session.user.id)
             .maybeSingle();
 
@@ -84,7 +84,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         if (data && data.user) {
           const { data: profile } = await supabase
             .from("profiles")
-            .select("*")
+            .select("id,name,email,role,base_id,created_at,updated_at")
             .eq("id", data.user.id)
             .maybeSingle();
 
