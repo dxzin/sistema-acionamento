@@ -50,6 +50,18 @@ export function summarizeJourneyBatch(items: JourneyBatchItem[]): JourneyBatchSu
   return summary;
 }
 
+export function summarizeJourneyEndLocation(value: string | null | undefined) {
+  if (!value?.trim()) return null;
+
+  const parts = value
+    .split("·")
+    .map((part) => part.trim().replace(/\s+\/\s+/g, "/"))
+    .filter(Boolean);
+
+  if (parts.length <= 2) return parts.join(" · ");
+  return `${parts[0]} · ${parts.at(-1)}`;
+}
+
 export function matchBatchJobs(records: JourneyRecordSnapshot[], jobs: JourneyBatchJob[]) {
   const remaining = [...jobs];
   return records.map((record) => {

@@ -1,7 +1,7 @@
 "use client";
 
 import { AlertTriangle, CheckCircle2, CircleDashed, Loader2, RefreshCw, ShieldAlert, X } from "lucide-react";
-import { summarizeJourneyBatch, type JourneyBatchItem } from "@/lib/sighra/journey-batch";
+import { summarizeJourneyBatch, summarizeJourneyEndLocation, type JourneyBatchItem } from "@/lib/sighra/journey-batch";
 
 interface JourneyBatchDialogProps {
   items: JourneyBatchItem[];
@@ -27,14 +27,6 @@ function detail(item: JourneyBatchItem) {
   if (item.outcome === "pending") return item.job?.status === "running" ? "Consulta em execução" : "Aguardando a ponte";
   if (item.outcome === "failed") return item.job?.error || "A consulta não foi concluída.";
   if (!item.preview) return "Sem resultado disponível.";
-  const locationComparison = item.preview.endLocationComparison;
-  const locationDetail = locationComparison?.status === "matched"
-    ? " · Local conferido"
-    : locationComparison?.status === "different"
-      ? ` · Local diferente: SIGhRA ${locationComparison.actual} / planilha ${locationComparison.expected}`
-      : locationComparison?.status === "unavailable"
-        ? ` · Local SIGhRA não informado / planilha ${locationComparison.expected}`
-        : "";
   if (item.preview.conflicts.length) {
     return item.preview.conflicts.map((conflict) =>
       `${conflict.field === "entry_time" ? "Entrada" : conflict.field === "exit_time" ? "Saída" : "Placa"}: atual ${conflict.field === "fleet_code" ? conflict.current : clock(conflict.current)} · SIGhRA ${conflict.field === "fleet_code" ? conflict.sighra : clock(conflict.sighra)}`
@@ -42,13 +34,19 @@ function detail(item: JourneyBatchItem) {
   }
   if (item.preview.resolution.status !== "safe") return item.preview.resolution.message;
   if (item.outcome === "unchanged") return item.preview.preservedPlate
-    ? `Horários já registrados · placa atual ${item.preview.preservedPlate.current} mantida${locationDetail}`
-    : `Os dados encontrados já estão registrados.${locationDetail}`;
+    ? `Horários já registrados · placa atual ${item.preview.preservedPlate.current} mantida`
+    : "Os dados encontrados já estão registrados.";
   const plate = item.preview.preservedPlate
     ? `mantida ${item.preview.preservedPlate.current}`
     : item.preview.changes.fleet_code || "—";
-  return `Entrada ${clock(item.preview.changes.entry_time)} · Saída ${clock(item.preview.changes.exit_time)} · Placa ${plate}${locationDetail}`;
+  return `Entrada ${clock(item.preview.changes.entry_time)} · Saída ${clock(item.preview.changes.exit_time)} · Placa ${plate}`;
 }
+
+const LOCATION_STATUS = {
+  matched: { label: "Confere", className: "border-emerald-200 bg-emerald-50 text-emerald-800" },
+  different: { label: "Diferente", className: "border-amber-200 bg-amber-50 text-amber-800" },
+  unavailable: { label: "Sem local", className: "border-slate-200 bg-slate-50 text-slate-600" },
+} as const;
 
 export function JourneyBatchDialog({ items, applying, error, onApplySafe, onCancel, onClose, onRetryFailures }: JourneyBatchDialogProps) {
   const summary = summarizeJourneyBatch(items);
@@ -65,7 +63,7 @@ export function JourneyBatchDialog({ items, applying, error, onApplySafe, onCanc
         onKeyDown={(event) => {
           if (event.key === "Escape" && !applying) (running ? onCancel : onClose)();
         }}
-        className="journey-batch-dialog flex max-h-[92vh] w-full max-w-5xl flex-col overflow-hidden border border-slate-300 bg-white shadow-2xl"
+        className="journey-batch-dialog flex max-h-[92vh] w-full max-w-7xl flex-col overflow-hidden border border-slate-300 bg-white shadow-2xl"
       >
         <header className="flex items-start justify-between border-b border-slate-200 bg-[#f3f3f3] px-4 py-3">
           <div>
@@ -93,13 +91,25 @@ export function JourneyBatchDialog({ items, applying, error, onApplySafe, onCanc
         </div>
 
         <div className="min-h-0 flex-1 overflow-auto">
-          <table className="w-full border-collapse text-left text-xs">
+          <table className="w-full min-w-[1120px] border-collapse text-left text-xs">
             <thead className="sticky top-0 z-10 bg-slate-100 text-[10px] uppercase text-slate-600">
-              <tr><th className="px-3 py-2">Condutor</th><th className="px-3 py-2">Login</th><th className="px-3 py-2">Resultado</th><th className="px-3 py-2">Detalhe</th></tr>
+              <tr>
+                <th scope="col" className="px-3 py-2">Condutor</th>
+                <th scope="col" className="px-3 py-2">Login</th>
+                <th scope="col" className="px-3 py-2">Resultado</th>
+                <th scope="col" className="px-3 py-2">Detalhe</th>
+                <th scope="col" className="border-l border-slate-200 px-3 py-2">Fim no SIGhRA</th>
+                <th scope="col" className="px-3 py-2">Na planilha</th>
+              </tr>
             </thead>
             <tbody>
-              {items.map((item) => (
-                <tr key={item.record.recordId} className="border-t border-slate-200 align-top">
+              {items.map((item) => {
+                const comparison = item.preview?.endLocationComparison;
+                const actualLocation = summarizeJourneyEndLocation(comparison?.actual);
+                const expectedLocation = comparison?.expected || item.record.plannedEndLocation;
+                const status = comparison ? LOCATION_STATUS[comparison.status] : null;
+
+                return <tr key={item.record.recordId} className="border-t border-slate-200 align-top">
                   <td className="px-3 py-2 font-semibold text-slate-900">{item.record.driverName}</td>
                   <td className="px-3 py-2 font-mono text-slate-700">{item.record.login}</td>
                   <td className="px-3 py-2">
@@ -112,8 +122,17 @@ export function JourneyBatchDialog({ items, applying, error, onApplySafe, onCanc
                     </span>
                   </td>
                   <td className="max-w-md px-3 py-2 text-slate-600">{detail(item)}</td>
-                </tr>
-              ))}
+                  <td className="w-44 border-l border-slate-200 px-3 py-2">
+                    <span className="block font-semibold text-slate-800" title={comparison?.actual || undefined}>
+                      {item.outcome === "pending" ? "Aguardando" : actualLocation || "Não informado"}
+                    </span>
+                    {status && <span className={`mt-1 inline-flex border px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide ${status.className}`}>{status.label}</span>}
+                  </td>
+                  <td className="w-36 px-3 py-2 font-semibold text-slate-800" title={expectedLocation || undefined}>
+                    {expectedLocation || "Não preenchido"}
+                  </td>
+                </tr>;
+              })}
             </tbody>
           </table>
         </div>

@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { journeyBatchOutcome, matchBatchJobs, summarizeJourneyBatch, type JourneyBatchItem, type JourneyBatchJob } from "../src/lib/sighra/journey-batch";
+import { journeyBatchOutcome, matchBatchJobs, summarizeJourneyBatch, summarizeJourneyEndLocation, type JourneyBatchItem, type JourneyBatchJob } from "../src/lib/sighra/journey-batch";
 import type { JourneyPreview, JourneyRecordSnapshot } from "../src/lib/sighra/journey";
 
 const record = (login: string): JourneyRecordSnapshot => ({
@@ -49,6 +49,12 @@ test("local de fim divergente é informado sem bloquear o lote", () => {
     },
   };
   assert.equal(journeyBatchOutcome(job("1", "completed"), locationMismatch), "safe");
+});
+
+test("local de fim é resumido para comparação na tabela", () => {
+  assert.equal(summarizeJourneyEndLocation("BELLO PARKING · Av. Leopoldino · Uberaba / MG"), "BELLO PARKING · Uberaba/MG");
+  assert.equal(summarizeJourneyEndLocation("BRACELL · Lençóis Paulista / SP"), "BRACELL · Lençóis Paulista/SP");
+  assert.equal(summarizeJourneyEndLocation(null), null);
 });
 
 test("placa preservada não bloqueia a saída no lote", () => {
