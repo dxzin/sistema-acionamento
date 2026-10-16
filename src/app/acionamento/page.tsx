@@ -169,7 +169,7 @@ function AcionamentoContent() {
     return journeyBatch.records.map((requested, index) => {
       const job = matchedJobs[index];
       let preview: JourneyPreview | null = null;
-      if (job?.status === "completed" && Array.isArray(job.result?.journey_events)) {
+      if (job?.status === "completed" && job.result) {
         const result: JourneyProviderResult = {
           provider: job.simulation === true ? "mock" : journeyProvider.kind,
           requestedAt: job.created_at,
@@ -822,7 +822,7 @@ function AcionamentoContent() {
     for (const item of journeyBatchItems) {
       if (!item.job || item.outcome === "pending" || journeyBatchAuditedRef.current.has(item.job.id)) continue;
       journeyBatchAuditedRef.current.add(item.job.id);
-      if (item.job.status === "completed" && Array.isArray(item.job.result?.journey_events) && item.preview) {
+      if (item.job.status === "completed" && item.job.result && item.preview) {
         const result: JourneyProviderResult = {
           provider: item.job.simulation === true ? "mock" : journeyProvider.kind,
           requestedAt: item.job.created_at,
@@ -907,7 +907,7 @@ function AcionamentoContent() {
     const updates = new Map<string, Partial<DispatchRowModel>>();
     const applied: Array<{ record: JourneyRecordSnapshot; result: JourneyProviderResult; preview: JourneyPreview }> = [];
     for (const item of journeyBatchItems.filter((candidate) => candidate.outcome === "safe")) {
-      if (!item.job?.result?.journey_events) continue;
+      if (!item.job?.result) continue;
       const result: JourneyProviderResult = {
         provider: item.job.simulation === true ? "mock" : journeyProvider.kind,
         requestedAt: item.job.created_at,

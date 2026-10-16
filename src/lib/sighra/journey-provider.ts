@@ -33,7 +33,15 @@ export function mapSighraJourneyEvent(macro: SighraMacro): JourneyEvent {
 }
 
 export function journeyEventsFromResult(result: SighraResult): JourneyEvent[] {
-  const journeyEvents = result.journey_events || [];
+  const journeyEvents = result.journey_events
+    ? [...result.journey_events]
+    : result.macros.filter((macro) => classifyJourneyEvent(macro.name) !== "intermediate");
+  // Compatibilidade com a ponte anterior: ela já envia o último fim com local,
+  // mas não envia journey_events. Reaproveitamos esse evento sem duplicá-lo.
+  if (!result.journey_events && result.last_end &&
+      !journeyEvents.some((macro) => eventId(macro) === eventId(result.last_end!))) {
+    journeyEvents.push(result.last_end);
+  }
   if (result.restart_events) return [...journeyEvents, ...result.restart_events].map(mapSighraJourneyEvent);
 
   // A ponte anterior já traz a placa das últimas dez macros. Essa janela só é
@@ -80,9 +88,7 @@ export class SighraJourneyProvider implements JourneyProvider {
     }
     if (job.status !== "completed") throw new Error(job.error || "A consulta SIGhRa não foi concluída.");
     const result = job.result as SighraResult;
-    if (!Array.isArray(result?.journey_events)) {
-      throw new Error("A ponte ainda não fornece a sequência completa da jornada. Atualize o script local da ponte antes de usar o piloto.");
-    }
+    if (!result || !Array.isArray(result.macros)) throw new Error("A ponte retornou um resultado inválido.");
     return { provider: job.simulation === true ? "mock" : this.kind, requestedAt, queryId: job.id,
       events: journeyEventsFromResult(result) };
   }

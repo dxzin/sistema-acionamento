@@ -39,3 +39,31 @@ test("se o início saiu das últimas dez, não presume que um reinício visível
   assert.deepEqual(preview(result).changes, { entry_time: "00:55:00" });
   assert.deepEqual(preview({ ...result, restart_events: [laterRestart] }).changes, { entry_time: "00:55:00", fleet_code: "ABC1D23" });
 });
+
+test("ponte anterior reutiliza o último fim com local sem exigir atualização", () => {
+  const restart = macro("REINICIO DE VIAGEM", "2026-09-28 01:10:00", "ABC1D23");
+  const finish = {
+    ...macro("FIM DE JORNADA", "2026-09-28 09:05:00", null),
+    point: "BELLO PARKING",
+    city: "Uberaba",
+    state: "MG",
+  };
+  const legacyResult: SighraResult = { macros: [restart, start], last_end: finish };
+  const legacyRecord = { ...record, plannedEndLocation: "UBERABA" };
+  const resultPreview = buildJourneyPreview(
+    legacyRecord,
+    resolveJourneyForRecord(journeyEventsFromResult(legacyResult), legacyRecord)
+  );
+
+  assert.equal(resultPreview.resolution.status, "safe");
+  assert.deepEqual(resultPreview.changes, {
+    entry_time: "00:55:00",
+    exit_time: "09:05:00",
+    fleet_code: "ABC1D23",
+  });
+  assert.deepEqual(resultPreview.endLocationComparison, {
+    status: "matched",
+    expected: "UBERABA",
+    actual: "BELLO PARKING · Uberaba / MG",
+  });
+});
