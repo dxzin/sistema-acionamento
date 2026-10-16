@@ -7,7 +7,7 @@ import type { SighraMacro, SighraResult } from "../src/lib/sighra/queries";
 const record: JourneyRecordSnapshot = {
   recordId: "row", login: "45864", driverName: "Condutor", operationalDate: "2026-09-28",
   shift: "00:00:00", status: "ACIONADO", entryTime: null, exitTime: null,
-  fleetCode: null, updatedAt: "2026-09-28T01:00:00Z",
+  fleetCode: null, plannedEndLocation: null, updatedAt: "2026-09-28T01:00:00Z",
 };
 
 function macro(name: string, gps_at: string, plate: string | null): SighraMacro {

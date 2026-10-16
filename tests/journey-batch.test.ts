@@ -6,6 +6,7 @@ import type { JourneyPreview, JourneyRecordSnapshot } from "../src/lib/sighra/jo
 const record = (login: string): JourneyRecordSnapshot => ({
   recordId: crypto.randomUUID(), login, driverName: `Condutor ${login}`, operationalDate: "2026-09-25",
   shift: "04:00:00", status: "ACIONADO", entryTime: null, exitTime: null, fleetCode: null, updatedAt: "2026-09-25T10:00:00Z",
+  plannedEndLocation: null,
 });
 const job = (login: string, status: JourneyBatchJob["status"]): JourneyBatchJob => ({
   id: crypto.randomUUID(), login, status, created_at: "2026-09-25T10:00:00Z", since_date: "2026-09-25", result: null, error: null,
@@ -36,6 +37,18 @@ test("fim isolado após entrada preenchida exige confirmação individual", () =
   };
   assert.equal(endOnly.canApply, true);
   assert.equal(journeyBatchOutcome(job("1", "completed"), endOnly), "review");
+});
+
+test("local de fim divergente é informado sem bloquear o lote", () => {
+  const locationMismatch: JourneyPreview = {
+    ...preview(true),
+    endLocationComparison: {
+      status: "different",
+      expected: "LP",
+      actual: "BELLO PARKING · Uberaba / MG",
+    },
+  };
+  assert.equal(journeyBatchOutcome(job("1", "completed"), locationMismatch), "safe");
 });
 
 test("placa preservada não bloqueia a saída no lote", () => {

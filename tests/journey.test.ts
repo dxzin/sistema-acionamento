@@ -5,6 +5,7 @@ import {
   buildJourneyPreview,
   canAutoApplyManualEnd,
   isJourneyEligible,
+  journeyEndLocationMatches,
   pairJourneyEvents,
   resolveJourneyForRecord,
   resolveJourneyRecord,
@@ -31,6 +32,73 @@ function row(id = "abc", name = "JOÃO", login = "45778", status = "ACIONADO"): 
 test("allowlist consulta somente ACIONADO, TROCA e APOIO", () => {
   for (const status of ["ACIONADO", " troca ", "apoio"]) assert.equal(isJourneyEligible(status), true);
   for (const status of ["BALDEIO", "ABONADO", "AFASTADO", "ATESTADO", "FOLGA", "", "OUTRO"]) assert.equal(isJourneyEligible(status), false);
+});
+
+test("normaliza os locais conhecidos do fim de jornada", () => {
+  assert.equal(journeyEndLocationMatches("BELLO PARKING · Av. das Torres · Uberaba / MG", "UBERABA"), true);
+  assert.equal(journeyEndLocationMatches("TRANSAMERICA · Rodovia BR-050", "UBERABA"), true);
+  assert.equal(journeyEndLocationMatches("Lençóis Paulista / SP", "LP"), true);
+  assert.equal(journeyEndLocationMatches("Portaria BRACELL · SP-300", "LP"), true);
+  assert.equal(journeyEndLocationMatches("TRANSAMERICA · Uberaba / MG", "LP"), false);
+});
+
+test("fim divergente do destino final é informativo e não bloqueia a aplicação", () => {
+  const dispatch = row();
+  dispatch.final_destination_name = "LP";
+  const record = snapshotJourneyRecord(dispatch, "2026-09-19");
+  const resolved = resolveJourneyForRecord([
+    event("start", "start", "2026-09-19T04:00:00"),
+    { ...event("end", "end", "2026-09-19T12:00:00"), location: "BELLO PARKING · Uberaba / MG" },
+  ], record);
+  const preview = buildJourneyPreview(record, resolved);
+  assert.equal(resolved.status, "safe");
+  assert.equal(preview.canApply, true);
+  assert.deepEqual(preview.endLocationComparison, {
+    status: "different",
+    expected: "LP",
+    actual: "BELLO PARKING · Uberaba / MG",
+  });
+});
+
+test("destino final tem prioridade e destino é usado quando ele está vazio", () => {
+  const withFinal = row();
+  withFinal.destination_name = "UBERABA";
+  withFinal.final_destination_name = "LP";
+  assert.equal(snapshotJourneyRecord(withFinal, "2026-09-19").plannedEndLocation, "LP");
+
+  const withoutFinal = row();
+  withoutFinal.destination_name = "UBERABA";
+  const record = snapshotJourneyRecord(withoutFinal, "2026-09-19");
+  assert.equal(record.plannedEndLocation, "UBERABA");
+  const resolved = resolveJourneyForRecord([
+    event("start", "start", "2026-09-19T04:00:00"),
+    { ...event("end", "end", "2026-09-19T12:00:00"), location: "TRANSAMERICA · Uberaba / MG" },
+  ], record);
+  assert.equal(resolved.status, "safe");
+  const preview = buildJourneyPreview(record, resolved);
+  assert.deepEqual(preview.endLocationComparison, {
+    status: "matched",
+    expected: "UBERABA",
+    actual: "TRANSAMERICA · Uberaba / MG",
+  });
+});
+
+test("fim sem localização não bloqueia o horário quando há local final na planilha", () => {
+  const dispatch = row();
+  dispatch.destination_name = "UBERABA";
+  const record = snapshotJourneyRecord(dispatch, "2026-09-19");
+  const resolved = resolveJourneyForRecord([
+    event("start", "start", "2026-09-19T04:00:00"),
+    event("end", "end", "2026-09-19T12:00:00"),
+  ], record);
+  const preview = buildJourneyPreview(record, resolved);
+  assert.equal(resolved.status, "safe");
+  assert.equal(preview.canApply, true);
+  assert.deepEqual(preview.endLocationComparison, {
+    status: "unavailable",
+    expected: "UBERABA",
+    actual: null,
+  });
 });
 
 test("turno 20h atravessa a meia-noite e pertence à data do início", () => {

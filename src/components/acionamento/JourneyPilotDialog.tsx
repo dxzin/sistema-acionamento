@@ -43,6 +43,7 @@ export function JourneyPilotDialog({ preview, provider, saving, error, onApply, 
             <div><dt className="font-bold text-slate-500">Login</dt><dd className="font-mono font-semibold">{preview.record.login}</dd></div>
             <div><dt className="font-bold text-slate-500">Data operacional</dt><dd>{formatDate(preview.record.operationalDate)}</dd></div>
             <div><dt className="font-bold text-slate-500">Turno</dt><dd>{preview.record.shift?.slice(0, 5) || "Não informado"}</dd></div>
+            <div className="col-span-2"><dt className="font-bold text-slate-500">Local final da planilha</dt><dd>{preview.record.plannedEndLocation || "Não preenchido"}</dd></div>
             <div className="col-span-2"><dt className="font-bold text-slate-500">Registro imutável</dt><dd className="truncate font-mono text-[10px]" title={preview.record.recordId}>{preview.record.recordId}</dd></div>
           </dl>
 
@@ -65,6 +66,7 @@ export function JourneyPilotDialog({ preview, provider, saving, error, onApply, 
                 <span className="text-[10px] font-bold uppercase text-slate-500">Fim SIGhRa</span>
                 <p className="mt-1 font-mono text-base font-bold">{pair.end ? formatTimestamp(pair.end.occurredAt) : "Em andamento"}</p>
                 {pair.end && <p className="mt-1 truncate font-mono text-[9px] text-slate-500" title={pair.end.id}>Macro {pair.end.id}</p>}
+                {pair.end?.location && <p className="mt-1 text-[10px] text-slate-600">Local: {pair.end.location}</p>}
               </div>
             </div>
           )}
@@ -79,6 +81,7 @@ export function JourneyPilotDialog({ preview, provider, saving, error, onApply, 
                 <span className="text-[10px] font-bold uppercase text-slate-500">Fim SIGhRa</span>
                 <p className="mt-1 font-mono text-base font-bold">{formatTimestamp(manualEnd.occurredAt)}</p>
                 <p className="mt-1 truncate font-mono text-[9px] text-slate-500" title={manualEnd.id}>Macro {manualEnd.id}</p>
+                {manualEnd.location && <p className="mt-1 text-[10px] text-slate-600">Local: {manualEnd.location}</p>}
               </div>
             </div>
           )}
@@ -89,6 +92,17 @@ export function JourneyPilotDialog({ preview, provider, saving, error, onApply, 
             <p className="border border-sky-200 bg-sky-50 p-2 text-xs text-sky-900">
               Placa da planilha <b>{preview.preservedPlate.current}</b> será mantida. A macro mostra <b>{preview.preservedPlate.sighra}</b>; essa diferença não impede aplicar os horários.
             </p>
+          )}
+          {preview.endLocationComparison && (
+            <div className={`border p-2 text-xs ${
+              preview.endLocationComparison.status === "matched"
+                ? "border-emerald-200 bg-emerald-50 text-emerald-900"
+                : "border-amber-300 bg-amber-50 text-amber-900"
+            }`}>
+              <strong>{preview.endLocationComparison.status === "matched" ? "Local do fim confere." : "Local do fim não confere com a planilha."}</strong>
+              <p className="mt-1">Planilha: <b>{preview.endLocationComparison.expected}</b> · SIGhRA: <b>{preview.endLocationComparison.actual || "não informado"}</b></p>
+              {preview.endLocationComparison.status !== "matched" && <p className="mt-1">A diferença é somente informativa e não impede preencher os horários.</p>}
+            </div>
           )}
 
           {preview.conflicts.length > 0 && (

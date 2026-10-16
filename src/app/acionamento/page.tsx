@@ -987,7 +987,12 @@ function AcionamentoContent() {
         try {
           await handleUpdateRow(freshRecord.recordId, preview.changes);
           await auditJourney(freshRecord, "applied", result, preview, "Saída preenchida automaticamente a partir da entrada manual.");
-          setSaveState({ status: "saved", message: "Fim de jornada preenchido automaticamente pelo SIGhRa." });
+          const locationNotice = preview.endLocationComparison?.status === "different"
+            ? ` Local diferente: SIGhRA ${preview.endLocationComparison.actual}; planilha ${preview.endLocationComparison.expected}.`
+            : preview.endLocationComparison?.status === "unavailable"
+              ? ` O SIGhRA não informou o local para comparar com ${preview.endLocationComparison.expected}.`
+              : "";
+          setSaveState({ status: "saved", message: `Fim de jornada preenchido automaticamente pelo SIGhRa.${locationNotice}` });
         } catch (error) {
           const message = error instanceof Error ? error.message : "Não foi possível preencher automaticamente o fim da jornada.";
           setJourneyDialog({ requested, result, preview });

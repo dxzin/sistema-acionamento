@@ -17,6 +17,7 @@ export interface JourneyRecordSnapshot {
   entryTime: string | null;
   exitTime: string | null;
   fleetCode: string | null;
+  plannedEndLocation: string | null;
   updatedAt: string;
 }
 
@@ -49,10 +50,17 @@ export interface JourneyFieldConflict {
   sighra: string;
 }
 
+export interface JourneyEndLocationComparison {
+  status: "matched" | "different" | "unavailable";
+  expected: string;
+  actual: string | null;
+}
+
 export interface JourneyPreview {
   record: JourneyRecordSnapshot;
   resolution: JourneyResolution;
   conflicts: JourneyFieldConflict[];
+  endLocationComparison?: JourneyEndLocationComparison;
   preservedPlate?: { current: string; sighra: string };
   changes: Partial<Pick<DispatchRowModel, "entry_time" | "exit_time" | "fleet_code">>;
   canApply: boolean;
@@ -65,6 +73,42 @@ const normalizeText = (value: string | null | undefined) => (value || "")
   .toLocaleUpperCase("pt-BR");
 
 const normalizeLogin = (value: string) => value.replace(/^0+(?=\d)/, "");
+
+const normalizeLocation = (value: string | null | undefined) => normalizeText(value)
+  .replace(/[^A-Z0-9]+/g, " ")
+  .trim()
+  .replace(/\s+/g, " ");
+
+function expectedLocationGroup(value: string) {
+  if (["UB", "UBERABA", "UBERABA MG"].includes(value)) return "UBERABA";
+  if (["LP", "LENCOIS PAULISTA", "LENCOIS PAULISTA SP", "BRACELL"].includes(value)) return "LP";
+  return value;
+}
+
+function sighraLocationGroup(value: string) {
+  if (["BELLO PARKING", "TRANSAMERICA", "UBERABA"].some((alias) => value.includes(alias))) return "UBERABA";
+  if (["LENCOIS PAULISTA", "BRACELL"].some((alias) => value.includes(alias))) return "LP";
+  return value;
+}
+
+export function journeyEndLocationMatches(actual: string | null | undefined, expected: string | null | undefined) {
+  const normalizedExpected = normalizeLocation(expected);
+  if (!normalizedExpected) return true;
+  const normalizedActual = normalizeLocation(actual);
+  if (!normalizedActual) return false;
+  if (sighraLocationGroup(normalizedActual) === expectedLocationGroup(normalizedExpected)) return true;
+  return normalizedExpected.length >= 3 && normalizedActual.includes(normalizedExpected);
+}
+
+function compareJourneyEndLocation(record: JourneyRecordSnapshot, end: JourneyEvent | null): JourneyEndLocationComparison | undefined {
+  if (!record.plannedEndLocation || !end) return undefined;
+  if (!end.location) return { status: "unavailable", expected: record.plannedEndLocation, actual: null };
+  return {
+    status: journeyEndLocationMatches(end.location, record.plannedEndLocation) ? "matched" : "different",
+    expected: record.plannedEndLocation,
+    actual: end.location,
+  };
+}
 
 export function isJourneyEligible(status: string | null | undefined) {
   return JOURNEY_ELIGIBLE_STATUSES.includes(normalizeText(status) as typeof JOURNEY_ELIGIBLE_STATUSES[number]);
@@ -92,6 +136,8 @@ export function clockTime(timestamp: string) {
 }
 
 export function snapshotJourneyRecord(row: DispatchRowModel, operationalDate: string): JourneyRecordSnapshot {
+  const plannedEndLocation = row.final_destination_name?.trim() || row.final_destination_location?.name?.trim() ||
+    row.destination_name?.trim() || row.destination_location?.name?.trim() || null;
   return {
     recordId: row.id,
     login: row.driver.login_matricula.trim(),
@@ -102,6 +148,7 @@ export function snapshotJourneyRecord(row: DispatchRowModel, operationalDate: st
     entryTime: row.entry_time || null,
     exitTime: row.exit_time || null,
     fleetCode: row.fleet_code || row.vehicle?.plate_code || null,
+    plannedEndLocation,
     updatedAt: row.updated_at,
   };
 }
@@ -277,7 +324,14 @@ export function buildJourneyPreview(record: JourneyRecordSnapshot, resolution: J
       ? [{ field: "exit_time", current: record.exitTime, sighra: exit }]
       : [];
     const changes: JourneyPreview["changes"] = record.exitTime ? {} : { exit_time: exit };
-    return { record, resolution, conflicts, changes, canApply: conflicts.length === 0 && !record.exitTime };
+    return {
+      record,
+      resolution,
+      conflicts,
+      endLocationComparison: compareJourneyEndLocation(record, resolution.end),
+      changes,
+      canApply: conflicts.length === 0 && !record.exitTime,
+    };
   }
   if (resolution.status !== "safe") return { record, resolution, conflicts: [], changes: {}, canApply: false };
   const entry = clockTime(resolution.pair.start.occurredAt);
@@ -293,7 +347,7 @@ export function buildJourneyPreview(record: JourneyRecordSnapshot, resolution: J
   if (!record.entryTime) changes.entry_time = entry;
   if (exit && !record.exitTime) changes.exit_time = exit;
   if (plate && !record.fleetCode) changes.fleet_code = plate;
-  return { record, resolution, conflicts, preservedPlate, changes,
+  return { record, resolution, conflicts, endLocationComparison: compareJourneyEndLocation(record, resolution.pair.end), preservedPlate, changes,
     canApply: conflicts.length === 0 && Object.keys(changes).length > 0 };
 }
 

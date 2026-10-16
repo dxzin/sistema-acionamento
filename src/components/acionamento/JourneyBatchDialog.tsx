@@ -27,6 +27,14 @@ function detail(item: JourneyBatchItem) {
   if (item.outcome === "pending") return item.job?.status === "running" ? "Consulta em execução" : "Aguardando a ponte";
   if (item.outcome === "failed") return item.job?.error || "A consulta não foi concluída.";
   if (!item.preview) return "Sem resultado disponível.";
+  const locationComparison = item.preview.endLocationComparison;
+  const locationDetail = locationComparison?.status === "matched"
+    ? " · Local conferido"
+    : locationComparison?.status === "different"
+      ? ` · Local diferente: SIGhRA ${locationComparison.actual} / planilha ${locationComparison.expected}`
+      : locationComparison?.status === "unavailable"
+        ? ` · Local SIGhRA não informado / planilha ${locationComparison.expected}`
+        : "";
   if (item.preview.conflicts.length) {
     return item.preview.conflicts.map((conflict) =>
       `${conflict.field === "entry_time" ? "Entrada" : conflict.field === "exit_time" ? "Saída" : "Placa"}: atual ${conflict.field === "fleet_code" ? conflict.current : clock(conflict.current)} · SIGhRA ${conflict.field === "fleet_code" ? conflict.sighra : clock(conflict.sighra)}`
@@ -34,12 +42,12 @@ function detail(item: JourneyBatchItem) {
   }
   if (item.preview.resolution.status !== "safe") return item.preview.resolution.message;
   if (item.outcome === "unchanged") return item.preview.preservedPlate
-    ? `Horários já registrados · placa atual ${item.preview.preservedPlate.current} mantida`
-    : "Os dados encontrados já estão registrados.";
+    ? `Horários já registrados · placa atual ${item.preview.preservedPlate.current} mantida${locationDetail}`
+    : `Os dados encontrados já estão registrados.${locationDetail}`;
   const plate = item.preview.preservedPlate
     ? `mantida ${item.preview.preservedPlate.current}`
     : item.preview.changes.fleet_code || "—";
-  return `Entrada ${clock(item.preview.changes.entry_time)} · Saída ${clock(item.preview.changes.exit_time)} · Placa ${plate}`;
+  return `Entrada ${clock(item.preview.changes.entry_time)} · Saída ${clock(item.preview.changes.exit_time)} · Placa ${plate}${locationDetail}`;
 }
 
 export function JourneyBatchDialog({ items, applying, error, onApplySafe, onCancel, onClose, onRetryFailures }: JourneyBatchDialogProps) {
