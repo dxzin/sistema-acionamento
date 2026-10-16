@@ -687,6 +687,15 @@ function AcionamentoContent() {
       );
     }
 
+    channel = channel.on(
+      "postgres_changes",
+      { event: "UPDATE", schema: "public", table: "drivers" },
+      () => {
+        dispatchService.invalidateDriversCache();
+        requestRefresh();
+      }
+    );
+
     channel.subscribe((status) => {
         if (status === "SUBSCRIBED") setSyncStatus("live");
         if (["CHANNEL_ERROR", "TIMED_OUT", "CLOSED"].includes(status)) {

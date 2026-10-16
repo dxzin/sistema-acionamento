@@ -35,6 +35,7 @@ export interface Driver {
   base_id: string;
   default_shift?: string;
   default_start_time?: string;
+  is_closed_trip?: boolean;
   is_active: boolean;
   created_at: string;
   updated_at: string;

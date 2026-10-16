@@ -12,3 +12,13 @@ test("Castilho mantém seu destaque e os demais condutores não recebem cor espe
   assert.equal(getDriverNameHighlightClass("1", "LP"), "");
   assert.equal(getDriverNameHighlightClass("F", "LP"), "");
 });
+
+test("cadastro de viagem fechada destaca somente os dias trabalhados", () => {
+  for (const code of ["1", "2", "3", "4", "AT", "SATD"]) {
+    assert.equal(getDriverNameHighlightClass(code, "LP", true), "excel-driver-vf");
+  }
+  for (const code of ["F", "FE", "AF", "DES", "DESL", ""]) {
+    assert.equal(getDriverNameHighlightClass(code, "LP", true), "");
+  }
+  assert.equal(getDriverNameHighlightClass("1", "CASTILHO", true), "excel-driver-castilho");
+});

@@ -15,11 +15,18 @@ const presenceConflictFix = readFileSync(
 );
 const header = readFileSync(new URL("../src/components/layout/Header.tsx", import.meta.url), "utf8");
 const historyPage = readFileSync(new URL("../src/app/historico/page.tsx", import.meta.url), "utf8");
+const closedTripMigration = readFileSync(
+  new URL("../supabase/migrations/20261016000000_driver_closed_trip.sql", import.meta.url),
+  "utf8"
+);
 
-test("Realtime acompanha somente as folhas e escalas abertas pelo operador", () => {
+test("Realtime acompanha folhas, escalas e alterações no cadastro dos condutores", () => {
   assert.match(operationPage, /filter: `daily_sheet_id=eq\.\$\{sheetId\}`/);
   assert.match(operationPage, /filter: `id=eq\.\$\{sheetId\}`/);
   assert.match(operationPage, /filter: `schedule_id=eq\.\$\{scheduleId\}`/);
+  assert.match(operationPage, /table: "drivers"/);
+  assert.match(operationPage, /dispatchService\.invalidateDriversCache\(\)/);
+  assert.match(closedTripMigration, /ALTER PUBLICATION supabase_realtime ADD TABLE public\.drivers/);
   assert.doesNotMatch(operationPage, /table: "dispatches",\s*\n\s*}\s*,/);
 });
 

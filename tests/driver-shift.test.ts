@@ -28,9 +28,10 @@ test("editar o turno da escala atualiza o cadastro compartilhado sem sobrescreve
     assert.equal((await loadMonthlySchedule(9, 2026, "SP")).drivers.find((item) => item.id === driver.id)?.default_start_time, "07:30:00");
     await updateDriver(driver.id, {
       name: driver.name, login_matricula: driver.login_matricula, base_id: driver.base_id,
-      default_shift: shift, default_start_time: "09:00:00", is_active: driver.is_active,
+      default_shift: shift, default_start_time: "09:00:00", is_closed_trip: true, is_active: driver.is_active,
     }, "demo");
     assert.equal((await loadMonthlySchedule(9, 2026, "SP")).drivers.find((item) => item.id === driver.id)?.default_start_time, "09:00:00");
+    assert.equal(getDemoDrivers().find((item) => item.id === driver.id)?.is_closed_trip, true);
     await assert.rejects(updateDriverScheduleTime(driver.id, "25:30", "demo"), /Horário inválido/);
     assert.equal((await loadMonthlySchedule(9, 2026, "SP")).drivers.find((item) => item.id === driver.id)?.default_shift, shift);
     for (const letter of ["A", "B", "C", "D", "E", "F", "G"]) {

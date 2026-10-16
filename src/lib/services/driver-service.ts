@@ -10,6 +10,7 @@ export interface DriverFormData {
   base_id: string;
   default_shift: string;
   default_start_time: string;
+  is_closed_trip?: boolean;
   is_active: boolean;
 }
 
@@ -136,6 +137,7 @@ async function updateDriverAndFutureSchedule(
     base_id: previousDriver.base_id,
     default_shift: previousDriver.default_shift,
     default_start_time: previousDriver.default_start_time,
+    is_closed_trip: previousDriver.is_closed_trip ?? false,
     is_active: previousDriver.is_active,
   }).eq("id", id);
   const rollbackEntries = await Promise.all(entrySnapshots.map((entry) => supabase

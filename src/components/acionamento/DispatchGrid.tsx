@@ -1896,6 +1896,7 @@ export function DispatchGrid({
               const driverNameHighlightClass = getDriverNameHighlightClass(
                 row.scale_day_status,
                 row.base?.code,
+                row.driver.is_closed_trip ?? false,
               );
               const rowFeedback = Object.entries(cellSaveStates)
                 .filter(([key]) => key.startsWith(`${row.id}:`))

@@ -79,6 +79,10 @@ class DispatchService {
     return Date.now() - this.catalogLoadedAt[key] < this.catalogTtlMs;
   }
 
+  invalidateDriversCache() {
+    this.catalogLoadedAt.drivers = 0;
+  }
+
   private isSupabaseConfigured(): boolean {
     const url = process.env.NEXT_PUBLIC_SUPABASE_URL || "";
     const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || "";
@@ -144,7 +148,7 @@ class DispatchService {
       if (this.catalogIsFresh("drivers")) return this.localDrivers;
       try {
         const supabase = createClient();
-        const { data, error } = await supabase.from("drivers").select("id,name,login_matricula,base_id,default_shift,default_start_time,is_active,created_at,updated_at").order("name");
+        const { data, error } = await supabase.from("drivers").select("id,name,login_matricula,base_id,default_shift,default_start_time,is_closed_trip,is_active,created_at,updated_at").order("name");
         if (error) throw new Error(error.message);
         this.localDrivers = data || [];
         this.catalogLoadedAt.drivers = Date.now();
@@ -379,7 +383,7 @@ class DispatchService {
           if (baseIds.length > 0) {
             let activeDriversQuery = supabase
               .from("drivers")
-              .select("id,name,login_matricula,base_id,default_shift,default_start_time,is_active,created_at,updated_at")
+              .select("id,name,login_matricula,base_id,default_shift,default_start_time,is_closed_trip,is_active,created_at,updated_at")
               .in("base_id", baseIds)
               .eq("is_active", true);
             if (!shouldCreateSheet) {

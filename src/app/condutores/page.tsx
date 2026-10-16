@@ -29,6 +29,7 @@ const EMPTY_FORM: DriverFormData = {
   base_id: "",
   default_shift: "B",
   default_start_time: "12:00",
+  is_closed_trip: false,
   is_active: true,
 };
 
@@ -186,6 +187,7 @@ export default function CondutoresPage() {
       base_id: driver.base_id,
       default_shift: driver.default_shift || "B",
       default_start_time: (driver.default_start_time || "12:00").slice(0, 5),
+      is_closed_trip: driver.is_closed_trip ?? false,
       is_active: driver.is_active,
     });
     setError(null);
@@ -249,6 +251,7 @@ export default function CondutoresPage() {
           base_id: driver.base_id,
           default_shift: driver.default_shift || "B",
           default_start_time: driver.default_start_time || "12:00:00",
+          is_closed_trip: driver.is_closed_trip ?? false,
           is_active: !driver.is_active,
         },
         source
@@ -544,9 +547,10 @@ export default function CondutoresPage() {
                           title={driver.name}
                         >
                           <div className="flex items-center justify-between gap-1 overflow-hidden">
-                            <span className="font-bold text-xs text-slate-900 truncate">
+                            <span className={`font-bold text-xs truncate ${driver.is_closed_trip ? "text-blue-700" : "text-slate-900"}`}>
                               {driver.name}
                             </span>
+                            {driver.is_closed_trip && <span className="shrink-0 rounded border border-blue-200 bg-blue-50 px-1.5 py-0.5 text-[9px] font-bold text-blue-700">VIAGEM FECHADA</span>}
                             <button
                               onClick={(e) => {
                                 e.stopPropagation();
@@ -754,6 +758,19 @@ export default function CondutoresPage() {
               </label>
 
               <label className="col-span-2 flex items-center gap-2 rounded border border-slate-300 bg-slate-50 px-3 py-2 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={form.is_closed_trip}
+                  onChange={(event) => setForm({ ...form, is_closed_trip: event.target.checked })}
+                  className="h-4 w-4 shrink-0 accent-blue-600"
+                />
+                <span className="min-w-0">
+                  <span className="block font-semibold text-slate-800">Condutor de viagem fechada</span>
+                  <span className="block text-[10px] leading-4 text-slate-600">Mantém os dias normais da escala e destaca o nome em azul nos dias trabalhados.</span>
+                </span>
+              </label>
+
+              <label className="col-span-2 flex min-h-11 items-center gap-2 rounded border border-slate-300 bg-slate-50 px-3 py-2 cursor-pointer">
                 <input
                   type="checkbox"
                   checked={form.is_active}
