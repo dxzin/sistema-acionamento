@@ -1,4 +1,4 @@
-import type { JourneyPreview, JourneyRecordSnapshot } from "./journey";
+import { canAutoApplyManualEnd, type JourneyPreview, type JourneyRecordSnapshot } from "./journey";
 import type { SighraResult } from "./queries";
 
 export type JourneyBatchJobStatus = "queued" | "running" | "completed" | "failed" | "expired";
@@ -31,7 +31,9 @@ export type JourneyBatchSummary = Record<JourneyBatchOutcome, number> & {
 export function journeyBatchOutcome(job: JourneyBatchJob | null, preview: JourneyPreview | null): JourneyBatchOutcome {
   if (!job || job.status === "queued" || job.status === "running") return "pending";
   if (job.status === "failed" || job.status === "expired") return "failed";
-  if (!preview || preview.resolution.status !== "safe" || preview.conflicts.length > 0) return "review";
+  if (!preview || preview.conflicts.length > 0) return "review";
+  if (canAutoApplyManualEnd(preview)) return "safe";
+  if (preview.resolution.status !== "safe") return "review";
   return preview.canApply ? "safe" : "unchanged";
 }
 

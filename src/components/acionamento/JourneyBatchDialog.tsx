@@ -32,6 +32,9 @@ function detail(item: JourneyBatchItem) {
       `${conflict.field === "entry_time" ? "Entrada" : conflict.field === "exit_time" ? "Saída" : "Placa"}: atual ${conflict.field === "fleet_code" ? conflict.current : clock(conflict.current)} · SIGhRA ${conflict.field === "fleet_code" ? conflict.sighra : clock(conflict.sighra)}`
     ).join("; ");
   }
+  if (item.preview.resolution.status === "manual_end" && item.outcome === "safe") {
+    return `Saída ${clock(item.preview.changes.exit_time)} encontrada após a entrada já preenchida · será aplicada pelo lote`;
+  }
   if (item.preview.resolution.status !== "safe") return item.preview.resolution.message;
   if (item.outcome === "unchanged") return item.preview.preservedPlate
     ? `Horários já registrados · placa atual ${item.preview.preservedPlate.current} mantida`

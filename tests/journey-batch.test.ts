@@ -27,16 +27,25 @@ test("lote separa pendentes, seguros, inalterados, revisão e falhas", () => {
   assert.equal(journeyBatchOutcome(job("1", "failed"), null), "failed");
 });
 
-test("fim isolado após entrada preenchida exige confirmação individual", () => {
+test("fim isolado após entrada preenchida entra no lote sem esconder a divergência de local", () => {
   const end = { id: "fim", login: "1", name: "FIM DE JORNADA", type: "end" as const,
-    occurredAt: "2026-09-25T15:05:00", receivedAt: null, vehicle: null };
+    occurredAt: "2026-09-25T15:05:00", receivedAt: null, vehicle: null, location: "BELLO PARKING · Uberaba / MG" };
   const endOnly: JourneyPreview = {
     ...preview(true),
     resolution: { status: "manual_end", pair: null, end, reasons: [], message: "Conferir saída" },
     changes: { exit_time: "15:05:00" },
+    endLocationComparison: { status: "different", expected: "LP", actual: end.location },
   };
   assert.equal(endOnly.canApply, true);
-  assert.equal(journeyBatchOutcome(job("1", "completed"), endOnly), "review");
+  assert.equal(journeyBatchOutcome(job("1", "completed"), endOnly), "safe");
+  assert.equal(endOnly.endLocationComparison?.status, "different");
+
+  const conflictingEnd = {
+    ...endOnly,
+    conflicts: [{ field: "exit_time" as const, current: "15:10:00", sighra: "15:05:00" }],
+    canApply: false,
+  };
+  assert.equal(journeyBatchOutcome(job("1", "completed"), conflictingEnd), "review");
 });
 
 test("local de fim divergente é informado sem bloquear o lote", () => {
