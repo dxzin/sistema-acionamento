@@ -1,7 +1,7 @@
 "use client";
 
 import { AlertTriangle, CheckCircle2, Loader2, RefreshCw, X } from "lucide-react";
-import type { JourneyPreview } from "@/lib/sighra/journey";
+import { isConfirmedManualEnd, type JourneyPreview } from "@/lib/sighra/journey";
 import type { JourneyProviderKind } from "@/lib/sighra/journey-config";
 
 interface JourneyPilotDialogProps {
@@ -21,6 +21,8 @@ const formatClock = (value: string) => value.slice(0, 5);
 export function JourneyPilotDialog({ preview, provider, saving, error, onApply, onCancel, onForceSearch }: JourneyPilotDialogProps) {
   const pair = preview.resolution.status === "safe" ? preview.resolution.pair : null;
   const manualEnd = preview.resolution.status === "manual_end" ? preview.resolution.end : null;
+  const confirmedManualEnd = isConfirmedManualEnd(preview);
+  const confirmedResult = preview.resolution.status === "safe" || confirmedManualEnd;
   return (
     <div className="fixed inset-0 z-[150] flex items-center justify-center bg-slate-950/45 p-4" role="presentation">
       <section
@@ -47,11 +49,11 @@ export function JourneyPilotDialog({ preview, provider, saving, error, onApply, 
             <div className="col-span-2"><dt className="font-bold text-slate-500">Registro imutável</dt><dd className="truncate font-mono text-[10px]" title={preview.record.recordId}>{preview.record.recordId}</dd></div>
           </dl>
 
-          <div className={`flex gap-2 border p-3 ${preview.resolution.status === "safe" ? "border-emerald-300 bg-emerald-50" : "border-amber-300 bg-amber-50"}`}>
-            {preview.resolution.status === "safe" ? <CheckCircle2 className="h-5 w-5 shrink-0 text-emerald-700" /> : <AlertTriangle className="h-5 w-5 shrink-0 text-amber-700" />}
+          <div className={`flex gap-2 border p-3 ${confirmedResult ? "border-emerald-300 bg-emerald-50" : "border-amber-300 bg-amber-50"}`}>
+            {confirmedResult ? <CheckCircle2 className="h-5 w-5 shrink-0 text-emerald-700" /> : <AlertTriangle className="h-5 w-5 shrink-0 text-amber-700" />}
             <div>
-              <strong>{preview.resolution.message}</strong>
-              {preview.resolution.status !== "safe" && preview.resolution.reasons.map((reason) => <p key={reason} className="mt-1 text-xs">{reason}</p>)}
+              <strong>{confirmedManualEnd ? "Fim de jornada já preenchido e local conferido." : preview.resolution.message}</strong>
+              {!confirmedResult && preview.resolution.status !== "safe" && preview.resolution.reasons.map((reason) => <p key={reason} className="mt-1 text-xs">{reason}</p>)}
             </div>
           </div>
 
@@ -75,7 +77,7 @@ export function JourneyPilotDialog({ preview, provider, saving, error, onApply, 
               <div className="border border-slate-200 p-3">
                 <span className="text-[10px] font-bold uppercase text-slate-500">Entrada da planilha</span>
                 <p className="mt-1 font-mono text-base font-bold">{formatDate(preview.record.operationalDate)} {formatClock(preview.record.entryTime || "")}</p>
-                <p className="mt-1 text-[10px] text-slate-500">Mantida como foi preenchida; sem macro de início SIGhRa.</p>
+                <p className="mt-1 text-[10px] text-slate-500">Entrada já preenchida e mantida.</p>
               </div>
               <div className="border border-slate-200 p-3">
                 <span className="text-[10px] font-bold uppercase text-slate-500">Fim SIGhRa</span>

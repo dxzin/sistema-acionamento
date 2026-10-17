@@ -5,6 +5,7 @@ import {
   buildJourneyPreview,
   canAutoApplyManualEnd,
   isJourneyEligible,
+  isConfirmedManualEnd,
   journeyEndLocationMatches,
   pairJourneyEvents,
   resolveJourneyForRecord,
@@ -166,7 +167,8 @@ test("entrada preenchida permite aplicar somente o fim posterior quando falta ma
 
 test("fim isolado exige entrada preenchida e não altera saída manual divergente", () => {
   const dispatch = row();
-  const finish = event("fim", "end", "2026-09-27T15:05:05");
+  dispatch.final_destination_name = "LP";
+  const finish = { ...event("fim", "end", "2026-09-27T15:05:05"), location: "GARAGEM GARBUIO · LENÇÓIS PAULISTA/SP" };
   assert.equal(resolveJourneyForRecord([finish], snapshotJourneyRecord(dispatch, "2026-09-27")).status, "ambiguous");
   dispatch.entry_time = "04:00:00";
   dispatch.exit_time = "15:10:00";
@@ -182,6 +184,7 @@ test("fim isolado exige entrada preenchida e não altera saída manual divergent
   assert.deepEqual(filledPreview.changes, {});
   assert.equal(filledPreview.canApply, false);
   assert.equal(canAutoApplyManualEnd(filledPreview), false);
+  assert.equal(isConfirmedManualEnd(filledPreview), true);
 });
 
 test("dois fins posteriores à entrada continuam exigindo conferência", () => {

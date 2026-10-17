@@ -2,6 +2,7 @@
 
 import { AlertTriangle, CheckCircle2, CircleDashed, Loader2, RefreshCw, ShieldAlert, X } from "lucide-react";
 import { summarizeJourneyBatch, summarizeJourneyEndLocation, type JourneyBatchItem } from "@/lib/sighra/journey-batch";
+import { isConfirmedManualEnd } from "@/lib/sighra/journey";
 
 interface JourneyBatchDialogProps {
   items: JourneyBatchItem[];
@@ -34,6 +35,9 @@ function detail(item: JourneyBatchItem) {
   }
   if (item.preview.resolution.status === "manual_end" && item.outcome === "safe") {
     return `Saída ${clock(item.preview.changes.exit_time)} encontrada após a entrada já preenchida · será aplicada pelo lote`;
+  }
+  if (isConfirmedManualEnd(item.preview)) {
+    return `Saída ${clock(item.preview.record.exitTime)} já preenchida · local do fim confere`;
   }
   if (item.preview.resolution.status !== "safe") return item.preview.resolution.message;
   if (item.outcome === "unchanged") return item.preview.preservedPlate

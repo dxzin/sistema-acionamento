@@ -1,4 +1,4 @@
-import { canAutoApplyManualEnd, type JourneyPreview, type JourneyRecordSnapshot } from "./journey";
+import { canAutoApplyManualEnd, isConfirmedManualEnd, type JourneyPreview, type JourneyRecordSnapshot } from "./journey";
 import type { SighraResult } from "./queries";
 
 export type JourneyBatchJobStatus = "queued" | "running" | "completed" | "failed" | "expired";
@@ -33,6 +33,7 @@ export function journeyBatchOutcome(job: JourneyBatchJob | null, preview: Journe
   if (job.status === "failed" || job.status === "expired") return "failed";
   if (!preview || preview.conflicts.length > 0) return "review";
   if (canAutoApplyManualEnd(preview)) return "safe";
+  if (isConfirmedManualEnd(preview)) return "unchanged";
   if (preview.resolution.status !== "safe") return "review";
   return preview.canApply ? "safe" : "unchanged";
 }

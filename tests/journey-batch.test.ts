@@ -48,6 +48,19 @@ test("fim isolado após entrada preenchida entra no lote sem esconder a divergê
   assert.equal(journeyBatchOutcome(job("1", "completed"), conflictingEnd), "review");
 });
 
+test("fim já preenchido e com local igual fica como já preenchido", () => {
+  const end = { id: "fim", login: "1", name: "FIM DE JORNADA", type: "end" as const,
+    occurredAt: "2026-09-25T15:05:00", receivedAt: null, vehicle: null, location: "GARAGEM GARBUIO · LENÇÓIS PAULISTA/SP" };
+  const confirmed: JourneyPreview = {
+    ...preview(false),
+    record: { ...record("1"), entryTime: "04:00:00", exitTime: "15:05:00", plannedEndLocation: "LP" },
+    resolution: { status: "manual_end", pair: null, end, reasons: [], message: "Conferir saída" },
+    endLocationComparison: { status: "matched", expected: "LP", actual: end.location },
+  };
+
+  assert.equal(journeyBatchOutcome(job("1", "completed"), confirmed), "unchanged");
+});
+
 test("local de fim divergente é informado sem bloquear o lote", () => {
   const locationMismatch: JourneyPreview = {
     ...preview(true),

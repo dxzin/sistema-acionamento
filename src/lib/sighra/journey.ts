@@ -364,3 +364,10 @@ export function canAutoApplyManualEnd(preview: JourneyPreview): boolean {
     typeof preview.changes.exit_time === "string" &&
     Object.keys(preview.changes).length === 1;
 }
+
+export function isConfirmedManualEnd(preview: JourneyPreview): boolean {
+  return preview.resolution.status === "manual_end" &&
+    preview.conflicts.length === 0 &&
+    preview.record.exitTime === clockTime(preview.resolution.end.occurredAt) &&
+    preview.endLocationComparison?.status === "matched";
+}
