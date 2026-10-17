@@ -273,6 +273,21 @@ test("inícios separados por até um minuto usam o primeiro início", () => {
   if (resolved.status === "safe") assert.equal(resolved.pair.start.id, "primeiro-inicio");
 });
 
+test("início GA seguido por início padrão mantém o primeiro início no lote", () => {
+  const record = snapshotJourneyRecord(row(), "2026-09-16");
+  const resolved = resolveJourneyForRecord([
+    { ...event("primeiro-inicio-ga", "start", "2026-09-16T18:56:47"), name: "INÍCIO DE JORNADA GA" },
+    { ...event("aguardando-frota", "start", "2026-09-16T18:57:26"), name: "AGUARDANDO FROTA", type: "intermediate" },
+    event("inicio-padrao-posterior", "start", "2026-09-16T23:47:00"),
+    event("fim", "end", "2026-09-17T03:08:42"),
+  ], record);
+  assert.equal(resolved.status, "safe");
+  if (resolved.status === "safe") {
+    assert.equal(resolved.pair.start.id, "primeiro-inicio-ga");
+    assert.equal(resolved.pair.end?.id, "fim");
+  }
+});
+
 test("inícios separados por mais de um minuto continuam exigindo conferência", () => {
   const record = snapshotJourneyRecord(row(), "2026-09-16");
   const resolved = resolveJourneyForRecord([

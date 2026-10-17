@@ -208,7 +208,13 @@ function collapseNearDuplicateJourneyEvents(events: JourneyEvent[]): JourneyEven
     if (previous?.type === event.type && (event.type === "start" || event.type === "end")) {
       const difference = Date.parse(event.occurredAt) - Date.parse(previous.occurredAt);
       const tolerance = event.type === "start" ? JOURNEY_DUPLICATE_START_WINDOW_MS : JOURNEY_DUPLICATE_END_WINDOW_MS;
-      if (Number.isFinite(difference) && difference >= 0 && difference <= tolerance) continue;
+      const startVariants = event.type === "start"
+        ? new Set([normalizeText(previous.name), normalizeText(event.name)])
+        : null;
+      const sameStartRecordedByGaAndStandard = startVariants?.size === 2 &&
+        startVariants.has("INICIO DE JORNADA GA") && startVariants.has("INICIO DE JORNADA");
+      if (sameStartRecordedByGaAndStandard ||
+          (Number.isFinite(difference) && difference >= 0 && difference <= tolerance)) continue;
     }
     collapsed.push(event);
   }

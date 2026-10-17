@@ -67,3 +67,20 @@ test("ponte anterior reutiliza o último fim com local sem exigir atualização"
     actual: "BELLO PARKING · Uberaba / MG",
   });
 });
+
+test("lote da ponte anterior usa o primeiro início quando há GA e padrão", () => {
+  const firstGa = macro("INICIO DE JORNADA GA", "2026-09-28 00:55:36", null);
+  const waiting = macro("AGUARDANDO FROTA", "2026-09-28 00:55:48", null);
+  const standard = macro("INICIO DE JORNADA", "2026-09-28 05:40:00", null);
+  const finish = macro("FIM DE JORNADA", "2026-09-28 09:05:00", null);
+  const resultPreview = preview({
+    macros: [finish, standard, waiting, firstGa],
+    last_end: finish,
+  });
+
+  assert.equal(resultPreview.resolution.status, "safe");
+  if (resultPreview.resolution.status === "safe") {
+    assert.equal(resultPreview.resolution.pair.start.occurredAt, "2026-09-28T00:55:36");
+  }
+  assert.deepEqual(resultPreview.changes, { entry_time: "00:55:00", exit_time: "09:05:00" });
+});
