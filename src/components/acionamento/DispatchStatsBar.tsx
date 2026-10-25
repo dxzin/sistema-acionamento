@@ -18,9 +18,9 @@ interface DispatchStatsBarProps {
 
 export function DispatchStatsBar({ summary }: DispatchStatsBarProps) {
   return (
-    <div className="excel-kpis grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 gap-px mb-2">
+    <div className="excel-kpis mb-1 grid grid-cols-2 gap-2 md:grid-cols-4 xl:grid-cols-8">
       {/* Total Condutores */}
-      <div className="bg-slate-800 border border-slate-700 rounded p-2 flex items-center justify-between">
+      <div data-tone="blue" className="rounded-2xl p-3 flex items-center justify-between">
         <div>
           <div className="text-[10px] uppercase font-bold text-slate-400">Total Escala</div>
           <div className="text-base font-bold text-white font-mono">{summary.total}</div>
@@ -29,7 +29,7 @@ export function DispatchStatsBar({ summary }: DispatchStatsBarProps) {
       </div>
 
       {/* Acionados */}
-      <div className="bg-slate-800 border border-emerald-800/60 rounded p-2 flex items-center justify-between bg-emerald-950/20">
+      <div data-tone="green" className="rounded-2xl p-3 flex items-center justify-between">
         <div>
           <div className="text-[10px] uppercase font-bold text-emerald-400">Acionados</div>
           <div className="text-base font-bold text-emerald-300 font-mono">{summary.acionados}</div>
@@ -38,7 +38,7 @@ export function DispatchStatsBar({ summary }: DispatchStatsBarProps) {
       </div>
 
       {/* Em Trânsito / Andamento */}
-      <div className="bg-slate-800 border border-cyan-800/60 rounded p-2 flex items-center justify-between bg-cyan-950/20">
+      <div data-tone="cyan" className="rounded-2xl p-3 flex items-center justify-between">
         <div>
           <div className="text-[10px] uppercase font-bold text-cyan-400">Em Trânsito</div>
           <div className="text-base font-bold text-cyan-300 font-mono">{summary.emAndamento}</div>
@@ -47,7 +47,7 @@ export function DispatchStatsBar({ summary }: DispatchStatsBarProps) {
       </div>
 
       {/* Abonados */}
-      <div className="bg-slate-800 border border-rose-800/60 rounded p-2 flex items-center justify-between bg-rose-950/20">
+      <div data-tone="rose" className="rounded-2xl p-3 flex items-center justify-between">
         <div>
           <div className="text-[10px] uppercase font-bold text-rose-400">Abonados</div>
           <div className="text-base font-bold text-rose-300 font-mono">{summary.abonados}</div>
@@ -56,7 +56,7 @@ export function DispatchStatsBar({ summary }: DispatchStatsBarProps) {
       </div>
 
       {/* Apoio */}
-      <div className="bg-slate-800 border border-amber-800/60 rounded p-2 flex items-center justify-between bg-amber-950/20">
+      <div data-tone="amber" className="rounded-2xl p-3 flex items-center justify-between">
         <div>
           <div className="text-[10px] uppercase font-bold text-amber-400">Apoio / PA</div>
           <div className="text-base font-bold text-amber-300 font-mono">{summary.apoios}</div>
@@ -65,7 +65,7 @@ export function DispatchStatsBar({ summary }: DispatchStatsBarProps) {
       </div>
 
       {/* Trocas */}
-      <div className="bg-slate-800 border border-yellow-800/60 rounded p-2 flex items-center justify-between bg-yellow-950/20">
+      <div data-tone="yellow" className="rounded-2xl p-3 flex items-center justify-between">
         <div>
           <div className="text-[10px] uppercase font-bold text-yellow-400">Trocas / Pts</div>
           <div className="text-base font-bold text-yellow-300 font-mono">{summary.trocas}</div>
@@ -74,7 +74,7 @@ export function DispatchStatsBar({ summary }: DispatchStatsBarProps) {
       </div>
 
       {/* Faltas */}
-      <div className="bg-slate-800 border border-red-900 rounded p-2 flex items-center justify-between bg-red-950/30">
+      <div data-tone="red" className="rounded-2xl p-3 flex items-center justify-between">
         <div>
           <div className="text-[10px] uppercase font-bold text-red-400">Faltas</div>
           <div className="text-base font-bold text-red-300 font-mono">{summary.faltas}</div>
@@ -83,7 +83,7 @@ export function DispatchStatsBar({ summary }: DispatchStatsBarProps) {
       </div>
 
       {/* Pendências de Abono */}
-      <div className={`rounded p-2 flex items-center justify-between border ${
+      <div data-tone={summary.pendentesAbono > 0 ? "amber" : "slate"} className={`rounded-2xl p-3 flex items-center justify-between border ${
         summary.pendentesAbono > 0
           ? "bg-amber-500/20 border-amber-500 text-amber-300 animate-pulse"
           : "bg-slate-800 border-slate-700 text-slate-400"

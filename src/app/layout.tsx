@@ -1,7 +1,20 @@
 import type { Metadata } from "next";
+import { Inter, JetBrains_Mono } from "next/font/google";
 import Script from "next/script";
 import { AuthProvider } from "@/lib/auth-context";
 import "./globals.css";
+
+const inter = Inter({
+  subsets: ["latin"],
+  variable: "--font-interface",
+  display: "swap",
+});
+
+const jetbrainsMono = JetBrains_Mono({
+  subsets: ["latin"],
+  variable: "--font-mono",
+  display: "swap",
+});
 
 const themeBootstrapScript = `
   try {
@@ -28,7 +41,7 @@ export default function RootLayout({
 }) {
   return (
     <html lang="pt-BR" suppressHydrationWarning>
-      <body className="min-h-screen flex flex-col antialiased">
+      <body className={`${inter.variable} ${jetbrainsMono.variable} min-h-screen flex flex-col antialiased`}>
         <Script
           id="theme-bootstrap"
           strategy="beforeInteractive"

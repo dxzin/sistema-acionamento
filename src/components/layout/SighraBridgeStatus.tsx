@@ -84,7 +84,7 @@ export function SighraBridgeStatus({ canManage = false, compact = true }: { canM
     ? `${bridgeLabels[activeBridge]} · último sinal: ${new Date(lastSeen).toLocaleString("pt-BR")}`
     : `${bridgeLabels[activeBridge]} · nenhum sinal recebido`);
   return <div className={compact
-    ? "hidden lg:flex min-h-11 items-center gap-1.5 text-[10px] text-white"
+    ? "sighra-bridge-status hidden lg:flex min-h-11 items-center gap-1.5 text-[10px]"
     : "excel-toolbar flex min-h-11 flex-wrap items-center gap-2 border border-slate-300 p-3 text-sm"} title={title}>
     <div className="flex items-center gap-1.5">
       <span aria-hidden="true" className={`h-2 w-2 shrink-0 rounded-full ${status === "online" ? "bg-green-500" : "bg-amber-400"}`} />
@@ -102,7 +102,7 @@ export function SighraBridgeStatus({ canManage = false, compact = true }: { canM
       </select> : <span>{bridgeLabels[activeBridge]}</span>}
     <span role={error ? "alert" : "status"} aria-live="polite" className={error
       ? compact ? "text-red-200" : "text-red-700"
-      : compact ? "text-emerald-100" : status === "online" ? "text-emerald-700" : "text-amber-700"}>
+      : compact ? "sighra-status-value" : status === "online" ? "text-emerald-700" : "text-amber-700"}>
         {switching ? "trocando…" : error ? error : labels[status]}
       </span>
     {!compact && <span className="w-full text-xs opacity-80">As duas pontes podem ficar ligadas; somente a selecionada recebe as consultas.</span>}

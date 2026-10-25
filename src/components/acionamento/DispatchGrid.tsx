@@ -4,11 +4,12 @@ import React, { startTransition, useEffect, useState, useMemo, useRef } from "re
 import { DispatchRowModel } from "@/types/domain";
 import { DispatchStatus, CargoStatus } from "@/types/database";
 import { normalizeClockTime } from "@/lib/calculations/jornada";
+import { assessJourneyClose, formatMinutesUntilDeadline, journeyCloseRule } from "@/lib/calculations/journey-close-deadline";
 import { isJourneyEligible } from "@/lib/sighra/journey";
 import { captureGridSelection, DispatchGridSelection, gridSelectionBounds, resolveGridSelectionRows } from "@/lib/editing/dispatch-grid-selection";
 import { parseGridClipboard } from "@/lib/editing/dispatch-grid-clipboard";
 import { getDriverNameHighlightClass } from "@/lib/dispatch/driver-name-highlight";
-import { ArrowUpDown, Bell, BellRing, Check, ChevronDown, Columns3, Copy, Clock, Eye, EyeOff, ListChecks, Loader2, Maximize2, Minimize2, Minus, Plus, RefreshCw, Search, Trash2, Volume2, VolumeX, X } from "lucide-react";
+import { ArrowUpDown, Bell, BellRing, Check, ChevronDown, Columns3, Copy, Clock, Eye, EyeOff, FilterX, ListChecks, Loader2, Maximize2, Minimize2, Minus, Plus, Printer, RefreshCw, Search, Trash2, Volume2, VolumeX, X } from "lucide-react";
 
 interface DispatchGridProps {
   dispatches: DispatchRowModel[];
@@ -34,6 +35,8 @@ interface DispatchGridProps {
   journeyBatchRequesting?: boolean;
   onRequestJourney?: (dispatchId: string) => void;
   onRequestJourneyBatch?: (dispatchIds: string[]) => void;
+  operationalDate: string;
+  referenceTimestamp?: number;
 }
 
 interface GridHistoryChange {
@@ -50,13 +53,18 @@ type SortField = keyof DispatchRowModel | "driver_name" | "city" | "login" | "sc
 type ColumnFilterKey =
   | "driver" | "city" | "login" | "schedule" | "forecast" | "status" | "reason"
   | "origin" | "entry" | "fleet" | "cargo" | "destination" | "finalDestination"
-  | "exit" | "observations" | "scale" | "nextForecast" | "workedTime";
+  | "exit" | "closeDeadline" | "observations" | "scale" | "nextForecast" | "workedTime";
 
 const FILTER_COLUMNS: ColumnFilterKey[] = [
   "driver", "city", "login", "schedule", "forecast", "status", "reason", "origin", "entry",
-  "fleet", "cargo", "destination", "finalDestination", "exit", "observations", "scale",
+  "fleet", "cargo", "destination", "finalDestination", "exit", "closeDeadline", "observations", "scale",
   "nextForecast", "workedTime",
 ];
+
+const PRINT_HIDDEN_COLUMN_KEYS = new Set<ColumnFilterKey>([
+  "status", "reason", "entry", "fleet", "cargo", "destination", "finalDestination",
+  "exit", "closeDeadline", "observations",
+]);
 
 const EMPTY_VALUE_FILTER_COLUMNS = new Set<ColumnFilterKey>([
   "status", "origin", "entry", "fleet", "cargo", "destination", "finalDestination", "exit",
@@ -64,18 +72,18 @@ const EMPTY_VALUE_FILTER_COLUMNS = new Set<ColumnFilterKey>([
 
 const COLUMN_LABELS = [
   "Condutor", "Cidade", "Login", "Horário", "Previsão", "Status", "Motivo do abono", "Local",
-  "Entrada", "Frota", "C/V", "Destino", "Destino final", "Saída", "Observação",
+  "Entrada", "Frota", "C/V", "Destino", "Destino final", "Saída", "Fechar até", "Observação",
   "Dia de escala", "Prev. próximo dia", "Tempo de jornada",
 ];
 const ROW_NUMBER_WIDTH = 44;
-const COLUMN_WIDTHS = [230, 78, 86, 92, 90, 135, 230, 100, 90, 100, 55, 120, 120, 90, 180, 80, 95, 110];
+const COLUMN_WIDTHS = [230, 78, 86, 92, 90, 135, 230, 100, 90, 100, 55, 120, 120, 90, 112, 180, 80, 95, 110];
 
 const EXCEL_HEADERS: Record<string, ColumnFilterKey> = {
   CONDUTOR: "driver", CIDADE: "city", LOGIN: "login", HORARIO: "schedule",
   PREVISAO: "forecast", STATUS: "status", MOTIVO_DO_ABONO_APROVACAO: "reason",
   LOCAL: "origin", ENTRADA: "entry", FROTA: "fleet", C_V: "cargo",
   DESTINO: "destination", DESTINO_FINAL: "finalDestination", SAIDA: "exit",
-  OBSERVACAO: "observations", DIA_DE_ESCALA: "scale",
+  FECHAR_ATE: "closeDeadline", OBSERVACAO: "observations", DIA_DE_ESCALA: "scale",
   PREV_PROX_DIA: "nextForecast", TEMPO_DE_JORNADA: "workedTime",
 };
 const EXCEL_EXPORT_COLUMNS: ColumnFilterKey[] = [
@@ -103,6 +111,10 @@ function getColumnValue(row: DispatchRowModel, key: ColumnFilterKey): string {
     destination: row.destination_name || row.destination_location?.name,
     finalDestination: row.final_destination_name || row.final_destination_location?.name,
     exit: row.exit_time,
+    closeDeadline: (() => {
+      const rule = journeyCloseRule(row);
+      return rule ? `${rule.dayOffset === 0 ? "Hoje" : "Amanhã"} ${rule.deadlineTime}` : "";
+    })(),
     observations: row.observations,
     scale: row.scale_day_status,
     nextForecast: row.next_day_forecast_time,
@@ -482,6 +494,8 @@ export function DispatchGrid({
   journeyBatchRequesting = false,
   onRequestJourney,
   onRequestJourneyBatch,
+  operationalDate,
+  referenceTimestamp = 0,
 }: DispatchGridProps) {
   const [copiedCell, setCopiedCell] = useState<string | null>(null);
   const [sortField, setSortField] = useState<SortField>("schedule_time");
@@ -510,6 +524,7 @@ export function DispatchGrid({
     records: { id: string; login: string; sheetId: string; updatedAt?: string }[];
   } | null>(null);
   const [hiddenColumns, setHiddenColumns] = useState<number[]>([]);
+  const [isPrintView, setIsPrintView] = useState(false);
   const activeFilterColumns = useMemo(
     () => showCity ? FILTER_COLUMNS : FILTER_COLUMNS.filter((key) => key !== "city"),
     [showCity]
@@ -524,6 +539,19 @@ export function DispatchGrid({
   );
   const protectedColumnCount = showCity ? 3 : 2;
   const preferenceSuffix = showCity ? "mg" : "sp";
+  const printHiddenColumns = useMemo(
+    () => activeFilterColumns.reduce<number[]>((indexes, key, index) => {
+      if (PRINT_HIDDEN_COLUMN_KEYS.has(key)) indexes.push(index);
+      return indexes;
+    }, []),
+    [activeFilterColumns]
+  );
+  const effectiveHiddenColumns = useMemo(
+    () => isPrintView
+      ? Array.from(new Set([...hiddenColumns, ...printHiddenColumns]))
+      : hiddenColumns,
+    [hiddenColumns, isPrintView, printHiddenColumns]
+  );
   const [columnWidths, setColumnWidths] = useState<number[]>([...defaultColumnWidths]);
   const [gridZoom, setGridZoom] = useState(100);
   const [isExpanded, setIsExpanded] = useState(false);
@@ -545,7 +573,7 @@ export function DispatchGrid({
   const undoStack = useRef<GridHistoryAction[]>([]);
   const redoStack = useRef<GridHistoryAction[]>([]);
   const visibleTableWidth = ROW_NUMBER_WIDTH + columnWidths.reduce(
-    (total, width, index) => total + (hiddenColumns.includes(index) ? 0 : width),
+    (total, width, index) => total + (effectiveHiddenColumns.includes(index) ? 0 : width),
     0
   );
   const scaledTableWidth = visibleTableWidth * (gridZoom / 100);
@@ -692,6 +720,9 @@ export function DispatchGrid({
     ]))
       .sort((a, b) => a.localeCompare(b, "pt-BR", { numeric: true }))])
   ) as Record<ColumnFilterKey, string[]>, [activeFilterColumns, dispatches]);
+  const activeColumnFilterCount = Object.values(columnFilters)
+    .filter((values) => Boolean(values?.length)).length;
+  const hasActiveGridFilters = Boolean(columnSearch.trim()) || activeColumnFilterCount > 0;
 
   // Filtragem e ordenação dos despachos
   const processedDispatches = useMemo(() => {
@@ -775,15 +806,18 @@ export function DispatchGrid({
 
   useEffect(() => {
     localStorage.setItem(`dispatch-hidden-columns-${preferenceSuffix}`, JSON.stringify(hiddenColumns));
+  }, [hiddenColumns, preferenceSuffix]);
+
+  useEffect(() => {
     const table = tableRef.current;
     if (!table) return;
     table.querySelectorAll("tr").forEach((row) => Array.from(row.children).forEach((cell, cellIndex) => {
-      if (cellIndex > 0) (cell as HTMLElement).style.display = hiddenColumns.includes(cellIndex - 1) ? "none" : "";
+      if (cellIndex > 0) (cell as HTMLElement).style.display = effectiveHiddenColumns.includes(cellIndex - 1) ? "none" : "";
     }));
     table.querySelectorAll("colgroup col").forEach((column, columnIndex) => {
-      (column as HTMLElement).style.display = columnIndex > 0 && hiddenColumns.includes(columnIndex - 1) ? "none" : "";
+      (column as HTMLElement).style.display = columnIndex > 0 && effectiveHiddenColumns.includes(columnIndex - 1) ? "none" : "";
     });
-  }, [hiddenColumns, processedDispatches.length, preferenceSuffix]);
+  }, [effectiveHiddenColumns, processedDispatches.length]);
 
   const selectionBounds = gridSelectionBounds(selection);
   const selectionDispatches = resolveGridSelectionRows(selection, processedDispatches);
@@ -1106,7 +1140,7 @@ export function DispatchGrid({
     if (currentRow < 0) return;
     const nextRow = Math.max(0, Math.min(processedDispatches.length - 1, currentRow + rowDelta));
     let nextColumn = selection.focus.column + columnDelta;
-    while (nextColumn >= 0 && nextColumn < activeColumnLabels.length && hiddenColumns.includes(nextColumn)) {
+    while (nextColumn >= 0 && nextColumn < activeColumnLabels.length && effectiveHiddenColumns.includes(nextColumn)) {
       nextColumn += columnDelta >= 0 ? 1 : -1;
     }
     nextColumn = Math.max(0, Math.min(activeColumnLabels.length - 1, nextColumn));
@@ -1441,9 +1475,42 @@ export function DispatchGrid({
           {isExpanded ? <Minimize2 className="h-3.5 w-3.5" /> : <Maximize2 className="h-3.5 w-3.5" />}
           {isExpanded ? "Restaurar" : "Expandir"}
         </button>
-        {hiddenColumns.length > 0 && (
-          <span className="text-[10px] font-semibold text-slate-600">{hiddenColumns.length} oculta(s)</span>
+        <button
+          type="button"
+          onClick={() => {
+            setShowColumnMenu(false);
+            setIsPrintView((active) => !active);
+          }}
+          className={`flex items-center gap-1 border px-2 py-1 text-[10px] font-bold transition-colors ${isPrintView
+            ? "border-[#217346] bg-[#217346] text-white hover:bg-[#185c37]"
+            : "border-[#a6a6a6] bg-white text-slate-700 hover:bg-[#e2f0d9]"
+          }`}
+          aria-pressed={isPrintView}
+          title={isPrintView ? "Restaurar todas as colunas da visualização normal" : "Ocultar colunas e preparar a visualização para print"}
+        >
+          <Printer className="h-3.5 w-3.5" /> Print
+        </button>
+        {effectiveHiddenColumns.length > 0 && (
+          <span className="text-[10px] font-semibold text-slate-600">{effectiveHiddenColumns.length} oculta(s)</span>
         )}
+        <button
+          type="button"
+          disabled={!hasActiveGridFilters}
+          onClick={() => {
+            setColumnSearch("");
+            setColumnFilters({});
+            setIsSearching(false);
+          }}
+          className={`flex items-center gap-1 border px-2 py-1 text-[10px] font-bold transition-colors ${hasActiveGridFilters
+            ? "border-amber-400 bg-amber-50 text-amber-800 hover:bg-amber-100"
+            : "cursor-not-allowed border-[#cbd5e1] bg-[#f8fafc] text-slate-400"
+          }`}
+          title={hasActiveGridFilters
+            ? `Limpar ${activeColumnFilterCount + (columnSearch.trim() ? 1 : 0)} filtro(s) aplicado(s) na planilha`
+            : "Nenhum filtro aplicado na planilha"}
+        >
+          <FilterX className="h-3.5 w-3.5" /> Limpar filtros
+        </button>
         <button
           type="button"
           onClick={() => {
@@ -1519,18 +1586,24 @@ export function DispatchGrid({
             </div>
             <div className="max-h-64 overflow-y-auto">
               {activeColumnLabels.map((label, index) => {
-                const visible = !hiddenColumns.includes(index);
+                const visible = !effectiveHiddenColumns.includes(index);
+                const manuallyVisible = !hiddenColumns.includes(index);
                 const protectedColumn = index < protectedColumnCount;
+                const printHiddenColumn = isPrintView && printHiddenColumns.includes(index);
                 return (
                   <button
                     type="button"
                     key={label}
-                    disabled={protectedColumn}
-                    onClick={() => setHiddenColumns((current) => visible
+                    disabled={protectedColumn || printHiddenColumn}
+                    onClick={() => setHiddenColumns((current) => manuallyVisible
                       ? [...current, index]
                       : current.filter((column) => column !== index))}
                     className="flex w-full items-center gap-2 px-1.5 py-1 text-left text-[11px] text-slate-700 hover:bg-[#e2f0d9] disabled:cursor-not-allowed disabled:opacity-50"
-                    title={protectedColumn ? "Coluna fixa protegida" : visible ? "Ocultar coluna" : "Reexibir coluna"}
+                    title={protectedColumn
+                      ? "Coluna fixa protegida"
+                      : printHiddenColumn
+                        ? "Coluna oculta pelo modo Print"
+                        : visible ? "Ocultar coluna" : "Reexibir coluna"}
                   >
                     {visible ? <Eye className="h-3.5 w-3.5 text-[#217346]" /> : <EyeOff className="h-3.5 w-3.5" />}
                     <span>{label}</span>
@@ -1663,7 +1736,7 @@ export function DispatchGrid({
                   selectAllCells();
                 }}
               >#</th>
-              {"ABCDEFGHIJKLMNOPQR".slice(0, activeColumnLabels.length).split("").map((letter, column) => (
+              {"ABCDEFGHIJKLMNOPQRS".slice(0, activeColumnLabels.length).split("").map((letter, column) => (
                 <th
                   key={letter}
                   className={`${column === 0 ? "sticky left-[44px] z-30" : column === 1 ? "sticky left-[274px] z-30" : showCity && column === 2 ? "sticky left-[352px] z-30" : "relative"} cursor-pointer text-center hover:!bg-[#d9ead3]`}
@@ -1843,22 +1916,27 @@ export function DispatchGrid({
                 SAÍDA
               </th>
 
-              {/* Coluna 14: OBSERVAÇÃO */}
+              {/* Coluna 14: LIMITE OPERACIONAL DE FECHAMENTO */}
+              <th className="px-2 py-1.5 border-r border-emerald-700 text-center font-bold text-amber-100">
+                FECHAR ATÉ
+              </th>
+
+              {/* Coluna 15: OBSERVAÇÃO */}
               <th className="px-2 py-1.5 border-r border-emerald-700 font-bold">
                 OBSERVAÇÃO
               </th>
 
-              {/* Coluna 15: DIA DE ESCALA */}
+              {/* Coluna 16: DIA DE ESCALA */}
               <th className="px-2 py-1.5 border-r border-emerald-700 text-center font-bold">
                 DIA ESC.
               </th>
 
-              {/* Coluna 16: PREV. PRÓX. */}
+              {/* Coluna 17: PREV. PRÓX. */}
               <th className="px-2 py-1.5 border-r border-emerald-700 text-center text-amber-200 font-bold">
                 PREV. PRÓX.
               </th>
 
-              {/* Coluna 17: TEMPO DE JORNADA */}
+              {/* Coluna 18: TEMPO DE JORNADA */}
               <th className="px-2 py-1.5 text-center text-amber-100 font-bold">
                 TEMPO JORNADA
               </th>
@@ -1892,6 +1970,7 @@ export function DispatchGrid({
             {processedDispatches.map((row, index) => {
               const hasAbonoPending =
                 row.abono_authorized_by === "PENDENTE" && row.dispatch_status === "ABONADO";
+              const closeAssessment = assessJourneyClose(row, operationalDate, referenceTimestamp);
               const rowEditors = activeEditors[row.id] || [];
               const driverNameHighlightClass = getDriverNameHighlightClass(
                 row.scale_day_status,
@@ -2203,7 +2282,28 @@ export function DispatchGrid({
                     />
                   </td>
 
-                  {/* 14. OBSERVAÇÃO */}
+                  {/* 14. LIMITE OPERACIONAL DE FECHAMENTO */}
+                  <td
+                    className={`excel-close-deadline is-${closeAssessment?.risk || "neutral"} px-1 py-0.5 text-center`}
+                    title={closeAssessment
+                      ? `Turno ${String(closeAssessment.shiftHour).padStart(2, "0")}h: fechar até ${closeAssessment.deadlineDate.split("-").reverse().join("/")} às ${closeAssessment.deadlineTime} para preservar 11h10 de descanso antes do fim da próxima janela.`
+                      : "Sem regra de fechamento para este turno."}
+                  >
+                    {closeAssessment ? (
+                      <div className="flex flex-col items-center justify-center leading-tight">
+                        <span className="font-mono font-extrabold">
+                          {closeAssessment.dayLabel} {closeAssessment.deadlineTime}
+                        </span>
+                        <small>
+                          {closeAssessment.isOpenJourney
+                            ? formatMinutesUntilDeadline(closeAssessment.minutesRemaining)
+                            : closeAssessment.risk === "closed" ? "Jornada fechada" : "Limite operacional"}
+                        </small>
+                      </div>
+                    ) : <span className="text-slate-400">--:--</span>}
+                  </td>
+
+                  {/* 15. OBSERVAÇÃO */}
                   <td className="px-1.5 py-1" {...cellFeedback(row.id, "observations")}>
                     <EditableTextCell
                       value={row.observations || ""}
@@ -2214,17 +2314,17 @@ export function DispatchGrid({
                     />
                   </td>
 
-                  {/* 15. DIA DE ESCALA */}
+                  {/* 16. DIA DE ESCALA */}
                   <td className="px-1 py-1 text-center font-bold text-slate-800">
                     {row.scale_day_status || "-"}
                   </td>
 
-                  {/* 16. PREV. PRÓX. DIA */}
+                  {/* 17. PREV. PRÓX. DIA */}
                   <td className="px-1 py-1 text-center font-bold text-emerald-700">
                     {row.next_day_forecast_time ? row.next_day_forecast_time.slice(0, 5) : "--:--"}
                   </td>
 
-                  {/* 17. TEMPO DE JORNADA */}
+                  {/* 18. TEMPO DE JORNADA */}
                   <td className="px-1.5 py-1 text-center font-bold">
                     {row.is_ongoing ? (
                       <span className="flex items-center justify-center space-x-1 text-emerald-700 animate-pulse font-bold">

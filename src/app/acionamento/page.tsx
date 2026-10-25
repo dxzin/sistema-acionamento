@@ -19,6 +19,7 @@ import { OperationalAlerts } from "@/components/acionamento/OperationalAlerts";
 import { JourneyPilotDialog } from "@/components/acionamento/JourneyPilotDialog";
 import { JourneyBatchDialog } from "@/components/acionamento/JourneyBatchDialog";
 import { summarizeOperationalAlerts } from "@/lib/calculations/operational-alerts";
+import { assessJourneyClose } from "@/lib/calculations/journey-close-deadline";
 import { BellRing, Clock3, X } from "lucide-react";
 import {
   buildDispatchReminderDate,
@@ -100,6 +101,8 @@ function AcionamentoContent() {
   const [reminderVolume, setReminderVolume] = useState(DEFAULT_REMINDER_VOLUME);
   const [reminderVolumeReady, setReminderVolumeReady] = useState(false);
   const [reminderNow, setReminderNow] = useState(() => Date.now());
+  const [journeyCloseNow, setJourneyCloseNow] = useState(() => Date.now());
+  const [closingRiskFilter, setClosingRiskFilter] = useState<"upcoming" | "overdue" | null>(null);
   const journeyProvider = useMemo(() => createJourneyProvider(), []);
   const [journeyRequestingId, setJourneyRequestingId] = useState<string | null>(null);
   const [journeyDialog, setJourneyDialog] = useState<JourneyDialogState | null>(null);
@@ -468,6 +471,12 @@ function AcionamentoContent() {
     );
     return () => window.clearTimeout(timer);
   }, [reminders, reminderNow]);
+
+  useEffect(() => {
+    const update = () => setJourneyCloseNow(Date.now());
+    const interval = window.setInterval(update, 60_000);
+    return () => window.clearInterval(interval);
+  }, []);
 
   const unlockReminderSound = useCallback(() => {
     try {
@@ -1163,9 +1172,22 @@ function AcionamentoContent() {
   }, [onlineOperators, user?.id]);
 
   const operationalAlerts = useMemo(
-    () => summarizeOperationalAlerts(filteredDispatches),
-    [filteredDispatches]
+    () => summarizeOperationalAlerts(filteredDispatches, {
+      operationalDate: filters.date,
+      referenceTimestamp: journeyCloseNow,
+    }),
+    [filteredDispatches, filters.date, journeyCloseNow]
   );
+
+  const displayedDispatches = useMemo(() => {
+    if (!closingRiskFilter) return filteredDispatches;
+    return filteredDispatches.filter((row) => {
+      const risk = assessJourneyClose(row, filters.date, journeyCloseNow)?.risk;
+      return closingRiskFilter === "overdue"
+        ? risk === "overdue"
+        : risk === "warning" || risk === "urgent";
+    });
+  }, [closingRiskFilter, filteredDispatches, filters.date, journeyCloseNow]);
 
   const reminderTimes = useMemo(() => Object.fromEntries(
     reminders.map((reminder) => [reminder.dispatchId, reminderClockTime(reminder)])
@@ -1221,6 +1243,15 @@ function AcionamentoContent() {
       <div className="flex flex-1 overflow-hidden">
         <Sidebar />
         <main className="excel-workspace flex flex-1 flex-col overflow-hidden">
+          <section className="wv-page-heading">
+            <div>
+              <span className="wv-page-eyebrow">Central de operações</span>
+              <h2>Controle de acionamento</h2>
+              <p>Acompanhe condutores, jornadas e movimentações em tempo real.</p>
+            </div>
+            <div className="wv-live-pill"><span aria-hidden="true" /> Dados ao vivo</div>
+          </section>
+
           {/* Barra de Indicadores Operacionais */}
           <DispatchStatsBar summary={summaryKPIs} />
 
@@ -1240,7 +1271,11 @@ function AcionamentoContent() {
             isExporting={isExporting}
           />
 
-          {!isLoading && !loadError && <OperationalAlerts summary={operationalAlerts} />}
+          {!isLoading && !loadError && <OperationalAlerts
+            summary={operationalAlerts}
+            activeClosingFilter={closingRiskFilter}
+            onClosingFilterChange={setClosingRiskFilter}
+          />}
 
           {loadError && (
             <div role="alert" className="mx-3 mb-2 border border-rose-400 bg-rose-50 px-3 py-2 text-xs font-semibold text-rose-800">
@@ -1251,7 +1286,7 @@ function AcionamentoContent() {
           {/* Grade Operacional Estilo Planilha */}
           <DispatchGrid
             key={filters.region}
-            dispatches={filteredDispatches}
+            dispatches={displayedDispatches}
             showCity={filters.region !== "SP"}
             onDraftRow={stageLocalEdits}
             onUpdateRow={handleUpdateRow}
@@ -1275,6 +1310,8 @@ function AcionamentoContent() {
             journeyPilotEnabled={JOURNEY_FEATURE.pilotEnabled}
             journeyRequestingId={journeyRequestingId}
             journeyBatchRequesting={journeyBatchRequesting || Boolean(journeyBatch)}
+            operationalDate={filters.date}
+            referenceTimestamp={journeyCloseNow}
             onRequestJourney={(id) => { void requestJourney(id); }}
             onRequestJourneyBatch={(ids) => { void requestJourneyBatch(ids); }}
           />

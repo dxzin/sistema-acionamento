@@ -52,7 +52,7 @@ function Harness({ showCity = true, expandedRows = false }: { showCity?: boolean
   });
   return <><DispatchGrid dispatches={rows} showCity={showCity} onDraftRow={draft} onUpdateRow={save}
     onUpdateBatch={async updates => { for (const [id, changes] of updates) await save(id, changes); }}
-    locations={[]} saveState={{ status: "idle" }} journeyPilotEnabled
+    locations={[]} saveState={{ status: "idle" }} journeyPilotEnabled operationalDate="2026-10-25"
     onRequestJourneyBatch={ids => setBatchRequests(current => [...current, ids])} />
     <pre id="writes">{JSON.stringify(writes)}</pre>
     <pre id="batch-requests">{JSON.stringify(batchRequests)}</pre></>;

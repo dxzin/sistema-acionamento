@@ -49,9 +49,9 @@ export function DispatchFilters({
     : exportDayCount > 31 ? "Selecione no máximo 31 dias por arquivo." : null;
 
   return (
-    <div className="excel-toolbar p-2 flex flex-wrap items-center justify-between gap-2 text-xs">
+    <div className="excel-toolbar wv-filter-bar p-1 text-xs">
       {/* Busca e Filtros Rápidos */}
-      <div className="flex flex-wrap items-center gap-2.5 flex-1">
+      <div className="wv-filter-fields">
         {/* Campo de Busca por Condutor ou Matrícula */}
         <div className="relative min-w-[240px] max-w-[340px]">
           <Search className="w-3.5 h-3.5 absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400" />
@@ -119,7 +119,10 @@ export function DispatchFilters({
           <option value="C">Turno C (20:00)</option>
         </select>
 
-        <div className="excel-presence-strip flex min-h-7 items-center gap-1.5 border-l border-slate-600 pl-2" aria-label="Operadores online nesta planilha">
+      </div>
+
+      <div className="wv-filter-footer">
+        <div className="excel-presence-strip flex min-h-7 items-center gap-1.5" aria-label="Operadores online nesta planilha">
           <UsersRound className="h-3.5 w-3.5 text-emerald-400" />
           <span className="text-[10px] font-bold text-slate-300">Online</span>
           {onlineOperators.length ? onlineOperators.map((operator) => (
@@ -136,10 +139,9 @@ export function DispatchFilters({
             <span className="text-[10px] text-slate-400">conectando…</span>
           )}
         </div>
-      </div>
 
-      {/* Botão de Atualização / Recálculo */}
-      <div className="flex items-center space-x-2">
+        {/* Botão de Atualização / Recálculo */}
+        <div className="wv-filter-actions flex items-center space-x-2">
         <span
           className={`excel-sync-indicator is-${syncStatus}`}
           title={syncStatus === "live" ? "Alterações chegam em tempo real" : syncStatus === "fallback" ? "Rede bloqueou o tempo real; usando verificação automática rápida" : "Sem conexão com a internet"}
@@ -231,6 +233,7 @@ export function DispatchFilters({
           <RefreshCw className={`w-3.5 h-3.5 ${isLoading ? "animate-spin text-emerald-400" : "text-slate-300"}`} />
           <span>Atualizar</span>
         </button>
+        </div>
       </div>
     </div>
   );

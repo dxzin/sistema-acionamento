@@ -27,5 +27,7 @@ test("resume somente pendências operacionais existentes", () => {
     jornadasAbertas: 1,
     abonosPendentes: 1,
     jornadasAcimaDoLimite: 1,
+    fechamentosProximos: 0,
+    fechamentosAtrasados: 0,
   });
 });

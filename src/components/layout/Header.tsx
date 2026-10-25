@@ -2,7 +2,7 @@
 
 import React, { useEffect, useState } from "react";
 import { useAuth } from "@/lib/auth-context";
-import { Clock, LogOut, Moon, Shield, Sun, Truck } from "lucide-react";
+import { Activity, Clock, LogOut, Moon, Shield, Sun, Truck } from "lucide-react";
 import { SighraBridgeStatus } from "./SighraBridgeStatus";
 import { SupabaseUsage } from "./SupabaseUsage";
 
@@ -58,30 +58,35 @@ export function Header() {
   }, [darkMode, themePreference, themeReady]);
 
   return (
-    <header className="excel-titlebar h-12 flex items-center justify-between px-3 sticky top-0 z-30 select-none">
-      <div className="flex items-center space-x-3">
-        <div className="excel-app-icon w-7 h-7 flex items-center justify-center font-bold">
-          <Truck className="w-5 h-5" />
+    <header className="excel-titlebar flex h-12 items-center justify-between px-4 sticky top-0 z-30 select-none">
+      <div className="wv-brand flex items-center space-x-3">
+        <div className="excel-app-icon flex h-9 w-9 items-center justify-center font-bold">
+          <Truck className="h-5 w-5" />
         </div>
         <div>
-          <h1 className="font-semibold text-sm text-white">
-            Controle Operacional.xlsx
+          <h1 className="wv-brand-title text-sm font-bold">
+            Acionamento
           </h1>
-          <p className="text-[10px] text-emerald-100">
-            Sistema de Acionamento Logístico
+          <p className="wv-brand-subtitle text-[10px]">
+            Controle logístico
           </p>
         </div>
       </div>
 
-      <div className="flex items-center space-x-4">
+      <div className="wv-header-status hidden items-center gap-2 lg:flex" aria-label="Estado da operação">
+        <Activity className="h-4 w-4" />
+        <span>Operação em tempo real</span>
+      </div>
+
+      <div className="flex items-center space-x-2 sm:space-x-3">
         {user && <SighraBridgeStatus canManage={user.role === "admin" || user.role === "supervisor"} />}
         {(user?.role === "admin" || user?.role === "supervisor") && <SupabaseUsage compact />}
-        <label className="excel-theme-control flex min-h-11 items-center gap-1.5 border border-white/30 bg-black/10 px-2.5 text-[10px] font-bold text-white" title="Aparência do sistema">
+        <label className="excel-theme-control flex min-h-10 items-center gap-1.5 px-2.5 text-[10px] font-bold" title="Aparência do sistema">
           {darkMode ? <Moon className="h-3.5 w-3.5" /> : <Sun className="h-3.5 w-3.5" />}
           <select
             value={themePreference}
             onChange={(event) => setThemePreference(event.target.value as ThemePreference)}
-            className="bg-transparent text-[10px] font-bold text-white outline-none"
+            className="bg-transparent text-[10px] font-bold outline-none"
             aria-label="Aparência do sistema"
           >
             <option value="light">Claro</option>
@@ -94,10 +99,10 @@ export function Header() {
 
         {/* Informações do Usuário */}
         {user && (
-          <div className="flex items-center space-x-3 pl-3 border-l border-emerald-600">
-            <div className="text-right">
-              <div className="text-xs font-medium text-white">{user.name}</div>
-              <div className="text-[10px] text-emerald-100 capitalize flex items-center justify-end space-x-1">
+          <div className="wv-user flex items-center space-x-3 pl-3">
+            <div className="hidden text-right sm:block">
+              <div className="wv-user-name text-xs font-semibold">{user.name}</div>
+              <div className="wv-user-role flex items-center justify-end space-x-1 text-[10px] capitalize">
                 <Shield className="w-3 h-3" />
                 <span>{user.role}</span>
               </div>
@@ -105,7 +110,7 @@ export function Header() {
             <button
               onClick={() => logout()}
               title="Sair do Sistema"
-              className="p-1.5 text-emerald-100 hover:text-white hover:bg-emerald-700 transition-colors"
+              className="wv-logout grid h-10 w-10 place-items-center transition-colors"
             >
               <LogOut className="w-4 h-4" />
             </button>
