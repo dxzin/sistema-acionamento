@@ -525,17 +525,18 @@ export function DispatchGrid({
   } | null>(null);
   const [hiddenColumns, setHiddenColumns] = useState<number[]>([]);
   const [isPrintView, setIsPrintView] = useState(false);
+  const omittedColumnKey: ColumnFilterKey = showCity ? "closeDeadline" : "city";
   const activeFilterColumns = useMemo(
-    () => showCity ? FILTER_COLUMNS : FILTER_COLUMNS.filter((key) => key !== "city"),
-    [showCity]
+    () => FILTER_COLUMNS.filter((key) => key !== omittedColumnKey),
+    [omittedColumnKey]
   );
   const activeColumnLabels = useMemo(
-    () => showCity ? COLUMN_LABELS : COLUMN_LABELS.filter((_, index) => index !== 1),
-    [showCity]
+    () => COLUMN_LABELS.filter((_, index) => FILTER_COLUMNS[index] !== omittedColumnKey),
+    [omittedColumnKey]
   );
   const defaultColumnWidths = useMemo(
-    () => showCity ? COLUMN_WIDTHS : COLUMN_WIDTHS.filter((_, index) => index !== 1),
-    [showCity]
+    () => COLUMN_WIDTHS.filter((_, index) => FILTER_COLUMNS[index] !== omittedColumnKey),
+    [omittedColumnKey]
   );
   const protectedColumnCount = showCity ? 3 : 2;
   const preferenceSuffix = showCity ? "mg" : "sp";
@@ -1916,10 +1917,11 @@ export function DispatchGrid({
                 SAÍDA
               </th>
 
-              {/* Coluna 14: LIMITE OPERACIONAL DE FECHAMENTO */}
-              <th className="px-2 py-1.5 border-r border-emerald-700 text-center font-bold text-amber-100">
-                FECHAR ATÉ
-              </th>
+              {!showCity && (
+                <th className="px-2 py-1.5 border-r border-emerald-700 text-center font-bold text-amber-100">
+                  FECHAR ATÉ
+                </th>
+              )}
 
               {/* Coluna 15: OBSERVAÇÃO */}
               <th className="px-2 py-1.5 border-r border-emerald-700 font-bold">
@@ -1970,7 +1972,9 @@ export function DispatchGrid({
             {processedDispatches.map((row, index) => {
               const hasAbonoPending =
                 row.abono_authorized_by === "PENDENTE" && row.dispatch_status === "ABONADO";
-              const closeAssessment = assessJourneyClose(row, operationalDate, referenceTimestamp);
+              const closeAssessment = showCity
+                ? null
+                : assessJourneyClose(row, operationalDate, referenceTimestamp);
               const rowEditors = activeEditors[row.id] || [];
               const driverNameHighlightClass = getDriverNameHighlightClass(
                 row.scale_day_status,
@@ -2282,26 +2286,27 @@ export function DispatchGrid({
                     />
                   </td>
 
-                  {/* 14. LIMITE OPERACIONAL DE FECHAMENTO */}
-                  <td
-                    className={`excel-close-deadline is-${closeAssessment?.risk || "neutral"} px-1 py-0.5 text-center`}
-                    title={closeAssessment
-                      ? `Turno ${String(closeAssessment.shiftHour).padStart(2, "0")}h: fechar até ${closeAssessment.deadlineDate.split("-").reverse().join("/")} às ${closeAssessment.deadlineTime} para preservar 11h10 de descanso antes do fim da próxima janela.`
-                      : "Sem regra de fechamento para este turno."}
-                  >
-                    {closeAssessment ? (
-                      <div className="flex flex-col items-center justify-center leading-tight">
-                        <span className="font-mono font-extrabold">
-                          {closeAssessment.dayLabel} {closeAssessment.deadlineTime}
-                        </span>
-                        <small>
-                          {closeAssessment.isOpenJourney
-                            ? formatMinutesUntilDeadline(closeAssessment.minutesRemaining)
-                            : closeAssessment.risk === "closed" ? "Jornada fechada" : "Limite operacional"}
-                        </small>
-                      </div>
-                    ) : <span className="text-slate-400">--:--</span>}
-                  </td>
+                  {!showCity && (
+                    <td
+                      className={`excel-close-deadline is-${closeAssessment?.risk || "neutral"} px-1 py-0.5 text-center`}
+                      title={closeAssessment
+                        ? `Turno ${String(closeAssessment.shiftHour).padStart(2, "0")}h: fechar até ${closeAssessment.deadlineDate.split("-").reverse().join("/")} às ${closeAssessment.deadlineTime} para preservar 11h10 de descanso antes do fim da próxima janela.`
+                        : "Sem regra de fechamento para este turno."}
+                    >
+                      {closeAssessment ? (
+                        <div className="flex flex-col items-center justify-center leading-tight">
+                          <span className="font-mono font-extrabold">
+                            {closeAssessment.dayLabel} {closeAssessment.deadlineTime}
+                          </span>
+                          <small>
+                            {closeAssessment.isOpenJourney
+                              ? formatMinutesUntilDeadline(closeAssessment.minutesRemaining)
+                              : closeAssessment.risk === "closed" ? "Jornada fechada" : "Limite operacional"}
+                          </small>
+                        </div>
+                      ) : <span className="text-slate-400">--:--</span>}
+                    </td>
+                  )}
 
                   {/* 15. OBSERVAÇÃO */}
                   <td className="px-1.5 py-1" {...cellFeedback(row.id, "observations")}>
