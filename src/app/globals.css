@@ -559,10 +559,8 @@ input:focus-visible, select:focus-visible, button:focus-visible, a:focus-visible
 [data-app-theme="dark"] .excel-grid [class~="bg-[#EDE7F6]"] { color: #e9d5ff !important; background-color: #3c2d4c !important; }
 
 @media (max-width: 900px) {
-  .excel-sidebar { width: 52px; }
-  .excel-sidebar-title, .excel-sidebar-footer, .excel-sheet-link span { display: none; }
-  .excel-sheet-link { justify-content: center; padding: 10px 0; }
-  .excel-sheet-link svg { margin-right: 0; }
+  .excel-sidebar { width: 64px; }
+  .excel-sheet-link { justify-content: flex-start; padding: 8px; }
   .excel-workspace { padding-left: 4px; padding-right: 4px; }
   .excel-grid-bottom-scroll,
   .excel-grid .excel-statusbar { right: 4px; left: 56px; }
@@ -1062,9 +1060,41 @@ body {
 
 .excel-sidebar,
 [data-app-theme="dark"] .excel-sidebar {
+  position: absolute;
+  inset: 0 auto 0 0;
+  z-index: 40;
+  width: 64px;
+  overflow: hidden;
   color: var(--text-secondary);
   background: var(--wv-sidebar);
   border-right: 1px solid var(--wv-border);
+  box-shadow: none;
+  transition: width 180ms ease, box-shadow 180ms ease;
+}
+.excel-sidebar-rail {
+  position: relative;
+  z-index: 40;
+  width: 64px;
+  flex: 0 0 64px;
+}
+.excel-sidebar-copy {
+  visibility: hidden;
+  opacity: 0;
+  transform: translateX(-4px);
+  white-space: nowrap;
+  transition: opacity 120ms ease, transform 180ms ease, visibility 0s linear 180ms;
+}
+.excel-sidebar:hover,
+.excel-sidebar:focus-within {
+  width: 176px;
+  box-shadow: 14px 0 32px rgba(15, 23, 42, .16);
+}
+.excel-sidebar:hover .excel-sidebar-copy,
+.excel-sidebar:focus-within .excel-sidebar-copy {
+  visibility: visible;
+  opacity: 1;
+  transform: translateX(0);
+  transition-delay: 45ms, 45ms, 0s;
 }
 .excel-sidebar-title,
 [data-app-theme="dark"] .excel-sidebar-title {
@@ -1092,6 +1122,7 @@ body {
 }
 [data-app-theme="dark"] .excel-sheet-link.is-active { color: var(--wv-primary); }
 .wv-nav-icon { color: var(--wv-muted); background: var(--surface-subtle); }
+.excel-sidebar .wv-nav-icon { margin-right: 8px; }
 .excel-sheet-link.is-active .wv-nav-icon { color: var(--wv-primary); background: var(--wv-primary-soft); }
 .wv-nav-description { color: var(--wv-muted); }
 .excel-sidebar-footer,
@@ -1301,12 +1332,12 @@ body {
 .excel-report-table th { background: var(--wv-primary); }
 
 @media (min-width: 901px) {
-  .excel-sidebar { width: 176px; }
+  .excel-sidebar { width: 64px; }
   .excel-sidebar > div:first-child { padding: 8px; }
   .excel-sidebar-title { padding: 6px 8px; }
   .excel-sidebar nav { gap: 2px; }
   .excel-sidebar .excel-sheet-link {
-    min-height: 38px;
+    min-height: 44px;
     padding: 5px 8px;
     border-radius: 8px;
   }
@@ -1340,10 +1371,10 @@ body {
 @media (max-width: 900px) {
   .excel-titlebar { padding-right: 8px; padding-left: 8px; }
   .excel-titlebar .excel-clock { display: none; }
+  .excel-sidebar-rail { width: 64px; flex-basis: 64px; }
   .excel-sidebar { width: 64px; }
-  .excel-sidebar-title, .excel-sidebar-footer, .excel-sheet-link > span:last-child { display: none; }
-  .excel-sheet-link { justify-content: center; padding: 8px; }
-  .excel-sheet-link .wv-nav-icon { display: grid; margin-right: 0; }
+  .excel-sheet-link { justify-content: flex-start; padding: 8px; }
+  .excel-sheet-link .wv-nav-icon { display: grid; }
   .excel-workspace { padding: 10px 8px 0; }
   .wv-page-heading { min-height: 56px; }
   .wv-page-heading h2 { font-size: 19px; }
@@ -1363,4 +1394,5 @@ body {
 
 @media (prefers-reduced-motion: reduce) {
   .excel-kpis *, .wv-live-pill span { animation: none !important; transition: none !important; }
+  .excel-sidebar, .excel-sidebar-copy { transition: none !important; }
 }
