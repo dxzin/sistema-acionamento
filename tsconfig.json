@@ -36,6 +36,14 @@
     ".next/dev/types/**/*.ts"
   ],
   "exclude": [
-    "node_modules"
+    "node_modules",
+    ".next-optimized-local*",
+    ".next-sighra-test",
+    "backups",
+    "empresa",
+    "entregas",
+    "output",
+    "referencias",
+    "tmp"
   ]
 }

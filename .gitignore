@@ -16,7 +16,7 @@ out/
 # Environment variables and deployment metadata
 .env
 .env.*
-!.env.example
+!/.env.example
 .vercel/
 
 # Local reference data
@@ -30,7 +30,6 @@ ponte-sighra/powershell/config.teste.local.json
 ponte-sighra/powershell/config.teste.simulado.local.json
 ponte-sighra/powershell/config.notebook-teste.local.json
 ponte-sighra/powershell/CHAVE-PAREAMENTO-TESTE.txt
-ponte-sighra/powershell/config.notebook-teste.local.json
 ponte-sighra/powershell/*.anterior
 *.tsbuildinfo
 supabase/.temp/
@@ -43,6 +42,3 @@ __pycache__/
 Thumbs.db
 .vscode/
 .idea/
-
-.vercel
-.env*

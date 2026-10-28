@@ -1,6 +1,6 @@
 # Central de documentação — Sistema de Acionamento
 
-> Atualizado em 11/09/2026. Esta pasta pode ser aberta diretamente como um cofre no Obsidian e também pode ser importada pelo Notion.
+> Atualizado em 28/10/2026. Documentação técnica, funcional e operacional do sistema em produção.
 
 ## Por onde começar
 
@@ -13,20 +13,21 @@
 
 ## Estado resumido
 
-O sistema já está publicado em [sistema-acionamento.vercel.app](https://sistema-acionamento.vercel.app/) e está em fase de teste operacional. A grade de acionamento, a escala mensal, os cadastros, o histórico e a administração já possuem telas funcionais. A Escala de Setembro/2026 de SP foi substituída pelo arquivo operacional mais recente e conferida integralmente.
-
-O foco atual é homologar o comportamento da grade como uma planilha Excel, reforçar os testes reais com operadores e preparar a entrada oficial em produção.
+O sistema está em produção em [sistema-acionamento.vercel.app](https://sistema-acionamento.vercel.app/), com banco no Supabase e integração SIGhRA por uma ponte instalada na rede da empresa.
 
 ## Documentos técnicos existentes
 
 - [API de consulta para dashboard](API_DASHBOARD.md)
 
-- [Documentação técnica e funcional](../DOCUMENTACAO_SISTEMA.md)
-- [Regras de negócio completas](../REGRAS_NEGOCIO.md)
-- [Roadmap técnico original](../ROADMAP.md)
-- [Arquitetura](../ARQUITETURA.md)
-- [Mapeamento do Excel](../MAPEAMENTO_EXCEL.md)
+- [Arquitetura atual](ARQUITETURA.md)
+- [Documentação técnica e funcional](DOCUMENTACAO_SISTEMA.md)
+- [Regras de negócio completas](REGRAS_NEGOCIO.md)
+- [Operação e recuperação](OPERACAO_E_RECUPERACAO.md)
+- [Ponte SIGhRA](PONTE_SIGHRA.md)
+- [Mapeamento original do Excel](MAPEAMENTO_EXCEL.md)
+- [Roadmap técnico original](archive/ROADMAP_ORIGINAL.md)
+- [Ponto de restauração histórico](archive/BACKUP_INFO_2026-09-20.md)
 
-## Decisão de ferramenta
+## Organização
 
-O Obsidian é a base recomendada agora porque os arquivos ficam junto do código, funcionam offline, têm histórico no Git e não exigem uma conta externa. Quando o conteúdo estiver aprovado, esta pasta poderá ser importada no Notion para compartilhamento e organização visual. A apresentação final deve ser criada a partir do roteiro desta pasta, sem transformar a documentação em duas fontes diferentes de verdade.
+Arquivos em `archive/` registram decisões ou pontos de restauração históricos e não descrevem necessariamente o estado atual da produção. O `README.md` da raiz e `ARQUITETURA.md` são os pontos de entrada para revisão técnica.
