@@ -96,4 +96,3 @@ public/           arquivos públicos da aplicação
 ## Segurança
 
 Consulte [SECURITY.md](SECURITY.md). A `SUPABASE_SERVICE_ROLE_KEY`, os tokens da ponte e credenciais do SIGhRA são segredos de servidor e nunca podem ser expostos no navegador, em logs, issues ou commits.
-

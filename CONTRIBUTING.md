@@ -38,4 +38,3 @@ feat: filtrar escala mensal por origem
 fix: preservar destino final na continuidade
 docs: atualizar instruções de implantação
 ```
-

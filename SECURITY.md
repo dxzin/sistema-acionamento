@@ -32,4 +32,3 @@ Se houver suspeita de exposição, revogue ou rotacione primeiro a credencial af
 - trilha de auditoria para alterações operacionais;
 - tokens independentes para as pontes SIGhRA;
 - validação de origem e limites de payload nas APIs sensíveis.
-
