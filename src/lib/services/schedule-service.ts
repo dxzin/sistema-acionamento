@@ -20,8 +20,12 @@ export interface ScheduleTimeChange {
   shift_time: string;
 }
 
+export interface ScheduleDriver extends Driver {
+  base_code: string;
+}
+
 export interface ScheduleCatalog {
-  drivers: Driver[];
+  drivers: ScheduleDriver[];
   entries: MonthlyScheduleEntry[];
   source: "supabase" | "demo";
 }
@@ -145,8 +149,12 @@ function storageKey(month: number, year: number, region: string) {
 
 function demoDriversForRegion(region: string) {
   const baseCodes = new Set(REGION_BASE_CODES[region] || []);
-  const baseIds = new Set(INITIAL_BASES.filter((base) => baseCodes.has(base.code)).map((base) => base.id));
-  return getDemoDrivers().filter((driver) => driver.is_active && baseIds.has(driver.base_id));
+  const baseCodeById = new Map(
+    INITIAL_BASES.filter((base) => baseCodes.has(base.code)).map((base) => [base.id, base.code])
+  );
+  return getDemoDrivers()
+    .filter((driver) => driver.is_active && baseCodeById.has(driver.base_id))
+    .map((driver) => ({ ...driver, base_code: baseCodeById.get(driver.base_id) || "" }));
 }
 
 function createDemoEntries(month: number, year: number, region: string, drivers: Driver[]): MonthlyScheduleEntry[] {
@@ -189,10 +197,11 @@ export async function loadMonthlySchedule(month: number, year: number, region: s
 
   const supabase = createClient();
   const baseCodes = REGION_BASE_CODES[region] || [];
-  const { data: bases, error: basesError } = await supabase.from("bases").select("id").in("code", baseCodes);
+  const { data: bases, error: basesError } = await supabase.from("bases").select("id,code").in("code", baseCodes);
   if (basesError) throw new Error(basesError.message);
 
   const baseIds = (bases || []).map((base) => base.id);
+  const baseCodeById = new Map((bases || []).map((base) => [base.id, base.code]));
   const driversResult = baseIds.length
     ? await supabase.from("drivers").select("id,name,login_matricula,base_id,default_shift,default_start_time,is_closed_trip,is_active,created_at,updated_at").in("base_id", baseIds).eq("is_active", true).order("name")
     : { data: [], error: null };
@@ -218,7 +227,11 @@ export async function loadMonthlySchedule(month: number, year: number, region: s
       if (page.length < pageSize) break;
     }
   }
-  return { drivers: (driversResult.data || []) as Driver[], entries, source: "supabase" };
+  const drivers = ((driversResult.data || []) as Driver[]).map((driver) => ({
+    ...driver,
+    base_code: baseCodeById.get(driver.base_id) || "",
+  }));
+  return { drivers, entries, source: "supabase" };
 }
 
 export async function saveMonthlySchedule(month: number, year: number, region: string, changes: ScheduleCellChange[], source: ScheduleCatalog["source"]): Promise<void> {

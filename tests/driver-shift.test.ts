@@ -13,6 +13,7 @@ test("editar o turno da escala atualiza o cadastro compartilhado sem sobrescreve
   } } });
   try {
     const catalog = await loadMonthlySchedule(9, 2026, "SP");
+    assert.ok(catalog.drivers.every((item) => ["LP", "CASTILHO"].includes(item.base_code)));
     const driver = catalog.drivers[0];
     assert.ok(driver);
     const shift = driver.default_shift === "A" ? "C" : "A";

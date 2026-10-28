@@ -15,7 +15,6 @@ import {
   ScheduleCatalog,
   ScheduleCellChange,
 } from "@/lib/services/schedule-service";
-import { Driver } from "@/types/database";
 import { useAuth } from "@/lib/auth-context";
 import { updateDriverShift, updateDriverScheduleTime, SCALE_LETTERS } from "@/lib/services/driver-service";
 import {
@@ -39,6 +38,18 @@ const WEEKDAYS = ["dom", "seg", "ter", "qua", "qui", "sex", "sáb"];
 const REGION_LABELS: Record<string, string> = {
   SP: "LP / MS / Castilho",
   MG: "Minas (UB / LZ / JP)",
+};
+const ORIGIN_FILTER_OPTIONS: Record<string, Array<{ value: string; label: string }>> = {
+  SP: [
+    { value: "ALL", label: "Todas" },
+    { value: "CASTILHO", label: "Castilho" },
+    { value: "LP", label: "LP" },
+  ],
+  MG: [
+    { value: "ALL", label: "Todas" },
+    { value: "UB", label: "Uberaba" },
+    { value: "LZ", label: "LZ" },
+  ],
 };
 type ScheduleSelection = {
   anchor: { row: number; day: number };
@@ -85,8 +96,9 @@ export default function EscalaPage() {
   const [month, setMonth] = useState(today.getMonth() + 1);
   const [year, setYear] = useState(today.getFullYear());
   const [region, setRegion] = useState("SP");
+  const [originFilter, setOriginFilter] = useState("ALL");
   const [search, setSearch] = useState("");
-  const [drivers, setDrivers] = useState<Driver[]>([]);
+  const [drivers, setDrivers] = useState<ScheduleCatalog["drivers"]>([]);
   const [values, setValues] = useState<Record<string, string>>({});
   const [scheduleTimes, setScheduleTimes] = useState<Record<string, string>>({});
   const [timeChanges, setTimeChanges] = useState<Record<string, string>>({});
@@ -115,7 +127,9 @@ export default function EscalaPage() {
     setSuccess(null);
     try {
       const updated = await updateDriverShift(driverId, shift, source);
-      setDrivers((current) => current.map((driver) => driver.id === updated.id ? updated : driver));
+      setDrivers((current) => current.map((driver) => driver.id === updated.id
+        ? { ...driver, ...updated }
+        : driver));
       setSuccess("Turno salvo na Escala Mensal e no cadastro de Condutores.");
     } catch (reason) {
       setError((reason as Error).message);
@@ -190,11 +204,12 @@ export default function EscalaPage() {
     const query = search.trim().toLocaleLowerCase("pt-BR");
     return drivers.filter(
       (driver) =>
-        !query ||
-        driver.name.toLocaleLowerCase("pt-BR").includes(query) ||
-        driver.login_matricula.toLowerCase().includes(query)
+        (originFilter === "ALL" || driver.base_code === originFilter) &&
+        (!query ||
+          driver.name.toLocaleLowerCase("pt-BR").includes(query) ||
+          driver.login_matricula.toLowerCase().includes(query))
     );
-  }, [drivers, search]);
+  }, [drivers, originFilter, search]);
 
   const selectionBounds = useMemo(() => {
     if (!selection) return null;
@@ -478,12 +493,16 @@ export default function EscalaPage() {
     try {
       for (const [driverId, shift] of Object.entries(shiftChanges)) {
         const updated = await updateDriverShift(driverId, shift, source);
-        setDrivers((current) => current.map((driver) => driver.id === driverId ? updated : driver));
+        setDrivers((current) => current.map((driver) => driver.id === driverId
+          ? { ...driver, ...updated }
+          : driver));
       }
       for (const [driverId, time] of normalizedTimes) {
         if (time === "VF") continue;
         const updated = await updateDriverScheduleTime(driverId, time, source);
-        setDrivers((current) => current.map((driver) => driver.id === driverId ? updated : driver));
+        setDrivers((current) => current.map((driver) => driver.id === driverId
+          ? { ...driver, ...updated }
+          : driver));
       }
       if (pending.length) await saveMonthlySchedule(month, year, region, pending, source);
       setChanges({});
@@ -646,13 +665,36 @@ export default function EscalaPage() {
                 <select
                   aria-label="Região"
                   value={region}
-                  onChange={(e) => setRegion(e.target.value)}
+                  onChange={(e) => {
+                    setRegion(e.target.value);
+                    setOriginFilter("ALL");
+                    setSelection(null);
+                    setTimeSelection(null);
+                  }}
                   disabled={pendingCount > 0 || saving}
                   title={pendingCount > 0 ? "Salve a importação atual antes de trocar a região." : undefined}
                   className="h-7 rounded border border-slate-400 bg-white px-2 text-xs font-bold text-slate-800 focus:border-[#107c41] focus:outline-none"
                 >
                   <option value="SP">SP · LP / MS / Castilho</option>
                   <option value="MG">MG · UB / LZ / JP</option>
+                </select>
+              </div>
+
+              <div className="flex items-center gap-1">
+                <span className="text-[11px] font-semibold text-slate-700">Origem:</span>
+                <select
+                  aria-label="Filtrar condutores por origem"
+                  value={originFilter}
+                  onChange={(event) => {
+                    setOriginFilter(event.target.value);
+                    setSelection(null);
+                    setTimeSelection(null);
+                  }}
+                  className="h-7 rounded border border-slate-400 bg-white px-2 text-xs font-bold text-slate-800 focus:border-[#107c41] focus:outline-none"
+                >
+                  {(ORIGIN_FILTER_OPTIONS[region] || ORIGIN_FILTER_OPTIONS.SP).map((option) => (
+                    <option key={option.value} value={option.value}>{option.label}</option>
+                  ))}
                 </select>
               </div>
 
