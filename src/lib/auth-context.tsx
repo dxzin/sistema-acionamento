@@ -9,7 +9,7 @@ import { canAccessPage } from "./access-control";
 interface AuthContextType {
   user: Profile | null;
   isLoading: boolean;
-  login: (email: string, role?: UserRole, password?: string) => Promise<boolean>;
+  login: (email: string, role?: UserRole, password?: string, captchaToken?: string) => Promise<boolean>;
   logout: () => Promise<void>;
   isAuthenticated: boolean;
 }
@@ -66,7 +66,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     initAuth();
   }, []);
 
-  const login = async (email: string, role: UserRole = "operator", password?: string): Promise<boolean> => {
+  const login = async (email: string, role: UserRole = "operator", password?: string, captchaToken?: string): Promise<boolean> => {
     setIsLoading(true);
     try {
       const supabase = createClient();
@@ -74,6 +74,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         const { data, error } = await supabase.auth.signInWithPassword({
           email: email.trim(),
           password,
+          options: captchaToken ? { captchaToken } : undefined,
         });
 
         if (error) {

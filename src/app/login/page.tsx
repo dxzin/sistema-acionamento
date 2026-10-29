@@ -1,8 +1,9 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useCallback, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/lib/auth-context";
+import { TurnstileWidget, TurnstileWidgetHandle } from "@/components/auth/TurnstileWidget";
 import { Truck, ArrowRight, Lock, AlertCircle } from "lucide-react";
 
 export default function LoginPage() {
@@ -12,6 +13,10 @@ export default function LoginPage() {
   const [password, setPassword] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [captchaToken, setCaptchaToken] = useState<string | null>(null);
+  const turnstileRef = useRef<TurnstileWidgetHandle>(null);
+  const turnstileSiteKey = process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY || "0x4AAAAAAFqePekZPz_a7l_e";
+  const handleCaptchaToken = useCallback((token: string | null) => setCaptchaToken(token), []);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -19,17 +24,22 @@ export default function LoginPage() {
       setErrorMessage("Por favor, preencha o e-mail e a senha.");
       return;
     }
+    if (turnstileSiteKey && !captchaToken) {
+      setErrorMessage("Conclua a verificação de segurança antes de entrar.");
+      return;
+    }
 
     setIsLoading(true);
     setErrorMessage(null);
 
-    const success = await login(email, "operator", password);
+    const success = await login(email, "operator", password, captchaToken ?? undefined);
     setIsLoading(false);
 
     if (success) {
       router.push("/acionamento");
       router.refresh();
     } else {
+      turnstileRef.current?.reset();
       setErrorMessage("Falha na autenticação. Verifique suas credenciais.");
     }
   };
@@ -90,9 +100,17 @@ export default function LoginPage() {
             </div>
           </div>
 
+          {turnstileSiteKey && (
+            <TurnstileWidget
+              ref={turnstileRef}
+              siteKey={turnstileSiteKey}
+              onTokenChange={handleCaptchaToken}
+            />
+          )}
+
           <button
             type="submit"
-            disabled={isLoading}
+            disabled={isLoading || Boolean(turnstileSiteKey && !captchaToken)}
             className="w-full py-2.5 bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white rounded font-medium text-sm transition-colors flex items-center justify-center space-x-2 shadow-sm"
           >
             <span>{isLoading ? "Autenticando..." : "Entrar no Sistema"}</span>
