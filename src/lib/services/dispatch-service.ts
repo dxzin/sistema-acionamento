@@ -5,6 +5,7 @@ import { calculateJornada } from "../calculations/jornada";
 import { calculateNextForecast } from "../calculations/interjornada";
 import { resolveDayContinuity, resolvePreviousAbono, resolveAutomaticForecast, usesWorkingContinuity } from "../calculations/continuity";
 import { resolveFirstDayBaseOrigin } from "../calculations/first-day-origin";
+import { isMedicalLeaveScaleCode, resolveMedicalLeaveScaleDay } from "../calculations/medical-leave-scale";
 import { canCreateDailySheet } from "../dates/operational-date";
 import { INVALID_LOCATION_MESSAGE, isValidLocationName, normalizeLocationName } from "../locations/location-name";
 import {
@@ -302,7 +303,9 @@ class DispatchService {
 
     let rawDispatches: Dispatch[] = [];
     const scheduleEntriesByDriver = new Map<string, { scale_code: string; shift_letter?: string | null; shift_time?: string | null }>();
+    let currentScheduleId: string | null = null;
     const normalizedRegion = region;
+    const scheduleRegion = normalizedRegion === "UBJP" ? "MG" : normalizedRegion;
 
     if (this.isSupabaseConfigured()) {
       try {
@@ -332,7 +335,6 @@ class DispatchService {
         // Confere a escala mensal mesmo quando a folha diária já existia.
         // Assim uma correção posterior para F, FE, AF, DES ou DESL também remove o condutor da tela.
         const [yearText, monthText, dayText] = date.split("-");
-        const scheduleRegion = normalizedRegion === "UBJP" ? "MG" : normalizedRegion;
         const { data: currentSchedule } = await supabase
           .from("monthly_schedules")
           .select("id")
@@ -342,6 +344,7 @@ class DispatchService {
           .maybeSingle();
 
         const scheduleKey = this.scheduleKey(date, normalizedRegion);
+        currentScheduleId = currentSchedule?.id || null;
         if (currentSchedule?.id) this.knownScheduleIds.set(scheduleKey, currentSchedule.id);
         else this.knownScheduleIds.delete(scheduleKey);
 
@@ -434,8 +437,8 @@ class DispatchService {
                   scale_day_status: scaleCode || null,
                   forecast_start_time: resolveAutomaticForecast(prevDisp, schedEntry?.shift_time || d.default_start_time, isClosedTrip),
                   forecast_source: usesWorkingContinuity(prevDisp?.dispatch_status) ? "CONTINUITY" : "SCHEDULE",
-                  // O status é uma decisão do operador e começa vazio.
-                  dispatch_status: "",
+                  // Atestado informado na escala já define o status da folha.
+                  dispatch_status: isMedicalLeaveScaleCode(scaleCode) ? "ATESTADO" : "",
                   abono_reason: previousAbono.abonoReason,
                   origin_location_id: continuity.originLocationId || baseOrigin,
                   origin_source: continuity.originLocationId ? "CONTINUITY" : baseOrigin ? "BASE" : "SCHEDULE",
@@ -481,6 +484,69 @@ class DispatchService {
     const basesMap = new Map(bases.map((b) => [b.id, b]));
     const vehiclesMap = new Map(vehicles.map((v) => [v.id, v]));
     const locationsMap = new Map(locations.map((l) => [l.id, l]));
+    const medicalDayByDriver = new Map<string, string>();
+    if (currentScheduleId) {
+      const medicalDrivers = [...scheduleEntriesByDriver]
+        .filter(([, entry]) => isMedicalLeaveScaleCode(entry.scale_code))
+        .map(([driverId]) => driverId);
+      await Promise.all(medicalDrivers.map(async (driverId) => {
+        const { data, error } = await createClient().from("monthly_schedule_entries")
+          .select("day_of_month,scale_code")
+          .eq("schedule_id", currentScheduleId)
+          .eq("driver_id", driverId);
+        if (error) throw new Error(error.message);
+        const baseCode = basesMap.get(driversMap.get(driverId)?.base_id || "")?.code;
+        const day = Number(date.slice(8, 10));
+        let label = resolveMedicalLeaveScaleDay(day, data || [], baseCode);
+        if (!label) {
+          const year = Number(date.slice(0, 4));
+          const month = Number(date.slice(5, 7));
+          const previous = new Date(Date.UTC(year, month - 2, 1));
+          const { data: previousSchedule, error: previousError } = await createClient().from("monthly_schedules")
+            .select("id")
+            .eq("year", previous.getUTCFullYear())
+            .eq("month", previous.getUTCMonth() + 1)
+            .eq("region", scheduleRegion)
+            .maybeSingle();
+          if (previousError) throw new Error(previousError.message);
+          if (previousSchedule) {
+            const { data: previousEntries, error: entriesError } = await createClient().from("monthly_schedule_entries")
+              .select("day_of_month,scale_code")
+              .eq("schedule_id", previousSchedule.id)
+              .eq("driver_id", driverId);
+            if (entriesError) throw new Error(entriesError.message);
+            const previousDays = new Date(Date.UTC(year, month - 1, 0)).getUTCDate();
+            label = resolveMedicalLeaveScaleDay(day, [
+              ...(previousEntries || []).map((entry) => ({ ...entry, day_of_month: entry.day_of_month - previousDays })),
+              ...(data || []),
+            ], baseCode);
+          }
+          if (!label) {
+            const next = new Date(Date.UTC(year, month, 1));
+            const { data: nextSchedule, error: nextError } = await createClient().from("monthly_schedules")
+              .select("id")
+              .eq("year", next.getUTCFullYear())
+              .eq("month", next.getUTCMonth() + 1)
+              .eq("region", scheduleRegion)
+              .maybeSingle();
+            if (nextError) throw new Error(nextError.message);
+            if (nextSchedule) {
+              const { data: nextEntries, error: entriesError } = await createClient().from("monthly_schedule_entries")
+                .select("day_of_month,scale_code")
+                .eq("schedule_id", nextSchedule.id)
+                .eq("driver_id", driverId);
+              if (entriesError) throw new Error(entriesError.message);
+              const currentDays = new Date(Date.UTC(year, month, 0)).getUTCDate();
+              label = resolveMedicalLeaveScaleDay(day, [
+                ...(data || []),
+                ...(nextEntries || []).map((entry) => ({ ...entry, day_of_month: currentDays + entry.day_of_month })),
+              ], baseCode);
+            }
+          }
+        }
+        if (label) medicalDayByDriver.set(driverId, label);
+      }));
+    }
 
     if (this.isSupabaseConfigured() && !options.preserveLocalSnapshot) {
       this.localDispatches = [...rawDispatches];
@@ -534,7 +600,8 @@ class DispatchService {
         ...disp,
         origin_location_id: originId,
         origin_source: firstDayOrigin ? "BASE" : disp.origin_source,
-        scale_day_status: currentScaleCode ?? disp.scale_day_status,
+        scale_day_status: medicalDayByDriver.get(disp.driver_id) || currentScaleCode || disp.scale_day_status,
+        dispatch_status: isMedicalLeaveScaleCode(currentScaleCode) ? "ATESTADO" : disp.dispatch_status,
         driver,
         base,
         vehicle,

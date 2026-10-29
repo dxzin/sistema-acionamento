@@ -3,9 +3,10 @@ import { createClient } from "@/lib/supabase/client";
 import { Driver, MonthlyScheduleEntry } from "@/types/database";
 import ExcelJS from "exceljs";
 import JSZip from "jszip";
+import { isMedicalLeaveScaleCode } from "../calculations/medical-leave-scale";
 import { getDemoDrivers } from "./driver-service";
 
-export const SCALE_CODES = ["1", "2", "3", "4", "5", "6", "VF", "F", "FE", "AT", "AF", "SATD", "DES", "DESL"] as const;
+export const SCALE_CODES = ["1", "2", "3", "4", "5", "6", "VF", "F", "FE", "AT", "ATES", "AF", "SATD", "DES", "DESL"] as const;
 
 export interface ScheduleCellChange {
   driver_id: string;
@@ -257,6 +258,42 @@ export async function saveMonthlySchedule(month: number, year: number, region: s
   if (filled.length) {
     const { error } = await supabase.from("monthly_schedule_entries").upsert(filled.map((change) => ({ ...change, schedule_id: schedule.id })), { onConflict: "schedule_id,driver_id,day_of_month" });
     if (error) throw new Error(error.message);
+  }
+  const medicalChanges = filled.filter((change) => isMedicalLeaveScaleCode(change.scale_code));
+  if (medicalChanges.length) {
+    const dates = [...new Set(medicalChanges.map((change) =>
+      `${year}-${String(month).padStart(2, "0")}-${String(change.day_of_month).padStart(2, "0")}`
+    ))];
+    const regions = region === "MG" ? ["MG", "UBJP"] : [region];
+    const { data: sheets, error: sheetsError } = await supabase.from("daily_sheets")
+      .select("id,date")
+      .in("date", dates)
+      .in("region", regions)
+      .eq("status", "OPEN");
+    if (sheetsError) throw new Error(sheetsError.message);
+    if (sheets?.length) {
+      const affected = new Set(medicalChanges.map((change) => `${change.driver_id}:${change.day_of_month}`));
+      const updates: Array<{ id: string; expected_updated_at: null; changes: { dispatch_status: string } }> = [];
+      for (let start = 0; ; start += 1000) {
+        const { data: rows, error } = await supabase.from("dispatches")
+          .select("id,daily_sheet_id,driver_id,dispatch_status")
+          .in("daily_sheet_id", sheets.map((sheet) => sheet.id))
+          .in("driver_id", [...new Set(medicalChanges.map((change) => change.driver_id))])
+          .range(start, start + 999);
+        if (error) throw new Error(error.message);
+        for (const row of rows || []) {
+          const sheet = sheets.find((item) => item.id === row.daily_sheet_id);
+          if (sheet && affected.has(`${row.driver_id}:${Number(sheet.date.slice(-2))}`) && row.dispatch_status !== "ATESTADO") {
+            updates.push({ id: row.id, expected_updated_at: null, changes: { dispatch_status: "ATESTADO" } });
+          }
+        }
+        if (!rows || rows.length < 1000) break;
+      }
+      for (let start = 0; start < updates.length; start += 500) {
+        const { error } = await supabase.rpc("update_dispatch_batch_with_audit", { p_updates: updates.slice(start, start + 500) });
+        if (error) throw new Error(error.message);
+      }
+    }
   }
   for (const change of cleared) {
     const { error } = await supabase.from("monthly_schedule_entries").delete().eq("schedule_id", schedule.id).eq("driver_id", change.driver_id).eq("day_of_month", change.day_of_month);

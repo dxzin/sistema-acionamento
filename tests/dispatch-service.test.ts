@@ -19,7 +19,7 @@ test("VF entra como trabalho e F, FE, AF, DES e DESL não entram no acionamento"
     assert.equal(isDispatchExcludedScaleCode(code), true);
   }
 
-  for (const code of ["1", "6", "VF", " vf ", "AT", "SATD", ""]) {
+  for (const code of ["1", "6", "VF", " vf ", "AT", "ATES", " ates ", "SATD", ""]) {
     assert.equal(isDispatchExcludedScaleCode(code), false);
   }
 
