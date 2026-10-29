@@ -89,6 +89,7 @@ public/           arquivos públicos da aplicação
 - [Documentação funcional](docs/DOCUMENTACAO_SISTEMA.md)
 - [Regras de negócio](docs/REGRAS_NEGOCIO.md)
 - [Operação e recuperação](docs/OPERACAO_E_RECUPERACAO.md)
+- [Prova de conceito na Cloudflare](docs/CLOUDFLARE_POC.md)
 - [Ponte SIGhRA](docs/PONTE_SIGHRA.md)
 - [API de consulta da escala](docs/API_DASHBOARD.md)
 - [Índice completo](docs/README.md)
