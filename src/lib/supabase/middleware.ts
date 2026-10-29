@@ -1,11 +1,33 @@
-import { createServerClient, type CookieOptions } from "@supabase/ssr";
+import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 import { canAccessPage } from "@/lib/access-control";
 
-export async function updateSession(request: NextRequest) {
-  let supabaseResponse = NextResponse.next({
-    request,
+const privateCacheHeaders = {
+  "Cache-Control": "private, no-cache, no-store, must-revalidate, max-age=0",
+  Expires: "0",
+  Pragma: "no-cache",
+};
+
+function preventCaching(response: NextResponse) {
+  Object.entries(privateCacheHeaders).forEach(([name, value]) => {
+    response.headers.set(name, value);
   });
+  return response;
+}
+
+function preserveSession(source: NextResponse, target: NextResponse) {
+  source.cookies.getAll().forEach((cookie) => target.cookies.set(cookie));
+
+  for (const name of ["cache-control", "expires", "pragma"]) {
+    const value = source.headers.get(name);
+    if (value) target.headers.set(name, value);
+  }
+
+  return preventCaching(target);
+}
+
+export async function updateSession(request: NextRequest) {
+  let supabaseResponse = preventCaching(NextResponse.next({ request }));
 
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || "";
   const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || "";
@@ -22,52 +44,51 @@ export async function updateSession(request: NextRequest) {
         getAll() {
           return request.cookies.getAll();
         },
-        setAll(cookiesToSet: { name: string; value: string; options?: CookieOptions }[]) {
+        setAll(cookiesToSet, headers) {
           cookiesToSet.forEach(({ name, value }) =>
             request.cookies.set(name, value)
           );
-          supabaseResponse = NextResponse.next({
-            request,
-          });
+          supabaseResponse = NextResponse.next({ request });
           cookiesToSet.forEach(({ name, value, options }) =>
             supabaseResponse.cookies.set(name, value, options)
           );
+          Object.entries(headers).forEach(([name, value]) => {
+            supabaseResponse.headers.set(name, value);
+          });
+          preventCaching(supabaseResponse);
         },
       },
     }
   );
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const { data } = await supabase.auth.getClaims();
+  const userId = typeof data?.claims.sub === "string" ? data.claims.sub : null;
 
   const isAuthPage = request.nextUrl.pathname.startsWith("/login");
 
-  if (!user && !isAuthPage && !request.nextUrl.pathname.startsWith("/_next") && !request.nextUrl.pathname.startsWith("/api")) {
+  if (!userId && !isAuthPage && !request.nextUrl.pathname.startsWith("/_next") && !request.nextUrl.pathname.startsWith("/api")) {
     const url = request.nextUrl.clone();
     url.pathname = "/login";
-    return NextResponse.redirect(url);
+    return preserveSession(supabaseResponse, NextResponse.redirect(url));
   }
 
-  if (user && isAuthPage) {
+  if (userId && isAuthPage) {
     const url = request.nextUrl.clone();
     url.pathname = "/acionamento";
-    return NextResponse.redirect(url);
+    return preserveSession(supabaseResponse, NextResponse.redirect(url));
   }
 
-  if (user && !isAuthPage && !request.nextUrl.pathname.startsWith("/api/") && !request.nextUrl.pathname.startsWith("/_next/") && !canAccessPage("operator", request.nextUrl.pathname)) {
+  if (userId && !isAuthPage && !request.nextUrl.pathname.startsWith("/api/") && !request.nextUrl.pathname.startsWith("/_next/") && !canAccessPage("operator", request.nextUrl.pathname)) {
     const { data: profile } = await supabase
       .from("profiles")
       .select("role")
-      .eq("id", user.id)
+      .eq("id", userId)
       .maybeSingle();
     if (!canAccessPage(profile?.role, request.nextUrl.pathname)) {
       const url = request.nextUrl.clone();
       url.pathname = "/acionamento";
       url.search = "";
-      const response = NextResponse.redirect(url);
-      supabaseResponse.cookies.getAll().forEach((cookie) => response.cookies.set(cookie));
-      return response;
+      return preserveSession(supabaseResponse, NextResponse.redirect(url));
     }
   }
 

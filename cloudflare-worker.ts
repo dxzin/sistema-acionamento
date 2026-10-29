@@ -1,4 +1,5 @@
 import vinextWorker from "vinext/server/fetch-handler";
+import type { ExecutionContextLike } from "vinext/shims/request-context";
 
 interface RateLimiter {
   limit(options: { key: string }): Promise<{ success: boolean }>;
@@ -50,7 +51,7 @@ function limitedResponse(): Response {
 }
 
 const worker = {
-  async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
+  async fetch(request: Request, env: Env, ctx: ExecutionContextLike): Promise<Response> {
     const url = new URL(request.url);
 
     if (url.pathname.startsWith("/api/")) {
