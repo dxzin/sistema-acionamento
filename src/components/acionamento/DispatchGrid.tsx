@@ -641,7 +641,7 @@ export function DispatchGrid({
   ];
 
   // Aprovadores
-  const APPROVER_OPTIONS = ["ANDERSON", "ROBERTO", "LEOVEGILDO", "PENDENTE"];
+  const APPROVER_OPTIONS = ["MARCOS", "ROBERTO", "LEOVEGILDO", "PENDENTE"];
 
   const handleCopy = (text: string, cellId: string) => {
     if (!text) return;
@@ -2174,6 +2174,11 @@ export function DispatchGrid({
                           }`}
                           title="Autorizado Por"
                         >
+                          {row.abono_authorized_by && !APPROVER_OPTIONS.includes(row.abono_authorized_by) ? (
+                            <option value={row.abono_authorized_by} disabled>
+                              {row.abono_authorized_by}
+                            </option>
+                          ) : null}
                           {APPROVER_OPTIONS.map((app) => (
                             <option key={app} value={app}>
                               {app}
