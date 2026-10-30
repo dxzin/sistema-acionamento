@@ -4,6 +4,16 @@ export function isMedicalLeaveScaleCode(code: string | null | undefined): boolea
   return ["AT", "ATES"].includes((code || "").trim().toUpperCase());
 }
 
+export function reconcileMedicalLeaveDispatchStatus(
+  scaleCode: string | null | undefined,
+  currentStatus: string | null | undefined,
+): string | null {
+  if (isMedicalLeaveScaleCode(scaleCode)) {
+    return currentStatus === "ATESTADO" ? null : "ATESTADO";
+  }
+  return currentStatus === "ATESTADO" ? "" : null;
+}
+
 export function resolveMedicalLeaveScaleDay(
   day: number,
   entries: ScheduleDay[],

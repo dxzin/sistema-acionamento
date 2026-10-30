@@ -1,6 +1,10 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { isMedicalLeaveScaleCode, resolveMedicalLeaveScaleDay } from "../src/lib/calculations/medical-leave-scale";
+import {
+  isMedicalLeaveScaleCode,
+  reconcileMedicalLeaveDispatchStatus,
+  resolveMedicalLeaveScaleDay,
+} from "../src/lib/calculations/medical-leave-scale";
 
 test("ATES e AT indicam atestado sem excluir o condutor da sequência", () => {
   assert.equal(isMedicalLeaveScaleCode(" ates "), true);
@@ -39,4 +43,12 @@ test("continua o ciclo usando o último dia numerado do mês anterior", () => {
 test("recupera o ciclo pelo primeiro dia numerado do mês seguinte", () => {
   const entries = [{ day_of_month: 30, scale_code: "ATES" }, { day_of_month: 31, scale_code: "2" }];
   assert.equal(resolveMedicalLeaveScaleDay(30, entries, "UB"), "1");
+});
+
+test("sincroniza a entrada e a retirada do atestado com o status da planilha", () => {
+  assert.equal(reconcileMedicalLeaveDispatchStatus("ATES", ""), "ATESTADO");
+  assert.equal(reconcileMedicalLeaveDispatchStatus("AT", "ATESTADO"), null);
+  assert.equal(reconcileMedicalLeaveDispatchStatus("3", "ATESTADO"), "");
+  assert.equal(reconcileMedicalLeaveDispatchStatus("", "ATESTADO"), "");
+  assert.equal(reconcileMedicalLeaveDispatchStatus("F", ""), null);
 });
