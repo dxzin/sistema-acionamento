@@ -40,6 +40,10 @@ test("normaliza os locais conhecidos do fim de jornada", () => {
   assert.equal(journeyEndLocationMatches("TRANSAMERICA · Rodovia BR-050", "UBERABA"), true);
   assert.equal(journeyEndLocationMatches("Lençóis Paulista / SP", "LP"), true);
   assert.equal(journeyEndLocationMatches("Portaria BRACELL · SP-300", "LP"), true);
+  assert.equal(journeyEndLocationMatches(
+    "POSTO PIRAPATOS - PONTO DE APOIO · JUSCELINO KUBITSCHECK - BR 040 - MINAS GERAIS · LUIZLÂNDIA DO OESTE / MG",
+    "LZ",
+  ), true);
   assert.equal(journeyEndLocationMatches("TRANSAMERICA · Uberaba / MG", "LP"), false);
 });
 

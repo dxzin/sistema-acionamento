@@ -81,12 +81,14 @@ const normalizeLocation = (value: string | null | undefined) => normalizeText(va
 
 function expectedLocationGroup(value: string) {
   if (["UB", "UBERABA", "UBERABA MG"].includes(value)) return "UBERABA";
+  if (["LZ", "LUIZLANDIA", "LUIZLANDIA DO OESTE", "LUIZLANDIA DO OESTE MG"].includes(value)) return "LZ";
   if (["LP", "LENCOIS PAULISTA", "LENCOIS PAULISTA SP", "BRACELL"].includes(value)) return "LP";
   return value;
 }
 
 function sighraLocationGroup(value: string) {
   if (["BELLO PARKING", "TRANSAMERICA", "UBERABA"].some((alias) => value.includes(alias))) return "UBERABA";
+  if (["POSTO PIRAPATOS", "LUIZLANDIA DO OESTE"].some((alias) => value.includes(alias))) return "LZ";
   if (["LENCOIS PAULISTA", "BRACELL"].some((alias) => value.includes(alias))) return "LP";
   return value;
 }
