@@ -32,15 +32,15 @@ export default function LoginPage() {
     setIsLoading(true);
     setErrorMessage(null);
 
-    const success = await login(email, "operator", password, captchaToken ?? undefined);
+    const result = await login(email, "operator", password, captchaToken ?? undefined);
     setIsLoading(false);
 
-    if (success) {
+    if (result.success) {
       router.push("/acionamento");
       router.refresh();
     } else {
       turnstileRef.current?.reset();
-      setErrorMessage("Falha na autenticação. Verifique suas credenciais.");
+      setErrorMessage(result.message || "Não foi possível entrar no sistema.");
     }
   };
 

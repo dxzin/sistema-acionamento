@@ -9,9 +9,23 @@ import { canAccessPage } from "./access-control";
 interface AuthContextType {
   user: Profile | null;
   isLoading: boolean;
-  login: (email: string, role?: UserRole, password?: string, captchaToken?: string) => Promise<boolean>;
+  login: (email: string, role?: UserRole, password?: string, captchaToken?: string) => Promise<LoginResult>;
   logout: () => Promise<void>;
   isAuthenticated: boolean;
+}
+
+interface LoginResult {
+  success: boolean;
+  message?: string;
+}
+
+function loginErrorMessage(code?: string): string {
+  if (code === "invalid_credentials") return "E-mail ou senha incorretos.";
+  if (code === "captcha_failed") return "A verificação de segurança expirou ou foi recusada. Marque-a novamente.";
+  if (code === "over_request_rate_limit") return "Muitas tentativas de acesso. Aguarde um minuto e tente novamente.";
+  if (code === "email_not_confirmed") return "Este e-mail ainda não foi confirmado.";
+  if (code === "request_timeout") return "O servidor de autenticação demorou para responder. Tente novamente.";
+  return "Não foi possível autenticar. Verifique a conexão e tente novamente.";
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -66,7 +80,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     initAuth();
   }, []);
 
-  const login = async (email: string, role: UserRole = "operator", password?: string, captchaToken?: string): Promise<boolean> => {
+  const login = async (email: string, role: UserRole = "operator", password?: string, captchaToken?: string): Promise<LoginResult> => {
     setIsLoading(true);
     try {
       const supabase = createClient();
@@ -79,7 +93,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
         if (error) {
           setIsLoading(false);
-          return false;
+          return { success: false, message: loginErrorMessage(error.code) };
         }
 
         if (data && data.user) {
@@ -101,7 +115,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
           setUser(activeUser);
           setIsLoading(false);
-          return true;
+          return { success: true };
         }
       }
 
@@ -111,7 +125,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       const demoMode = !supabaseUrl || !supabaseKey || supabaseUrl.includes("placeholder") || supabaseKey.includes("placeholder");
       if (!demoMode) {
         setIsLoading(false);
-        return false;
+        return { success: false, message: "Informe a senha de acesso." };
       }
       const profile: Profile = {
         id: `usr-${Date.now()}`,
@@ -125,11 +139,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
       setUser(profile);
       setIsLoading(false);
-      return true;
+      return { success: true };
     } catch (err) {
       console.error("Erro inesperado no login:", err);
       setIsLoading(false);
-      return false;
+      return { success: false, message: "Não foi possível conectar ao servidor de autenticação." };
     }
   };
 
