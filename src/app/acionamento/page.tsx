@@ -359,19 +359,27 @@ function AcionamentoContent() {
   const loadData = useCallback(async (foreground = true) => {
     if (pendingWritesRef.current > 0) return;
     const requestId = ++loadRequestRef.current;
+    let timeoutId: number | null = null;
     if (foreground) {
       foregroundLoadsRef.current += 1;
       setIsLoading(true);
     }
     setLoadError(null);
     try {
-      const dispatchesData = await dispatchService.getDispatchesForSheet(filters.date, filters.region);
-      const nextScheduleIds = dispatchService.getKnownScheduleIdsForDate(filters.date, filters.region);
-      const [locs, sheets, syncToken] = await Promise.all([
+      const loadPromise = Promise.all([
+        dispatchService.getDispatchesForSheet(filters.date, filters.region),
         dispatchService.getLocations(),
         dispatchService.getDailySheets(filters.date, filters.region),
         dispatchService.getDailySheetSyncToken(filters.date, filters.region),
       ]);
+      const timeoutPromise = new Promise<never>((_, reject) => {
+        timeoutId = window.setTimeout(
+          () => reject(new Error("O carregamento demorou demais. Verifique a conexão e tente novamente")),
+          20_000,
+        );
+      });
+      const [dispatchesData, locs, sheets, syncToken] = await Promise.race([loadPromise, timeoutPromise]);
+      const nextScheduleIds = dispatchService.getKnownScheduleIdsForDate(filters.date, filters.region);
       const sheet = filters.region === "ALL" ? null : sheets[0] || null;
 
       // Uma resposta de uma data/região antiga nunca pode sobrescrever a
@@ -401,6 +409,7 @@ function AcionamentoContent() {
         setLoadError(error instanceof Error ? error.message : "Não foi possível carregar a folha diária.");
       }
     } finally {
+      if (timeoutId !== null) window.clearTimeout(timeoutId);
       if (foreground) {
         foregroundLoadsRef.current = Math.max(0, foregroundLoadsRef.current - 1);
         if (foregroundLoadsRef.current === 0) setIsLoading(false);
@@ -417,6 +426,12 @@ function AcionamentoContent() {
     () => scheduleIds.slice().sort().join(","),
     [scheduleIds]
   );
+
+  useEffect(() => {
+    // O token pertence à data e à região anteriores. Zerá-lo evita que o
+    // verificador de segurança inicie uma segunda carga durante a navegação.
+    syncTokenRef.current = null;
+  }, [filters.date, filters.region]);
 
   useEffect(() => {
     loadData();
@@ -778,7 +793,7 @@ function AcionamentoContent() {
   useEffect(() => {
     let checking = false;
     const checkForChanges = async () => {
-      if (checking || document.visibilityState !== "visible" || pendingWritesRef.current > 0) return;
+      if (checking || isLoading || document.visibilityState !== "visible" || pendingWritesRef.current > 0) return;
       checking = true;
       try {
         const token = await dispatchService.getDailySheetSyncToken(filters.date, filters.region);
@@ -804,7 +819,7 @@ function AcionamentoContent() {
       window.clearInterval(interval);
       document.removeEventListener("visibilitychange", handleVisibilityChange);
     };
-  }, [filters.date, filters.region, loadData, syncStatus]);
+  }, [filters.date, filters.region, isLoading, loadData, syncStatus]);
 
   const handleFilterChange = async (newFilters: Partial<DispatchFilterOptions>) => {
     const changesSheet = (newFilters.date && newFilters.date !== filters.date) ||
