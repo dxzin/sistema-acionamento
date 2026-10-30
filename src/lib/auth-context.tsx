@@ -19,13 +19,19 @@ interface LoginResult {
   message?: string;
 }
 
-function loginErrorMessage(code?: string): string {
+function loginErrorMessage(error: { code?: string; message?: string; status?: number }): string {
+  const code = error.code;
+  const message = error.message || "Resposta sem mensagem";
   if (code === "invalid_credentials") return "E-mail ou senha incorretos.";
   if (code === "captcha_failed") return "A verificação de segurança expirou ou foi recusada. Marque-a novamente.";
   if (code === "over_request_rate_limit") return "Muitas tentativas de acesso. Aguarde um minuto e tente novamente.";
   if (code === "email_not_confirmed") return "Este e-mail ainda não foi confirmado.";
   if (code === "request_timeout") return "O servidor de autenticação demorou para responder. Tente novamente.";
-  return "Não foi possível autenticar. Verifique a conexão e tente novamente.";
+  if (/invalid login credentials/i.test(message)) return "E-mail ou senha incorretos.";
+  if (/captcha|turnstile/i.test(message)) return "A verificação de segurança foi recusada. Atualize a página e marque-a novamente.";
+  if (/rate limit|too many requests/i.test(message)) return "Muitas tentativas de acesso. Aguarde um minuto e tente novamente.";
+  const reference = code || (error.status ? `HTTP ${error.status}` : "sem código");
+  return `Falha do servidor de autenticação: ${message} (${reference}).`;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -93,7 +99,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
         if (error) {
           setIsLoading(false);
-          return { success: false, message: loginErrorMessage(error.code) };
+          return { success: false, message: loginErrorMessage(error) };
         }
 
         if (data && data.user) {
