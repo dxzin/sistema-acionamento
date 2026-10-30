@@ -11,7 +11,7 @@ import { dispatchService, SessionExpiredError } from "@/lib/services/dispatch-se
 import { createClient } from "@/lib/supabase/client";
 import { useAuth } from "@/lib/auth-context";
 import { DispatchRowModel, DispatchFilterOptions, DispatchSummaryKPIs } from "@/types/domain";
-import { DailySheet, Location, OperatorPresence } from "@/types/database";
+import { DailySheet, Dispatch, Location, OperatorPresence } from "@/types/database";
 import { currentDateInBrasilia } from "@/lib/dates/operational-date";
 import { isValidLocationName } from "@/lib/locations/location-name";
 import { matchesDispatchStatus } from "@/lib/calculations/continuity";
@@ -60,6 +60,7 @@ import {
   type JourneyBatchItem,
   type JourneyBatchJob,
 } from "@/lib/sighra/journey-batch";
+import { mergeRealtimeDispatchUpdate } from "@/lib/realtime/dispatch-update";
 
 type CellSaveStatus = "pending" | "saving" | "saved" | "error";
 type JourneyDialogState = { requested: JourneyRecordSnapshot; result: JourneyProviderResult; preview: JourneyPreview };
@@ -648,6 +649,30 @@ function AcionamentoContent() {
     void loadData(false);
   }, [loadData]);
 
+  const applyDispatchUpdateFromRealtime = useCallback((incoming: Dispatch) => {
+    const currentRow = dispatchesRef.current.find((row) => row.id === incoming.id);
+    if (!currentRow) return false;
+    const updatedRow = mergeRealtimeDispatchUpdate(currentRow, incoming, locations);
+    if (!updatedRow) return false;
+
+    setDispatches((current) => {
+      const localRow = current.find((row) => row.id === incoming.id);
+      if (!localRow) return current;
+      const nextServerRow = mergeRealtimeDispatchUpdate(localRow, incoming, locations);
+      if (!nextServerRow) return current;
+      const [mergedRow] = mergeServerDispatches(
+        [nextServerRow],
+        [localRow],
+        pendingEditsRef.current,
+        editingDispatchIdRef.current
+      );
+      const next = current.map((row) => row.id === incoming.id ? mergedRow : row);
+      dispatchesRef.current = next;
+      return next;
+    });
+    return true;
+  }, [locations]);
+
   // Sincronização em tempo real via Supabase Realtime
   useEffect(() => {
     const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -658,7 +683,7 @@ function AcionamentoContent() {
     let refreshTimer: ReturnType<typeof setTimeout> | null = null;
     const sheetIds = sheetSubscriptionKey ? sheetSubscriptionKey.split(",") : [];
     const subscribedScheduleIds = scheduleSubscriptionKey ? scheduleSubscriptionKey.split(",") : [];
-    const requestRefresh = () => {
+    const requestFullRefresh = () => {
       if (refreshTimer) clearTimeout(refreshTimer);
       refreshTimer = setTimeout(syncFromRemote, 700);
     };
@@ -673,26 +698,44 @@ function AcionamentoContent() {
           table: "dispatches",
           filter: `daily_sheet_id=eq.${sheetId}`,
         },
-        requestRefresh
+        (payload) => {
+          if (payload.eventType === "UPDATE" && applyDispatchUpdateFromRealtime(payload.new as Dispatch)) return;
+          if (payload.eventType === "DELETE") {
+            const deletedId = (payload.old as Partial<Dispatch>).id;
+            if (deletedId) {
+              setDispatches((current) => {
+                const next = current.filter((row) => row.id !== deletedId);
+                dispatchesRef.current = next;
+                return next;
+              });
+              return;
+            }
+          }
+          requestFullRefresh();
+        }
       );
       channel = channel.on(
         "postgres_changes",
         { event: "UPDATE", schema: "public", table: "daily_sheets", filter: `id=eq.${sheetId}` },
-        requestRefresh
+        (payload) => {
+          const incoming = payload.new as DailySheet;
+          setDailySheets((current) => current.map((sheet) => sheet.id === incoming.id ? incoming : sheet));
+          setDailySheet((current) => current?.id === incoming.id ? incoming : current);
+        }
       );
     }
 
     channel = channel.on(
       "postgres_changes",
       { event: "INSERT", schema: "public", table: "daily_sheets", filter: `date=eq.${filters.date}` },
-      requestRefresh
+      requestFullRefresh
     );
 
     for (const scheduleId of subscribedScheduleIds) {
       channel = channel.on(
         "postgres_changes",
         { event: "*", schema: "public", table: "monthly_schedule_entries", filter: `schedule_id=eq.${scheduleId}` },
-        requestRefresh
+        requestFullRefresh
       );
     }
 
@@ -701,7 +744,7 @@ function AcionamentoContent() {
       { event: "UPDATE", schema: "public", table: "drivers" },
       () => {
         dispatchService.invalidateDriversCache();
-        requestRefresh();
+        requestFullRefresh();
       }
     );
 
@@ -716,7 +759,7 @@ function AcionamentoContent() {
       if (refreshTimer) clearTimeout(refreshTimer);
       supabase.removeChannel(channel);
     };
-  }, [filters.date, filters.region, scheduleSubscriptionKey, sheetSubscriptionKey, syncFromRemote]);
+  }, [applyDispatchUpdateFromRealtime, filters.date, filters.region, scheduleSubscriptionKey, sheetSubscriptionKey, syncFromRemote]);
 
   useEffect(() => {
     const online = () => setSyncStatus((current) => current === "offline" ? "fallback" : current);

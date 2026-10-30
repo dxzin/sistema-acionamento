@@ -25,6 +25,7 @@ const REGION_BASES: Record<string, string[]> = {
 
 const DISPATCH_EXCLUDED_SCALE_CODES = new Set(["F", "FE", "AF", "DES", "DESL"]);
 const COMBINED_OPERATION_REGIONS = ["SP", "UBJP"] as const;
+type CatalogKey = "bases" | "locations" | "vehicles" | "drivers";
 
 export function regionsForDispatchSelection(region: string): readonly string[] {
   return region === "ALL" ? COMBINED_OPERATION_REGIONS : [region];
@@ -57,6 +58,7 @@ class DispatchService {
   private localBases: Base[] = [...INITIAL_BASES];
   private catalogLoadedAt = { bases: 0, locations: 0, vehicles: 0, drivers: 0 };
   private readonly catalogTtlMs = 5 * 60_000;
+  private readonly catalogPending = new Map<CatalogKey, Promise<unknown>>();
   private readonly knownScheduleIds = new Map<string, string>();
 
   private async authenticatedQuery<T>(
@@ -76,8 +78,31 @@ class DispatchService {
     return result.data;
   }
 
-  private catalogIsFresh(key: "bases" | "locations" | "vehicles" | "drivers"): boolean {
+  private catalogIsFresh(key: CatalogKey): boolean {
     return Date.now() - this.catalogLoadedAt[key] < this.catalogTtlMs;
+  }
+
+  private async loadCatalog<T>(
+    key: CatalogKey,
+    current: () => T[],
+    query: () => Promise<T[]>,
+    store: (rows: T[]) => void
+  ): Promise<T[]> {
+    if (this.catalogIsFresh(key)) return current();
+    const pending = this.catalogPending.get(key) as Promise<T[]> | undefined;
+    if (pending) return pending;
+
+    const request = query().then((rows) => {
+      store(rows);
+      this.catalogLoadedAt[key] = Date.now();
+      return rows;
+    });
+    this.catalogPending.set(key, request);
+    try {
+      return await request;
+    } finally {
+      if (this.catalogPending.get(key) === request) this.catalogPending.delete(key);
+    }
   }
 
   invalidateDriversCache() {
@@ -92,14 +117,12 @@ class DispatchService {
 
   async getBases(): Promise<Base[]> {
     if (this.isSupabaseConfigured()) {
-      if (this.catalogIsFresh("bases")) return this.localBases;
       try {
-        const supabase = createClient();
-        const { data, error } = await supabase.from("bases").select("id,code,name,interjornada_minutes,is_active,created_at").order("name");
-        if (error) throw new Error(error.message);
-        this.localBases = data || [];
-        this.catalogLoadedAt.bases = Date.now();
-        return this.localBases;
+        return await this.loadCatalog("bases", () => this.localBases, async () => {
+          const { data, error } = await createClient().from("bases").select("id,code,name,interjornada_minutes,is_active,created_at").order("name");
+          if (error) throw new Error(error.message);
+          return data || [];
+        }, (rows) => { this.localBases = rows; });
       } catch (e) {
         console.error("Falha ao buscar bases do Supabase:", e);
         throw e;
@@ -110,14 +133,12 @@ class DispatchService {
 
   async getLocations(): Promise<Location[]> {
     if (this.isSupabaseConfigured()) {
-      if (this.catalogIsFresh("locations")) return this.localLocations;
       try {
-        const supabase = createClient();
-        const { data, error } = await supabase.from("locations").select("id,name,region,is_active,created_at").order("name");
-        if (error) throw new Error(error.message);
-        this.localLocations = data || [];
-        this.catalogLoadedAt.locations = Date.now();
-        return this.localLocations;
+        return await this.loadCatalog("locations", () => this.localLocations, async () => {
+          const { data, error } = await createClient().from("locations").select("id,name,region,is_active,created_at").order("name");
+          if (error) throw new Error(error.message);
+          return data || [];
+        }, (rows) => { this.localLocations = rows; });
       } catch (e) {
         console.error("Falha ao buscar locais do Supabase:", e);
         throw e;
@@ -128,14 +149,12 @@ class DispatchService {
 
   async getVehicles(): Promise<Vehicle[]> {
     if (this.isSupabaseConfigured()) {
-      if (this.catalogIsFresh("vehicles")) return this.localVehicles;
       try {
-        const supabase = createClient();
-        const { data, error } = await supabase.from("vehicles").select("id,plate_code,vehicle_type,is_active,created_at").order("plate_code");
-        if (error) throw new Error(error.message);
-        this.localVehicles = data || [];
-        this.catalogLoadedAt.vehicles = Date.now();
-        return this.localVehicles;
+        return await this.loadCatalog("vehicles", () => this.localVehicles, async () => {
+          const { data, error } = await createClient().from("vehicles").select("id,plate_code,vehicle_type,is_active,created_at").order("plate_code");
+          if (error) throw new Error(error.message);
+          return data || [];
+        }, (rows) => { this.localVehicles = rows; });
       } catch (e) {
         console.error("Falha ao buscar frotas do Supabase:", e);
         throw e;
@@ -146,14 +165,12 @@ class DispatchService {
 
   async getDrivers(): Promise<Driver[]> {
     if (this.isSupabaseConfigured()) {
-      if (this.catalogIsFresh("drivers")) return this.localDrivers;
       try {
-        const supabase = createClient();
-        const { data, error } = await supabase.from("drivers").select("id,name,login_matricula,base_id,default_shift,default_start_time,is_closed_trip,is_active,created_at,updated_at").order("name");
-        if (error) throw new Error(error.message);
-        this.localDrivers = data || [];
-        this.catalogLoadedAt.drivers = Date.now();
-        return this.localDrivers;
+        return await this.loadCatalog("drivers", () => this.localDrivers, async () => {
+          const { data, error } = await createClient().from("drivers").select("id,name,login_matricula,base_id,default_shift,default_start_time,is_closed_trip,is_active,created_at,updated_at").order("name");
+          if (error) throw new Error(error.message);
+          return data || [];
+        }, (rows) => { this.localDrivers = rows; });
       } catch (e) {
         console.error("Falha ao buscar condutores do Supabase:", e);
         throw e;
